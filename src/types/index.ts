@@ -1,5 +1,17 @@
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  company: string;
+  avatarUrl?: string;
+  bio?: string;
+  createdAt?: string;
+}
+
 export interface CommunityPost {
   id: string;
+  userId?: string;
   author: {
     name: string;
     role: string;
@@ -57,6 +69,7 @@ export interface JobListing {
   description: string;
   skills: string[];
   applyUrl: string;
+  isSaved?: boolean;
 }
 
 export interface AssessmentQuestion {
@@ -81,4 +94,17 @@ export interface AssessmentResult {
   strengths: string[];
   growthAreas: string[];
   recommendedRole: string;
+}
+
+export interface SavedQuizResult {
+  id: string;
+  userId: string;
+  scorePercentage: number;
+  archetype: string;
+  summary: string;
+  dimensionScores: {
+    dimension: string;
+    score: number;
+  }[];
+  createdAt: string;
 }

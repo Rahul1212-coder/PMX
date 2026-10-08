@@ -1,20 +1,42 @@
 'use client';
 
-import React, { useState } from 'react';
-import { AssessmentQuestion, AssessmentResult } from '../types';
-import { Compass, CheckCircle2, RotateCcw, ArrowRight, Award, Brain, BarChart3, Target, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AssessmentQuestion, AssessmentResult, SavedQuizResult } from '../types';
+import { Compass, CheckCircle2, RotateCcw, ArrowRight, Award, Brain, BarChart3, Target, ShieldCheck, Database, LogIn } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { saveQuizResultToDb, getUserQuizResultsFromDb } from '@/lib/supabase/database';
 
 interface AssessmentQuizProps {
   questions: AssessmentQuestion[];
 }
 
 export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => {
+  const { user, openAuthModal, isConfigured } = useAuth();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [result, setResult] = useState<AssessmentResult | null>(null);
+  const [isSavedToDb, setIsSavedToDb] = useState(false);
+  const [pastResults, setPastResults] = useState<SavedQuizResult[]>([]);
 
   const currentQ = questions[currentIdx];
   const progressPercent = Math.round(((currentIdx + 1) / questions.length) * 100);
+
+  // Load past quiz results if authenticated
+  useEffect(() => {
+    let mounted = true;
+    async function loadPast() {
+      if (user && isConfigured) {
+        const history = await getUserQuizResultsFromDb(user.id);
+        if (mounted && history.length > 0) {
+          setPastResults(history);
+        }
+      }
+    }
+    loadPast();
+    return () => {
+      mounted = false;
+    };
+  }, [user, isConfigured]);
 
   const handleSelectOption = (qId: number, score: number) => {
     setSelectedAnswers((prev) => ({
@@ -37,7 +59,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
     }
   };
 
-  const calculateResult = () => {
+  const calculateResult = async () => {
     let totalScore = 0;
     const maxScore = questions.length * 4;
 
@@ -100,7 +122,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
       ];
     }
 
-    setResult({
+    const calculated: AssessmentResult = {
       scorePercentage,
       archetype,
       summary,
@@ -108,13 +130,24 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
       strengths,
       growthAreas,
       recommendedRole,
-    });
+    };
+
+    setResult(calculated);
+
+    // Save to Supabase
+    if (user && isConfigured) {
+      const ok = await saveQuizResultToDb(user.id, calculated);
+      if (ok) {
+        setIsSavedToDb(true);
+      }
+    }
   };
 
   const handleRetake = () => {
     setSelectedAnswers({});
     setCurrentIdx(0);
     setResult(null);
+    setIsSavedToDb(false);
   };
 
   return (
@@ -138,50 +171,50 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
       {!result ? (
         /* Quiz Interface */
         <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-          {/* Progress bar */}
-          <div>
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-              <span>Question {currentIdx + 1} of {questions.length}</span>
-              <span className="text-indigo-600">{progressPercent}% Completed</span>
+          {/* Progress Bar & Indicators */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-semibold text-slate-500">
+              <span className="flex items-center space-x-1">
+                <span>Scenario {currentIdx + 1} of {questions.length}</span>
+                <span>•</span>
+                <span className="text-indigo-600 font-bold">{currentQ.dimension}</span>
+              </span>
+              <span>{progressPercent}% Completed</span>
             </div>
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-amber-500 to-indigo-600 transition-all duration-300"
+                className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 rounded-full transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
 
-          {/* Dimension Tag */}
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-              {currentQ.dimension}
-            </span>
-          </div>
-
           {/* Question Scenario */}
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200/80">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
               {currentQ.scenario}
             </h2>
           </div>
 
           {/* Options */}
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Select the course of action you would take as the Product Manager:
+            </p>
             {currentQ.options.map((opt, idx) => {
               const isSelected = selectedAnswers[currentQ.id] === opt.score;
               return (
                 <button
                   key={idx}
                   onClick={() => handleSelectOption(currentQ.id, opt.score)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all flex items-start space-x-3 ${
+                  className={`w-full text-left p-4 rounded-xl border text-sm transition-all flex items-start space-x-3 ${
                     isSelected
-                      ? 'border-indigo-600 bg-indigo-50/70 shadow-sm ring-1 ring-indigo-600'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                      ? 'border-indigo-600 bg-indigo-50/60 text-slate-900 shadow-sm ring-1 ring-indigo-500/20'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700'
                   }`}
                 >
                   <div
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 ${
                       isSelected
                         ? 'border-indigo-600 bg-indigo-600 text-white'
                         : 'border-slate-300 bg-white'
@@ -189,9 +222,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
                   >
                     {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
                   </div>
-                  <span className="text-sm text-slate-800 font-medium leading-relaxed">
-                    {opt.text}
-                  </span>
+                  <span className="leading-relaxed">{opt.text}</span>
                 </button>
               );
             })}
@@ -236,6 +267,31 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
             <p className="text-sm text-slate-600 max-w-xl mx-auto leading-relaxed">
               {result.summary}
             </p>
+
+            {/* Supabase Save Status Banner */}
+            <div className="pt-2">
+              {user ? (
+                isSavedToDb ? (
+                  <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Saved to your PM Profile in Supabase</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                    <Database className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Calculated locally for this session</span>
+                  </div>
+                )
+              ) : (
+                <button
+                  onClick={() => openAuthModal('signin')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign in to save this assessment score to your permanent PM profile</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Dimension Breakdown */}

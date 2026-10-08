@@ -1,15 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CommunityPost } from '../types';
-import { ThumbsUp, MessageSquare, Tag, PlusCircle, Search, Pin, Share2 } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Tag, PlusCircle, Search, Pin, Share2, Database, Sparkles, LogIn } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import {
+  getCommunityPostsFromDb,
+  insertCommunityPostToDb,
+  togglePostUpvoteInDb,
+} from '@/lib/supabase/database';
 
 interface CommunityFeedProps {
   initialPosts: CommunityPost[];
 }
 
 export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) => {
+  const { user, profile, openAuthModal, isConfigured } = useAuth();
   const [posts, setPosts] = useState<CommunityPost[]>(initialPosts);
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -19,39 +27,86 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityPost['category']>('Strategy');
   const [newTags, setNewTags] = useState('Product, Strategy');
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const categories = ['All', 'Strategy', 'Execution', 'AI & Tech', 'Career & Transition', 'Case Study'];
 
-  const handleUpvote = (id: string) => {
+  // Load posts from Supabase on mount
+  useEffect(() => {
+    let mounted = true;
+    async function loadDbPosts() {
+      if (isConfigured) {
+        const dbPosts = await getCommunityPostsFromDb();
+        if (mounted && dbPosts && dbPosts.length > 0) {
+          setPosts(dbPosts);
+          setIsDbLoaded(true);
+        }
+      }
+    }
+    loadDbPosts();
+    return () => {
+      mounted = false;
+    };
+  }, [isConfigured]);
+
+  const handleUpvote = async (id: string) => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+
+    const currentPost = posts.find((p) => p.id === id);
+    if (!currentPost) return;
+
+    const willUpvote = !currentPost.hasUpvoted;
+
+    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === id) {
-          const hasUpvoted = p.hasUpvoted;
           return {
             ...p,
-            upvotes: hasUpvoted ? p.upvotes - 1 : p.upvotes + 1,
-            hasUpvoted: !hasUpvoted,
+            upvotes: willUpvote ? p.upvotes + 1 : Math.max(0, p.upvotes - 1),
+            hasUpvoted: willUpvote,
           };
         }
         return p;
       })
     );
+
+    // Sync to Supabase
+    if (isConfigured && user) {
+      await togglePostUpvoteInDb(id, user.id, !willUpvote);
+    }
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleStartPost = () => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
 
+    setIsPublishing(true);
+
     const newPost: CommunityPost = {
       id: `post-${Date.now()}`,
+      userId: user?.id,
       author: {
-        name: 'You (Alex PM)',
-        role: 'Product Lead',
-        company: 'Stealth SaaS',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+        name: profile?.fullName || 'Product Manager',
+        role: profile?.role || 'Associate PM',
+        company: profile?.company || 'Tech Company',
+        avatar:
+          profile?.avatarUrl ||
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
       },
-      title: newTitle,
-      content: newContent,
+      title: newTitle.trim(),
+      content: newContent.trim(),
       category: newCategory,
       tags: newTags.split(',').map((t) => t.trim()).filter(Boolean),
       upvotes: 1,
@@ -60,10 +115,18 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
       createdAt: 'Just now',
     };
 
+    // Optimistic UI update
     setPosts([newPost, ...posts]);
     setNewTitle('');
     setNewContent('');
     setIsModalOpen(false);
+
+    // Sync to Supabase Database
+    if (isConfigured) {
+      await insertCommunityPostToDb(newPost);
+    }
+
+    setIsPublishing(false);
   };
 
   const filteredPosts = posts.filter((p) => {
@@ -78,8 +141,14 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
   return (
     <div className="space-y-6">
       {/* Top Banner & Action */}
-      <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-700 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
-        <div className="max-w-3xl">
+      <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-700 rounded-2xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
+        <div className="max-w-3xl relative z-10">
+          <div className="flex items-center space-x-2 mb-2">
+            <span className="inline-flex items-center space-x-1 bg-white/10 border border-white/20 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-indigo-100">
+              <Database className="w-3 h-3" />
+              <span>{isDbLoaded ? 'Live Supabase Sync' : isConfigured ? 'Supabase Ready' : 'In-Memory / Demo Feed'}</span>
+            </span>
+          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Product Manager Community & Brain Trust
           </h1>
@@ -88,12 +157,22 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleStartPost}
               className="inline-flex items-center space-x-2 bg-white text-indigo-700 hover:bg-indigo-50 font-semibold px-4 py-2 rounded-xl shadow transition"
             >
               <PlusCircle className="w-5 h-5" />
               <span>Share Insight or Ask Question</span>
             </button>
+
+            {!user && (
+              <button
+                onClick={() => openAuthModal('signin')}
+                className="inline-flex items-center space-x-2 bg-indigo-800/60 hover:bg-indigo-800 text-white font-semibold px-4 py-2 rounded-xl border border-white/20 transition text-sm"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign in to participate</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -231,7 +310,21 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">Start a PM Discussion</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Start a PM Discussion</h3>
+                <p className="text-xs text-slate-500">
+                  Posting as <span className="font-semibold text-slate-800">{profile?.fullName}</span> ({profile?.role})
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-semibold"
+              >
+                ✕
+              </button>
+            </div>
+
             <form onSubmit={handleCreatePost} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
@@ -293,9 +386,14 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow"
+                  disabled={isPublishing}
+                  className="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow flex items-center space-x-1.5"
                 >
-                  Publish Post
+                  {isPublishing ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>Publish Post</span>
+                  )}
                 </button>
               </div>
             </form>
