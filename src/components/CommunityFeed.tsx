@@ -305,8 +305,29 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
         ))}
 
         {filteredPosts.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-2xl border border-purple-100">
-            <p className="text-slate-500 text-sm">No discussions match your filter.</p>
+          <div className="text-center py-16 px-6 bg-white rounded-3xl border border-purple-100/80 shadow-sm space-y-4">
+            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-purple-100 to-violet-50 rounded-2xl flex items-center justify-center p-2 border border-purple-200/60 shadow-sm">
+              <img src="/pmverse-icon.png" alt="PMVerse Icon" className="w-full h-full object-contain" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h3 className="text-lg font-bold text-slate-900">
+                {search || selectedCategory !== 'All' ? 'No matching discussions found' : 'Welcome to the PMVerse Brain Trust'}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                {search || selectedCategory !== 'All'
+                  ? 'Try adjusting your search terms or category filter to discover other product insights.'
+                  : 'No posts published yet. Start by signing up, creating your PM profile, and sharing the very first framework teardown or roadmap dilemma!'}
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={handleStartPost}
+                className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-purple-500/20 transition-all hover:scale-[1.02] text-xs"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{user ? 'Publish First Discussion' : 'Sign Up to Share First Insight'}</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

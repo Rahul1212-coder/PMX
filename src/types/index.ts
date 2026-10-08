@@ -48,14 +48,15 @@ export interface PmConcept {
   category: 'Frameworks' | 'Metrics & Data' | 'Product Strategy' | 'Discovery & UX' | 'Execution';
   quickSummary: string;
   detailedDefinition: string;
-  formulaOrSteps?: string;
+  formulaOrSteps?: string | string[];
   realWorldExample: string;
-  commonPitfalls: string;
+  commonPitfalls: string | string[];
   interviewTip: string;
 }
 
 export interface JobListing {
   id: string;
+  userId?: string;
   title: string;
   company: string;
   logo: string;

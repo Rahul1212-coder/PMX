@@ -2,23 +2,23 @@
 
 import React, { useState } from 'react';
 import { PmConcept } from '../types';
-import { Sparkles, BookOpen, AlertTriangle, Lightbulb, CheckCircle2, ArrowRight, Loader2, Search } from 'lucide-react';
+import { POPULAR_PM_TOPICS, DEFAULT_STARTER_CONCEPT } from '../data/mockData';
+import { Sparkles, BookOpen, AlertTriangle, Lightbulb, CheckCircle2, ArrowRight, Loader2, Search, History } from 'lucide-react';
 
 interface AiPmTutorProps {
   initialConcepts: PmConcept[];
 }
 
 export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
-  const [concepts] = useState<PmConcept[]>(initialConcepts);
-  const [selectedConcept, setSelectedConcept] = useState<PmConcept>(initialConcepts[0]);
+  const [historyConcepts, setHistoryConcepts] = useState<PmConcept[]>(initialConcepts.length > 0 ? initialConcepts : [DEFAULT_STARTER_CONCEPT]);
+  const [selectedConcept, setSelectedConcept] = useState<PmConcept>(initialConcepts[0] || DEFAULT_STARTER_CONCEPT);
   const [queryTerm, setQueryTerm] = useState('');
   const [userRole, setUserRole] = useState('Aspiring or Current Product Manager');
   const [loading, setLoading] = useState(false);
   const [customExplanation, setCustomExplanation] = useState<any | null>(null);
 
-  const handleAskAi = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!queryTerm.trim()) return;
+  const fetchAiExplanation = async (term: string) => {
+    if (!term.trim()) return;
 
     setLoading(true);
     setCustomExplanation(null);
@@ -28,7 +28,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          term: queryTerm,
+          term,
           userRole,
           questionType: 'in-depth PM breakdown',
         }),
@@ -36,11 +36,31 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
 
       const data = await res.json();
       if (data.success) {
+        const generated = {
+          id: `concept-${Date.now()}`,
+          term,
+          category: 'Frameworks' as const,
+          quickSummary: data.data.summary,
+          detailedDefinition: data.data.inDepth,
+          formulaOrSteps: data.data.formulaOrSteps,
+          realWorldExample: data.data.realWorldExample,
+          commonPitfalls: data.data.pitfalls,
+          interviewTip: data.data.interviewAdvice,
+          source: data.source,
+          note: data.note,
+        };
+
         setCustomExplanation({
-          term: queryTerm,
+          term,
           ...data.data,
           source: data.source,
           note: data.note,
+        });
+
+        // Add to history if not duplicate
+        setHistoryConcepts((prev) => {
+          const filtered = prev.filter((c) => c.term.toLowerCase() !== term.toLowerCase());
+          return [generated, ...filtered];
         });
       }
     } catch (err) {
@@ -48,6 +68,16 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAskAi = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetchAiExplanation(queryTerm);
+  };
+
+  const handleSelectTopicChip = async (topic: string) => {
+    setQueryTerm(topic);
+    await fetchAiExplanation(topic);
   };
 
   const activeContent = customExplanation || {
@@ -77,7 +107,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
             Master Any PM Term, Metric & Framework
           </h1>
           <p className="mt-2 text-purple-100/90 text-sm sm:text-base leading-relaxed">
-            From North Star Metrics to Product-Led Growth loops and Kano analysis, get instant actionable breakdowns with real tech company teardowns and interview advice.
+            From North Star Metrics to Product-Led Growth loops and Kano analysis, get instant actionable breakdowns with real tech company teardowns and interview advice powered by OpenAI GPT-4o-mini.
           </p>
 
           {/* AI Search Box */}
@@ -110,17 +140,36 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
               )}
             </button>
           </form>
+
+          {/* Popular Topic Prompt Chips */}
+          <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-purple-200 font-semibold text-[11px] mr-1">Popular Prompts:</span>
+            {POPULAR_PM_TOPICS.slice(0, 6).map((topic) => (
+              <button
+                key={topic}
+                type="button"
+                onClick={() => handleSelectTopicChip(topic)}
+                className="bg-white/10 hover:bg-white/20 text-purple-100 hover:text-white px-2.5 py-1 rounded-lg text-[11px] font-medium transition backdrop-blur-sm border border-white/10"
+              >
+                {topic}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Sidebar: Curated Essential Frameworks */}
+        {/* Sidebar: Recent / Explored Topics */}
         <div className="lg:col-span-4 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-purple-800 px-1">
-            Curated PM Glossary
-          </h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-purple-800 flex items-center space-x-1.5">
+              <History className="w-3.5 h-3.5 text-purple-600" />
+              <span>Explored Concepts ({historyConcepts.length})</span>
+            </h2>
+          </div>
+
           <div className="space-y-2">
-            {concepts.map((concept) => (
+            {historyConcepts.map((concept) => (
               <button
                 key={concept.id}
                 onClick={() => {
@@ -156,7 +205,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({ initialConcepts }) => {
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
                   Concept Breakdown
                 </span>
-                {customExplanation?.source === 'openai' && (
+                {activeContent.source === 'openai' && (
                   <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center space-x-1">
                     <Sparkles className="w-3 h-3" />
                     <span>Real-Time GPT-4o-mini</span>
