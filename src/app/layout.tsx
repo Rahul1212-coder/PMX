@@ -3,8 +3,12 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'ProdCraft | The Ultimate Product Manager Hub',
-  description: 'Community for Product Managers, AI Term Tutor, Verified PM Job Board, and Career Fit Diagnostic.',
+  title: 'PMVerse | The Product Management Universe',
+  description: 'Join PMVerse — The all-in-one ecosystem for Product Managers. Community discussions, AI Copilot, verified PM jobs, and diagnostic assessments.',
+  icons: {
+    icon: '/pmverse-icon.png',
+    apple: '/pmverse-icon.png',
+  },
 };
 
 export default function RootLayout({
@@ -14,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased selection:bg-indigo-500 selection:text-white">
+      <body className="antialiased selection:bg-purple-600 selection:text-white">
         <Providers>{children}</Providers>
       </body>
     </html>

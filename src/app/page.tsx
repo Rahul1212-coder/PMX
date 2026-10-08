@@ -12,7 +12,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'community' | 'ai-tutor' | 'jobs' | 'assessment'>('community');
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+    <div className="min-h-screen flex flex-col bg-[#faf8ff] text-slate-900">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -33,17 +33,18 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-6 mt-12">
+      <footer className="border-t border-purple-100 bg-white/90 backdrop-blur-sm py-8 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-slate-800">ProdCraft</span>
-            <span>— The All-in-One Product Management Platform</span>
+          <div className="flex items-center space-x-3">
+            <img src="/pmverse-icon.png" alt="PMVerse Icon" className="w-6 h-6 object-contain" />
+            <span className="font-extrabold text-slate-900 text-sm">PMVerse</span>
+            <span className="text-purple-600 font-semibold">— The All-in-One Product Management Universe</span>
           </div>
-          <div className="flex items-center space-x-4">
-            <button onClick={() => setActiveTab('community')} className="hover:text-indigo-600 transition">Community</button>
-            <button onClick={() => setActiveTab('ai-tutor')} className="hover:text-indigo-600 transition">AI Tutor</button>
-            <button onClick={() => setActiveTab('jobs')} className="hover:text-indigo-600 transition">Job Board</button>
-            <button onClick={() => setActiveTab('assessment')} className="hover:text-indigo-600 transition">Fit Quiz</button>
+          <div className="flex items-center space-x-5 text-xs font-medium">
+            <button onClick={() => setActiveTab('community')} className="hover:text-purple-700 transition">Community</button>
+            <button onClick={() => setActiveTab('ai-tutor')} className="hover:text-purple-700 transition">AI Tutor</button>
+            <button onClick={() => setActiveTab('jobs')} className="hover:text-purple-700 transition">Job Board</button>
+            <button onClick={() => setActiveTab('assessment')} className="hover:text-purple-700 transition">Fit Quiz</button>
           </div>
         </div>
       </footer>
