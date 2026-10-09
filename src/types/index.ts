@@ -1,9 +1,13 @@
+export type PmStage = 'existing_pm' | 'switching_roles' | 'fresher';
+
 export interface UserProfile {
   id: string;
   email: string;
   fullName: string;
   role: string;
   company: string;
+  pmStage?: PmStage;
+  previousRole?: string;
   avatarUrl?: string;
   bio?: string;
   headline?: string;

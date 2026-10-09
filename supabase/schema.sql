@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name TEXT DEFAULT 'Product Manager',
   role TEXT DEFAULT 'Associate PM',
   company TEXT DEFAULT 'Independent PM',
+  pm_stage TEXT DEFAULT 'existing_pm',
+  previous_role TEXT,
   avatar_url TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -89,13 +91,15 @@ CREATE TABLE IF NOT EXISTS public.quiz_results (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role, company, avatar_url)
+  INSERT INTO public.profiles (id, email, full_name, role, company, pm_stage, previous_role, avatar_url)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'role', 'Product Manager'),
     COALESCE(NEW.raw_user_meta_data->>'company', 'Independent PM'),
+    COALESCE(NEW.raw_user_meta_data->>'pm_stage', 'existing_pm'),
+    COALESCE(NEW.raw_user_meta_data->>'previous_role', NULL),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
   )
   ON CONFLICT (id) DO NOTHING;

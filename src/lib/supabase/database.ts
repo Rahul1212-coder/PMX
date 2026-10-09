@@ -232,6 +232,8 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
       company: data.company || 'Tech Company',
       avatarUrl: data.avatar_url || '',
       bio: data.bio || '',
+      pmStage: data.pm_stage || 'existing_pm',
+      previousRole: data.previous_role || '',
       connectionsCount,
       createdAt: data.created_at,
     };
@@ -254,6 +256,8 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
       company: profile.company,
       avatar_url: profile.avatarUrl,
       bio: profile.bio,
+      pm_stage: profile.pmStage || 'existing_pm',
+      previous_role: profile.previousRole || null,
       updated_at: new Date().toISOString(),
     });
 

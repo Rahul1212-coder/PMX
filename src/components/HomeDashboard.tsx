@@ -100,8 +100,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       {/* Top Welcome Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold mb-2">
-            Your PM Journey
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+              Your PM Journey
+            </span>
+            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
+              {profile?.pmStage === 'switching_roles'
+                ? 'Career Switcher'
+                : profile?.pmStage === 'fresher'
+                ? 'Fresher / APM Candidate'
+                : 'Practicing PM'}
+            </span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight m-0 text-[#201e1d]">
             {greeting}, {displayName}.
@@ -109,7 +118,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
         <div className="text-sm text-[#605d5d] max-w-sm">
           Target role: <strong className="text-[#201e1d] font-bold">{targetRole}</strong>.{' '}
-          {hasTakenTest ? (
+          {profile?.pmStage === 'switching_roles' ? (
+            <span>Translating past domain depth into product judgment. Take the diagnostic to benchmark transferable skills.</span>
+          ) : profile?.pmStage === 'fresher' ? (
+            <span>Mastering foundational product thinking for APM cohorts. Take the diagnostic to measure product sense.</span>
+          ) : hasTakenTest ? (
             <span>Verified PM Fit diagnostic active. Keep building mastery across competencies.</span>
           ) : (
             <span>Complete your competency diagnostic to calculate your verified score and gap analysis.</span>

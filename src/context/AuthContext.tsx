@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { getUserProfileFromDb, upsertUserProfileInDb } from '@/lib/supabase/database';
-import { UserProfile } from '@/types';
+import { UserProfile, PmStage } from '@/types';
 
 interface AuthContextType {
   user: User | null;
@@ -20,7 +20,17 @@ interface AuthContextType {
   openProfileModal: () => void;
   closeProfileModal: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, meta: { fullName: string; role: string; company: string }) => Promise<{ error?: string; message?: string }>;
+  signUp: (
+    email: string,
+    password: string,
+    meta: {
+      fullName: string;
+      role: string;
+      company: string;
+      pmStage?: PmStage;
+      previousRole?: string;
+    }
+  ) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error?: string }>;
   loginAsDemo: () => void;
@@ -48,10 +58,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const metaCompany = metadata.company || 'Independent PM';
       const metaAvatar = metadata.avatar_url || '';
 
+      const metaStage = (metadata.pm_stage as PmStage) || 'existing_pm';
+      const metaPrev = metadata.previous_role || '';
+
       if (dbProfile) {
         // Enforce user's actual name if DB profile had default or empty name
         if ((!dbProfile.fullName || dbProfile.fullName === 'Product Manager') && metaName) {
           dbProfile.fullName = metaName;
+        }
+        if (!dbProfile.pmStage && metaStage) {
+          dbProfile.pmStage = metaStage;
+        }
+        if (!dbProfile.previousRole && metaPrev) {
+          dbProfile.previousRole = metaPrev;
         }
         // Strip out legacy dummy Unsplash URLs if stored from prior default schemas
         if (
@@ -71,6 +90,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: metaRole,
           company: metaCompany,
           avatarUrl: metaAvatar,
+          pmStage: metaStage,
+          previousRole: metaPrev,
         };
         setProfile(fallbackProfile);
         upsertUserProfileInDb(fallbackProfile).catch(() => {});
@@ -192,7 +213,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (
     email: string,
     password: string,
-    meta: { fullName: string; role: string; company: string }
+    meta: {
+      fullName: string;
+      role: string;
+      company: string;
+      pmStage?: PmStage;
+      previousRole?: string;
+    }
   ) => {
     if (!configured) {
       const cleanProfile: UserProfile = {
@@ -201,6 +228,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fullName: meta.fullName.trim() || 'Product Manager',
         role: meta.role.trim() || 'Associate PM',
         company: meta.company.trim() || 'Independent PM',
+        pmStage: meta.pmStage || 'existing_pm',
+        previousRole: meta.previousRole || '',
         avatarUrl: '',
         connectionsCount: 0,
         profileViews: 0,
@@ -227,6 +256,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             full_name: meta.fullName,
             role: meta.role,
             company: meta.company,
+            pm_stage: meta.pmStage || 'existing_pm',
+            previous_role: meta.previousRole || '',
           },
         },
       });
@@ -248,6 +279,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fullName: meta.fullName.trim() || 'Product Manager',
           role: meta.role.trim() || 'Associate PM',
           company: meta.company.trim() || 'Independent PM',
+          pmStage: meta.pmStage || 'existing_pm',
+          previousRole: meta.previousRole || '',
           avatarUrl: '',
           connectionsCount: 0,
           profileViews: 0,

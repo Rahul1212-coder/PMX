@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
+import { PmStage } from '@/types';
 import { X, Camera, Link as LinkIcon, Trash2, Check, AlertCircle } from 'lucide-react';
 
 interface ProfileModalProps {
@@ -14,6 +15,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const { user, profile, updateProfile } = useAuth();
 
   const [fullName, setFullName] = useState('');
+  const [pmStage, setPmStage] = useState<PmStage>('existing_pm');
   const [role, setRole] = useState('Product Manager');
   const [company, setCompany] = useState('');
   const [bio, setBio] = useState('');
@@ -29,6 +31,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     if (isOpen && profile) {
       setFullName(profile.fullName || user?.user_metadata?.full_name || '');
+      setPmStage(profile.pmStage || 'existing_pm');
       setRole(profile.role || 'Product Manager');
       setCompany(profile.company || '');
       setBio(profile.bio || '');
@@ -112,6 +115,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         company: company.trim(),
         bio: bio.trim(),
         avatarUrl: avatarUrl.trim(),
+        pmStage,
       });
 
       if (res?.error) {
@@ -242,6 +246,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               onChange={(e) => setFullName(e.target.value)}
               className="input"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#201e1d] mb-1">Product Career Stage</label>
+            <select
+              value={pmStage}
+              onChange={(e) => setPmStage(e.target.value as PmStage)}
+              className="input bg-white text-xs"
+            >
+              <option value="existing_pm">Practicing Product Manager</option>
+              <option value="switching_roles">Looking to Switch from Another Role</option>
+              <option value="fresher">Fresher / Recent Graduate / APM Candidate</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-2">

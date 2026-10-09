@@ -2,7 +2,17 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { X, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { PmStage } from '@/types';
+import {
+  X,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  Briefcase,
+  RefreshCw,
+  GraduationCap,
+} from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -19,7 +29,9 @@ export const AuthModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [pmStage, setPmStage] = useState<PmStage>('existing_pm');
   const [role, setRole] = useState('Product Manager');
+  const [previousRole, setPreviousRole] = useState('Software Engineer');
   const [company, setCompany] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,11 +58,29 @@ export const AuthModal: React.FC = () => {
           setIsLoading(false);
           return;
         }
+
+        let classifiedRole = role;
+        let classifiedCompany = company.trim();
+
+        if (pmStage === 'existing_pm') {
+          classifiedRole = role;
+          classifiedCompany = company.trim() || 'Tech Squad';
+        } else if (pmStage === 'switching_roles') {
+          classifiedRole = previousRole ? `Aspiring PM (ex-${previousRole})` : 'Aspiring PM (Career Switcher)';
+          classifiedCompany = company.trim() || 'Transitioning Professional';
+        } else if (pmStage === 'fresher') {
+          classifiedRole = 'Aspiring Associate PM (Fresher)';
+          classifiedCompany = company.trim() || 'Recent Graduate';
+        }
+
         const res = await signUp(email, password, {
           fullName,
-          role,
-          company: company.trim() || 'Independent PM',
+          role: classifiedRole,
+          company: classifiedCompany,
+          pmStage,
+          previousRole: pmStage === 'switching_roles' ? previousRole : undefined,
         });
+
         if (res.error) {
           setError(res.error);
         } else if (res.message) {
@@ -71,7 +101,17 @@ export const AuthModal: React.FC = () => {
     'Staff / Principal PM',
     'Group PM / Director',
     'VP / Chief Product Officer',
-    'Aspiring PM / Transitioning',
+  ];
+
+  const switcherRoles = [
+    'Software Engineer',
+    'Product Designer',
+    'Data Analyst / Scientist',
+    'QA / SDET Engineer',
+    'Consultant / BizOps',
+    'Sales / Solutions Engineer',
+    'Project Manager / Scrum Master',
+    'Marketing / Growth',
   ];
 
   return (
@@ -167,6 +207,93 @@ export const AuthModal: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-3">
             {authModalTab === 'signup' && (
               <>
+                {/* 1. Journey Stage Question */}
+                <div>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1.5">
+                    What best describes your current product path?
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPmStage('existing_pm');
+                        setRole('Product Manager');
+                      }}
+                      className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
+                        pmStage === 'existing_pm'
+                          ? 'border-[#ec3013] bg-[#fdf3f2]'
+                          : 'border-[rgba(32,30,29,0.15)] bg-white hover:border-[#201e1d]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <Briefcase className={`w-3.5 h-3.5 ${pmStage === 'existing_pm' ? 'text-[#ec3013]' : 'text-[#605d5d]'}`} />
+                        {pmStage === 'existing_pm' && <span className="w-1.5 h-1.5 bg-[#ec3013]" />}
+                      </div>
+                      <div className="mt-1">
+                        <div className="font-extrabold text-[11px] text-[#201e1d] leading-tight">
+                          Already a PM
+                        </div>
+                        <div className="text-[10px] text-[#605d5d] leading-tight">
+                          Working PM
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPmStage('switching_roles');
+                        setRole('Aspiring PM');
+                      }}
+                      className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
+                        pmStage === 'switching_roles'
+                          ? 'border-[#ec3013] bg-[#fdf3f2]'
+                          : 'border-[rgba(32,30,29,0.15)] bg-white hover:border-[#201e1d]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <RefreshCw className={`w-3.5 h-3.5 ${pmStage === 'switching_roles' ? 'text-[#ec3013]' : 'text-[#605d5d]'}`} />
+                        {pmStage === 'switching_roles' && <span className="w-1.5 h-1.5 bg-[#ec3013]" />}
+                      </div>
+                      <div className="mt-1">
+                        <div className="font-extrabold text-[11px] text-[#201e1d] leading-tight">
+                          Switching Role
+                        </div>
+                        <div className="text-[10px] text-[#605d5d] leading-tight">
+                          Eng, Design, QA...
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPmStage('fresher');
+                        setRole('Associate PM');
+                      }}
+                      className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
+                        pmStage === 'fresher'
+                          ? 'border-[#ec3013] bg-[#fdf3f2]'
+                          : 'border-[rgba(32,30,29,0.15)] bg-white hover:border-[#201e1d]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <GraduationCap className={`w-3.5 h-3.5 ${pmStage === 'fresher' ? 'text-[#ec3013]' : 'text-[#605d5d]'}`} />
+                        {pmStage === 'fresher' && <span className="w-1.5 h-1.5 bg-[#ec3013]" />}
+                      </div>
+                      <div className="mt-1">
+                        <div className="font-extrabold text-[11px] text-[#201e1d] leading-tight">
+                          Fresher
+                        </div>
+                        <div className="text-[10px] text-[#605d5d] leading-tight">
+                          New Grad / Entry
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Full Name */}
                 <div>
                   <label className="block text-xs font-bold text-[#201e1d] mb-1">
                     Full Name
@@ -181,37 +308,103 @@ export const AuthModal: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                      PM Level
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="input bg-white"
-                    >
-                      {pmRoles.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {/* 3. Stage-Specific Contextual Inputs */}
+                {pmStage === 'existing_pm' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        Current PM Level
+                      </label>
+                      <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="input bg-white text-xs"
+                      >
+                        {pmRoles.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                      Company
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Organization"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      className="input"
-                    />
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        Company / Org
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Current Company"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        className="input text-xs"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {pmStage === 'switching_roles' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        Current Background
+                      </label>
+                      <select
+                        value={previousRole}
+                        onChange={(e) => setPreviousRole(e.target.value)}
+                        className="input bg-white text-xs"
+                      >
+                        {switcherRoles.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        Current Org / Domain
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Current company"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        className="input text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {pmStage === 'fresher' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        Target Focus
+                      </label>
+                      <input
+                        type="text"
+                        value="Associate PM (APM)"
+                        disabled
+                        className="input text-xs bg-slate-100 text-slate-700 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                        College / Bootcamp
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="College or University"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        className="input text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
