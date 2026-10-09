@@ -1,18 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { isSupabaseConfigured, getSupabaseConfig } from '@/lib/supabase/client';
 
 export async function middleware(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (
-    !supabaseUrl ||
-    !supabaseAnonKey ||
-    supabaseUrl === 'https://your-project.supabase.co' ||
-    supabaseAnonKey === 'your-anon-key-here'
-  ) {
+  if (!isSupabaseConfigured()) {
     return NextResponse.next();
   }
+
+  const { url, key } = getSupabaseConfig();
 
   let response = NextResponse.next({
     request: {
@@ -21,7 +16,7 @@ export async function middleware(request: NextRequest) {
   });
 
   try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    const supabase = createServerClient(url, key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();

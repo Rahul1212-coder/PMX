@@ -1,15 +1,23 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const DEFAULT_SUPABASE_URL = 'https://nbhrclqwcspkmffnrlbk.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iaHJjbHF3Y3Nwa21mZm5ybGJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NDkxNDksImV4cCI6MjEwNzAyNTE0OX0.e-oqVJxYRALx1dQC0NM4MYHv4KCfzA4KSW1D0ztcoeE';
+
+export const getSupabaseConfig = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+  return { url, key };
+};
 
 export const isSupabaseConfigured = (): boolean => {
+  const { url, key } = getSupabaseConfig();
   return Boolean(
-    supabaseUrl &&
-    supabaseAnonKey &&
-    supabaseUrl !== 'https://your-project.supabase.co' &&
-    supabaseAnonKey !== 'your-anon-key-here'
+    url &&
+    key &&
+    url !== 'https://your-project.supabase.co' &&
+    key !== 'your-anon-key-here'
   );
 };
 
@@ -21,12 +29,14 @@ export const getSupabaseClient = (): SupabaseClient | null => {
     return null;
   }
 
+  const { url, key } = getSupabaseConfig();
+
   if (typeof window === 'undefined') {
-    return createSupabaseClient(supabaseUrl!, supabaseAnonKey!);
+    return createSupabaseClient(url, key);
   }
 
   if (!browserClient) {
-    browserClient = createBrowserClient(supabaseUrl!, supabaseAnonKey!);
+    browserClient = createBrowserClient(url, key);
   }
 
   return browserClient;
