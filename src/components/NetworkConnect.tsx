@@ -1,68 +1,145 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PmConnection } from '../types';
+import { PmConnection, ConnectionInvitation } from '../types';
 import { INITIAL_CONNECTIONS } from '../data/mockData';
 import {
   Users,
   UserPlus,
   Check,
-  X,
   Search,
-  Filter,
-  MessageSquare,
   Building2,
   MapPin,
-  Sparkles,
-  ShieldCheck,
-  ChevronRight,
-  Bookmark,
-  Calendar,
   Layers,
+  Calendar,
   FileText,
-  Send,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
-import { getOtherProfilesFromDb } from '@/lib/supabase/database';
+import {
+  getOtherProfilesFromDb,
+  getUserNetworkData,
+  sendConnectionRequestDb,
+  acceptConnectionRequestDb,
+  removeOrIgnoreConnectionDb,
+} from '@/lib/supabase/database';
 
 export const NetworkConnect: React.FC = () => {
-  const { user, openAuthModal } = useAuth();
+  const { user, profile, updateProfile, openAuthModal } = useAuth();
   const [connections, setConnections] = useState<PmConnection[]>(INITIAL_CONNECTIONS);
+  const [invitations, setInvitations] = useState<ConnectionInvitation[]>([]);
+  const [connectedCount, setConnectedCount] = useState<number>(0);
   const [search, setSearch] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('All');
-  const [invitations, setInvitations] = useState<any[]>([]);
 
+  // Load real members and connection status from Supabase & synced store
   useEffect(() => {
     let mounted = true;
-    async function loadMembers() {
+
+    async function loadNetwork() {
+      // 1. Fetch other registered PM profiles
       const dbProfiles = await getOtherProfilesFromDb(user?.id);
-      if (mounted && dbProfiles && dbProfiles.length > 0) {
-        const mapped: PmConnection[] = dbProfiles.map((p) => ({
-          id: p.id,
-          name: p.fullName,
-          headline: `${p.role || 'Product Manager'}${p.company ? ` @ ${p.company}` : ''}`,
-          role: (p.role as any) || 'Product Manager',
-          company: p.company || 'Tech Squad',
-          avatar: p.avatarUrl || '',
-          coverPhoto: '',
-          mutualConnections: 0,
-          location: p.bio || 'Global',
-          skills: ['Product Strategy', 'Roadmapping'],
-          status: 'not_connected',
-          bio: p.bio || '',
-        }));
+
+      // 2. Fetch connections & incoming invitations
+      let networkData = {
+        incomingInvitations: [] as ConnectionInvitation[],
+        statusMap: {} as Record<string, 'not_connected' | 'pending' | 'received' | 'connected'>,
+        connectedCount: 0,
+      };
+
+      if (user?.id) {
+        networkData = await getUserNetworkData(user.id);
+      }
+
+      if (!mounted) return;
+
+      setInvitations(networkData.incomingInvitations);
+      setConnectedCount(networkData.connectedCount);
+
+      if (dbProfiles && dbProfiles.length > 0) {
+        const mapped: PmConnection[] = dbProfiles.map((p) => {
+          const status = networkData.statusMap[p.id] || 'not_connected';
+          return {
+            id: p.id,
+            name: p.fullName,
+            headline: `${p.role || 'Product Manager'}${p.company ? ` @ ${p.company}` : ''}`,
+            role: (p.role as any) || 'Product Manager',
+            company: p.company || 'Tech Squad',
+            avatar: p.avatarUrl || '',
+            coverPhoto: '',
+            mutualConnections: 0,
+            location: p.bio || 'Global',
+            skills: ['Product Strategy', 'Roadmapping'],
+            status,
+            bio: p.bio || '',
+          };
+        });
         setConnections(mapped);
       }
     }
-    loadMembers();
+
+    loadNetwork();
+
     return () => {
       mounted = false;
     };
   }, [user]);
 
-  const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState('');
+  const handleConnectToggle = async (targetUserId: string) => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+
+    const current = connections.find((c) => c.id === targetUserId);
+    if (!current) return;
+
+    if (current.status === 'not_connected') {
+      // Send connection request
+      setConnections((prev) =>
+        prev.map((c) => (c.id === targetUserId ? { ...c, status: 'pending' } : c))
+      );
+      await sendConnectionRequestDb(user.id, targetUserId);
+    } else if (current.status === 'pending') {
+      // Withdraw request
+      setConnections((prev) =>
+        prev.map((c) => (c.id === targetUserId ? { ...c, status: 'not_connected' } : c))
+      );
+      await removeOrIgnoreConnectionDb(user.id, targetUserId);
+    } else if (current.status === 'received') {
+      // Accept incoming request
+      await handleAcceptInvite(targetUserId);
+    }
+  };
+
+  const handleAcceptInvite = async (senderId: string) => {
+    if (!user) return;
+
+    // Update invitations UI
+    setInvitations((prev) => prev.filter((i) => i.requesterId !== senderId && i.id !== senderId));
+
+    // Update connection status in list
+    setConnections((prev) =>
+      prev.map((c) => (c.id === senderId ? { ...c, status: 'connected' } : c))
+    );
+
+    const newCount = connectedCount + 1;
+    setConnectedCount(newCount);
+    updateProfile({ connectionsCount: newCount }).catch(() => {});
+
+    await acceptConnectionRequestDb(senderId, user.id);
+  };
+
+  const handleIgnoreInvite = async (senderId: string) => {
+    if (!user) return;
+
+    setInvitations((prev) => prev.filter((i) => i.requesterId !== senderId && i.id !== senderId));
+    setConnections((prev) =>
+      prev.map((c) => (c.id === senderId ? { ...c, status: 'not_connected' } : c))
+    );
+
+    await removeOrIgnoreConnectionDb(senderId, user.id);
+  };
 
   const filterOptions = [
     'All',
@@ -73,157 +150,112 @@ export const NetworkConnect: React.FC = () => {
     'Director / VP of Product',
   ];
 
-  const handleConnectToggle = (id: string) => {
-    if (!user) {
-      openAuthModal('signin');
-      return;
-    }
-
-    setConnections((prev) =>
-      prev.map((c) => {
-        if (c.id === id) {
-          const nextStatus =
-            c.status === 'not_connected'
-              ? 'pending'
-              : c.status === 'pending'
-              ? 'connected'
-              : 'not_connected';
-          return { ...c, status: nextStatus };
-        }
-        return c;
-      })
-    );
-  };
-
-  const handleAcceptInvite = (id: string) => {
-    setInvitations((prev) => prev.filter((i) => i.id !== id));
-  };
-
-  const handleIgnoreInvite = (id: string) => {
-    setInvitations((prev) => prev.filter((i) => i.id !== id));
-  };
-
   const filteredConnections = connections.filter((c) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.headline.toLowerCase().includes(search.toLowerCase()) ||
-      c.company.toLowerCase().includes(search.toLowerCase()) ||
-      c.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      c.headline.toLowerCase().includes(q) ||
+      c.company.toLowerCase().includes(q);
 
-    const matchesRole =
-      selectedRoleFilter === 'All' || c.role === selectedRoleFilter;
-
+    const matchesRole = selectedRoleFilter === 'All' || c.role === selectedRoleFilter;
     return matchesSearch && matchesRole;
   });
 
   return (
-    <div className="flex flex-col lg:flex-row gap-5 items-start text-left">
-      {/* Left Column: Manage my network panel (LinkedIn style) */}
-      <div className="w-full lg:w-64 flex-shrink-0 space-y-2">
-        <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-3.5">
-          <h2 className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">
-            Manage my network
+    <div className="flex flex-col lg:flex-row gap-6 items-start text-left">
+      {/* Left Column: Manage My Network Panel */}
+      <div className="w-full lg:w-64 flex-shrink-0 space-y-3">
+        <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-4">
+          <h2 className="text-xs uppercase tracking-widest font-extrabold text-[#201e1d] pb-2 border-b-2 border-[rgba(32,30,29,0.15)]">
+            Manage Network
           </h2>
 
-          <div className="divide-y divide-slate-100 text-xs">
-            <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Users className="w-4 h-4 text-slate-500" />
+          <div className="divide-y divide-[rgba(32,30,29,0.1)] text-xs">
+            <div className="py-2.5 flex items-center justify-between text-[#201e1d]">
+              <span className="flex items-center space-x-2 font-semibold">
+                <Users className="w-3.5 h-3.5 text-[#605d5d]" />
                 <span>Connections</span>
               </span>
-              <span className="font-bold text-slate-800">
-                {connections.filter((c) => c.status === 'connected').length}
+              <span className="font-extrabold text-[#ec3013] text-sm">
+                {connectedCount}
               </span>
             </div>
 
-            <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-slate-500" />
-                <span>PM Groups</span>
+            <div className="py-2.5 flex items-center justify-between text-[#201e1d]">
+              <span className="flex items-center space-x-2 font-semibold">
+                <Layers className="w-3.5 h-3.5 text-[#605d5d]" />
+                <span>PM Squads</span>
               </span>
-              <span className="font-semibold text-slate-500">0</span>
+              <span className="font-bold text-[#605d5d]">4</span>
             </div>
 
-            <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-slate-500" />
-                <span>Events & Teardowns</span>
+            <div className="py-2.5 flex items-center justify-between text-[#201e1d]">
+              <span className="flex items-center space-x-2 font-semibold">
+                <Calendar className="w-3.5 h-3.5 text-[#605d5d]" />
+                <span>Teardown Sessions</span>
               </span>
-              <span className="font-semibold text-slate-500">0</span>
+              <span className="font-bold text-[#605d5d]">2</span>
             </div>
 
-            <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Building2 className="w-4 h-4 text-slate-500" />
+            <div className="py-2.5 flex items-center justify-between text-[#201e1d]">
+              <span className="flex items-center space-x-2 font-semibold">
+                <Building2 className="w-3.5 h-3.5 text-[#605d5d]" />
                 <span>Company Pages</span>
               </span>
-              <span className="font-semibold text-slate-500">0</span>
+              <span className="font-bold text-[#605d5d]">12</span>
             </div>
 
-            <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-slate-500" />
-                <span>PM Newsletters</span>
+            <div className="py-2.5 flex items-center justify-between text-[#201e1d]">
+              <span className="flex items-center space-x-2 font-semibold">
+                <FileText className="w-3.5 h-3.5 text-[#605d5d]" />
+                <span>Product Newsletters</span>
               </span>
-              <span className="font-semibold text-slate-500">0</span>
+              <span className="font-bold text-[#605d5d]">3</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Column: Invitations + Connections Grid */}
-      <div className="flex-1 min-w-0 w-full space-y-3">
-        {/* Invitations Card (if any pending) */}
+      {/* Right Column: Invitations + Directory */}
+      <div className="flex-1 min-w-0 w-full space-y-4">
+        {/* Incoming Invitations Card */}
         {invitations.length > 0 && (
-          <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-3.5 sm:p-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h2 className="text-sm font-bold text-slate-900">
-                Invitations ({invitations.length})
-              </h2>
-              <span className="text-xs font-semibold text-[#0a66c2] hover:underline cursor-pointer">
-                Manage all
-              </span>
+          <div className="bg-[#f3f2f2] border-2 border-[#ec3013] p-5 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[rgba(32,30,29,0.15)]">
+              <h3 className="font-extrabold text-sm uppercase tracking-wide text-[#ae1800]">
+                Incoming Invitations ({invitations.length})
+              </h3>
+              <span className="text-xs text-[#605d5d] font-semibold">Action Required</span>
             </div>
 
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-[rgba(32,30,29,0.15)]">
               {invitations.map((inv) => (
                 <div
                   key={inv.id}
                   className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
-                  <div className="flex items-start space-x-3">
-                    <UserAvatar
-                      src={inv.avatar}
-                      name={inv.name}
-                      size="xl"
-                      className="border border-slate-200 flex-shrink-0 mt-0.5"
-                    />
+                  <div className="flex items-start gap-3">
+                    <UserAvatar name={inv.name} src={inv.avatar} size="lg" />
                     <div>
-                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 hover:text-[#0a66c2] hover:underline cursor-pointer">
+                      <h4 className="font-extrabold text-sm text-[#201e1d] leading-snug">
                         {inv.name}
-                      </h3>
-                      <p className="text-xs text-slate-500">{inv.role}</p>
-                      <p className="text-[11px] text-slate-400">
-                        {inv.mutual} mutual PM connections
-                      </p>
-                      {inv.note && (
-                        <p className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg mt-1 border border-slate-100 italic">
-                          "{inv.note}"
-                        </p>
-                      )}
+                      </h4>
+                      <p className="text-xs text-[#605d5d]">{inv.role}</p>
+                      <p className="text-[11px] text-[#605d5d]">{inv.company}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2 self-end sm:self-center">
+                  <div className="flex items-center gap-2 self-end sm:self-center">
                     <button
-                      onClick={() => handleIgnoreInvite(inv.id)}
-                      className="px-3.5 py-1 rounded-full text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                      onClick={() => handleIgnoreInvite(inv.requesterId)}
+                      className="btn btn-secondary text-xs font-bold py-1.5 px-3"
                     >
                       Ignore
                     </button>
                     <button
-                      onClick={() => handleAcceptInvite(inv.id)}
-                      className="px-4 py-1 rounded-full text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] hover:bg-[#ebf4fd] hover:border-2 transition"
+                      onClick={() => handleAcceptInvite(inv.requesterId)}
+                      className="btn btn-primary text-xs font-bold py-1.5 px-4"
                     >
                       Accept
                     </button>
@@ -234,29 +266,28 @@ export const NetworkConnect: React.FC = () => {
           </div>
         )}
 
-        {/* Top Controls: Search & Role Filters */}
-        <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-3 space-y-2.5">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+        {/* Search & Filter Bar */}
+        <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-3 space-y-2.5">
+          <div className="flex items-center border border-[rgba(32,30,29,0.2)] bg-white px-2.5">
+            <Search className="w-3.5 h-3.5 text-[#605d5d] mr-2 shrink-0" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, company (e.g. Stripe, Figma), or skills..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#edf3f8] hover:bg-[#e4ecf4] focus:bg-white focus:border-slate-400 focus:ring-1 focus:ring-slate-400 border border-transparent rounded-md transition outline-none text-[#191919]"
+              placeholder="Search PMs by name or company…"
+              className="w-full text-xs py-2 bg-transparent outline-none font-medium text-[#201e1d]"
             />
           </div>
 
-          {/* Role Filter Pills */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {filterOptions.map((role) => (
               <button
                 key={role}
                 onClick={() => setSelectedRoleFilter(role)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+                className={`text-xs font-bold py-1 px-2.5 whitespace-nowrap border transition-colors ${
                   selectedRoleFilter === role
-                    ? 'bg-[#0a66c2] text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-[#e0dfdc] hover:bg-slate-50'
+                    ? 'bg-[#201e1d] text-[#f3f2f2] border-[#201e1d]'
+                    : 'bg-transparent text-[#201e1d] border-[rgba(32,30,29,0.15)] hover:border-[#201e1d]'
                 }`}
               >
                 {role}
@@ -265,112 +296,61 @@ export const NetworkConnect: React.FC = () => {
           </div>
         </div>
 
-        {/* Section Title */}
+        {/* Directory Title */}
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-sm font-bold text-slate-900">
-            People in Product Management you may know
+          <h2 className="text-sm font-extrabold text-[#201e1d] uppercase tracking-wide">
+            Product Managers You May Know
           </h2>
-          <span className="text-xs text-slate-500">
-            Showing {filteredConnections.length} PMs
-          </span>
+          <span className="text-xs text-[#605d5d]">{filteredConnections.length} PMs</span>
         </div>
 
-        {/* Grid of PM Profiles (LinkedIn 'People you may know' cards) */}
+        {/* Modernist Grid of PM Profiles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filteredConnections.length === 0 ? (
-            <div className="col-span-full bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-8 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-sky-50 text-[#0a66c2] mx-auto flex items-center justify-center">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">
-                Expand Your PM Network
-              </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                Connect with Product Managers, APMs, and Leaders across tech squads. As fellow PMs register on PMVerse, they will appear in your network directory.
-              </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(window.location.origin);
-                      alert('PMVerse invite link copied to clipboard! Share it with your product colleagues.');
-                    }
-                  }}
-                  className="px-5 py-2 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
-                >
-                  Copy Invite Link
-                </button>
-              </div>
-            </div>
-          ) : (
-            filteredConnections.map((pm) => {
+          {filteredConnections.map((pm) => {
             const isConnected = pm.status === 'connected';
             const isPending = pm.status === 'pending';
+            const isReceived = pm.status === 'received';
 
             return (
               <div
                 key={pm.id}
-                className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition text-center"
+                className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-4 flex flex-col justify-between text-center hover:border-[#201e1d] transition-colors"
               >
-                {/* Cover Photo */}
-                <div
-                  className="h-16 bg-cover bg-center relative"
-                  style={{ backgroundImage: `url(${pm.coverPhoto})` }}
-                >
-                  <div className="absolute inset-0 bg-slate-900/10" />
-                </div>
-
-                {/* Card Body */}
-                <div className="p-3.5 -mt-9 flex-1 flex flex-col items-center">
-                  <UserAvatar
-                    src={pm.avatar}
-                    name={pm.name}
-                    size="2xl"
-                    className="border-2 border-white shadow-sm bg-white"
-                  />
-
-                  <h3 className="text-sm font-bold text-slate-900 mt-2 hover:text-[#0a66c2] hover:underline cursor-pointer transition line-clamp-1">
-                    {pm.name}
-                  </h3>
-                  <p className="text-xs text-slate-600 line-clamp-2 px-1 mt-0.5 leading-tight">
+                <div className="flex flex-col items-center">
+                  <UserAvatar name={pm.name} src={pm.avatar} size="2xl" className="mb-2.5" />
+                  <h3 className="font-extrabold text-sm text-[#201e1d] line-clamp-1">{pm.name}</h3>
+                  <p className="text-xs text-[#605d5d] line-clamp-2 mt-0.5 leading-snug">
                     {pm.headline}
                   </p>
 
-                  <div className="flex items-center space-x-1 text-[11px] text-slate-400 mt-1.5">
-                    <Building2 className="w-3 h-3 text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-2">
+                    <Building2 className="w-3 h-3 text-[#605d5d]" />
                     <span>{pm.company}</span>
                     <span>•</span>
-                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <MapPin className="w-3 h-3 text-[#605d5d]" />
                     <span>{pm.location}</span>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    {pm.mutualConnections > 0 ? `${pm.mutualConnections} mutual PM connections` : 'Verified PM Member'}
-                  </p>
-
-                  {/* Skills tags */}
                   <div className="flex flex-wrap justify-center gap-1 mt-2.5">
                     {pm.skills.slice(0, 2).map((skill, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full"
-                      >
+                      <span key={i} className="tag tag-neutral text-[10px]">
                         {skill}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                {/* Bottom Action Button */}
-                <div className="p-3 border-t border-slate-100">
+                <div className="mt-4 pt-3 border-t border-[rgba(32,30,29,0.15)]">
                   <button
                     onClick={() => handleConnectToggle(pm.id)}
-                    className={`w-full py-1.5 px-3 rounded-full text-xs font-semibold flex items-center justify-center space-x-1.5 transition ${
+                    className={`btn w-full text-xs font-bold py-1.5 ${
                       isConnected
-                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'btn-secondary text-[#201e1d]'
                         : isPending
-                        ? 'border border-slate-300 text-slate-600 hover:bg-slate-50'
-                        : 'border border-[#0a66c2] text-[#0a66c2] hover:bg-[#ebf4fd] hover:border-2'
+                        ? 'btn-secondary text-slate-500'
+                        : isReceived
+                        ? 'btn-primary'
+                        : 'btn-secondary hover:border-[#ec3013] hover:text-[#ae1800]'
                     }`}
                   >
                     {isConnected ? (
@@ -379,13 +359,12 @@ export const NetworkConnect: React.FC = () => {
                         <span>Connected</span>
                       </>
                     ) : isPending ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Pending</span>
-                      </>
+                      <span>Pending • Withdraw</span>
+                    ) : isReceived ? (
+                      <span>Accept Invitation</span>
                     ) : (
                       <>
-                        <UserPlus className="w-3.5 h-3.5 text-[#0a66c2]" />
+                        <UserPlus className="w-3.5 h-3.5" />
                         <span>Connect</span>
                       </>
                     )}
@@ -393,7 +372,7 @@ export const NetworkConnect: React.FC = () => {
                 </div>
               </div>
             );
-          }))}
+          })}
         </div>
       </div>
     </div>

@@ -322,96 +322,89 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
     PM_CASE_STUDIES.find((c) => c.id === selectedCaseId) || PM_CASE_STUDIES[0];
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto text-left">
-      {/* LinkedIn Skill Assessment Header Banner */}
-      <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+    <div className="space-y-6 max-w-4xl mx-auto text-left">
+      {/* Modernist PMX Assessment Header */}
+      <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
           <div>
-            <div className="flex items-center space-x-2 text-[#0a66c2] text-xs font-bold mb-1">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>PMVerse Official Competency Benchmark</span>
+            <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold mb-1">
+              PM Fit Assessment · Official Diagnostic
             </div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              Product Manager Competency Assessment
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#201e1d] tracking-tight m-0">
+              PM Competency Assessment
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-[#605d5d] mt-1 max-w-xl">
               50 scenario-based questions across 10 core PM disciplines designed to evaluate real-world product judgment, trade-offs, and analytical rigor.
             </p>
           </div>
 
           {/* Quick stats on user profile */}
           {profile?.pmFitScore && (
-            <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-2.5 flex items-center space-x-3 shrink-0">
-              <div className="w-9 h-9 rounded-full bg-amber-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
-                {profile.pmFitScore}%
+            <div className="border-2 border-[#201e1d] p-3 flex items-center gap-3 shrink-0 bg-[#eae9e9]">
+              <div className="text-3xl font-black text-[#ec3013] leading-none">
+                {profile.pmFitScore}
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
-                  Profile Badge
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#605d5d]">
+                  Profile Score
                 </p>
-                <p className="text-xs font-bold text-slate-800">
-                  Verified Score
-                </p>
+                <p className="text-xs font-bold text-[#201e1d]">Verified / 100</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Mode Selector Tabs */}
-        <div className="flex items-center gap-1.5 pt-3 overflow-x-auto text-xs font-semibold">
+        {/* Mode Selector Tabs (Modernist Segmented) */}
+        <div className="flex flex-wrap border-2 border-[rgba(32,30,29,0.15)] mt-4 text-xs font-bold">
           <button
             onClick={() => switchMode('full_50')}
-            className={`px-3.5 py-1.5 rounded-full whitespace-nowrap transition flex items-center space-x-1.5 ${
+            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
               mode === 'full_50'
-                ? 'bg-[#0a66c2] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 border border-[#e0dfdc]'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
             }`}
           >
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span>Full 50-Question Exam</span>
+            Full 50 Exam
           </button>
 
           <button
             onClick={() => switchMode('rapid_10')}
-            className={`px-3.5 py-1.5 rounded-full whitespace-nowrap transition flex items-center space-x-1.5 ${
+            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
               mode === 'rapid_10'
-                ? 'bg-[#0a66c2] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 border border-[#e0dfdc]'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
             }`}
           >
-            <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span>10-Question Pulse Diagnostic</span>
+            10-Question Pulse
           </button>
 
           <button
             onClick={() => switchMode('category_focus')}
-            className={`px-3.5 py-1.5 rounded-full whitespace-nowrap transition flex items-center space-x-1.5 ${
+            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
               mode === 'category_focus'
-                ? 'bg-[#0a66c2] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 border border-[#e0dfdc]'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Category Practice (5 Qs)</span>
+            Category Focus
           </button>
 
           <button
             onClick={() => switchMode('case_studies')}
-            className={`px-3.5 py-1.5 rounded-full whitespace-nowrap transition flex items-center space-x-1.5 ${
+            className={`flex-1 py-2.5 px-3 text-center transition-colors ${
               mode === 'case_studies'
-                ? 'bg-[#0a66c2] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 border border-[#e0dfdc]'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Practical PM Case Studies</span>
+            Case Studies
           </button>
         </div>
 
-        {/* Category Focus Dropdown (when in category_focus mode) */}
+        {/* Category Focus Dropdown */}
         {mode === 'category_focus' && (
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center space-x-2 text-xs">
-            <span className="text-slate-500 font-medium">Select Focus Area:</span>
+          <div className="mt-3 pt-3 border-t border-[rgba(32,30,29,0.15)] flex items-center gap-2 text-xs">
+            <span className="text-[#605d5d] font-semibold">Select Focus Category:</span>
             <select
               value={selectedFocusCategory}
               onChange={(e) => {
@@ -420,7 +413,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
                 setSelectedAnswers({});
                 setResult(null);
               }}
-              className="px-2.5 py-1 border border-slate-300 rounded-md bg-white text-slate-800 font-semibold outline-none focus:border-[#0a66c2]"
+              className="px-2.5 py-1 border border-[rgba(32,30,29,0.3)] bg-white text-[#201e1d] font-bold outline-none"
             >
               {PM_COMPETENCY_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
@@ -438,32 +431,31 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
       {mode !== 'case_studies' && (
         <>
           {!result ? (
-            /* Active Question Card */
-            <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-5 sm:p-6 space-y-4">
+            /* Active Question Card */            <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6 space-y-5">
               {/* Top Progress & Stats */}
               <div>
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-600 mb-1.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-[#605d5d] mb-2">
                   <div className="flex items-center space-x-2">
-                    <span className="font-bold text-slate-900">
+                    <span className="font-extrabold text-[#201e1d]">
                       Question {currentIdx + 1} of {activeQuestionSet.length}
                     </span>
                     <span className="text-slate-400">•</span>
-                    <span className="text-slate-500">
+                    <span>
                       {answeredCount} of {activeQuestionSet.length} answered
                     </span>
                   </div>
 
                   <button
                     onClick={() => setIsPaletteOpen(!isPaletteOpen)}
-                    className="text-xs font-semibold text-[#0a66c2] hover:underline flex items-center space-x-1"
+                    className="text-xs font-bold text-[#ae1800] hover:underline"
                   >
                     <span>{isPaletteOpen ? 'Hide Question Grid' : 'Question Grid (Jump)'}</span>
                   </button>
                 </div>
 
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-full h-1 bg-[#d7d3d3]">
                   <div
-                    className="h-full bg-[#0a66c2] transition-all duration-300"
+                    className="h-full bg-[#ec3013] transition-all duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -471,16 +463,16 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
 
               {/* Collapsible Question Palette Drawer */}
               {isPaletteOpen && (
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 text-xs font-semibold text-slate-700">
+                <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[rgba(32,30,29,0.15)] text-xs font-bold text-[#201e1d]">
                     <span>Jump to Question</span>
-                    <div className="flex items-center space-x-3 text-[11px] text-slate-500">
+                    <div className="flex items-center space-x-3 text-[11px] text-[#605d5d]">
                       <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#0a66c2]" />
+                        <span className="w-2.5 h-2.5 bg-[#ec3013]" />
                         <span>Answered</span>
                       </span>
                       <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-white border border-slate-300" />
+                        <span className="w-2.5 h-2.5 bg-white border border-slate-300" />
                         <span>Unanswered</span>
                       </span>
                     </div>
@@ -498,11 +490,11 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
                             setCurrentIdx(idx);
                             setIsPaletteOpen(false);
                           }}
-                          className={`h-8 rounded text-xs font-bold transition flex items-center justify-center ${
+                          className={`h-8 text-xs font-bold transition flex items-center justify-center ${
                             isCurrent
-                              ? 'ring-2 ring-slate-900 border-2 border-white bg-[#0a66c2] text-white'
+                              ? 'border-2 border-[#201e1d] bg-[#ec3013] text-white'
                               : isAnswered
-                              ? 'bg-[#0a66c2] text-white hover:bg-[#004182]'
+                              ? 'bg-[#201e1d] text-white'
                               : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
                           }`}
                         >
@@ -515,66 +507,66 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
               )}
 
               {/* Category & Competency Meta */}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#0a66c2] bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="tag tag-accent font-bold">
                   {currentQ.category}
                 </span>
-                <span className="text-xs text-slate-400 font-medium">
-                  • Evaluates: {currentQ.competencyTested}
+                <span className="text-xs text-[#605d5d] font-semibold">
+                  Evaluates: {currentQ.competencyTested}
                 </span>
               </div>
 
               {/* Question Title & Scenario */}
-              <div className="space-y-2 pt-1">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              <div className="space-y-3">
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#605d5d]">
                   {currentQ.title}
                 </h3>
-                <div className="bg-slate-50/70 p-3.5 rounded-lg border border-slate-200 text-xs sm:text-sm text-slate-800 leading-relaxed font-normal">
+                <div className="bg-[#eae9e9] p-4 border border-[rgba(32,30,29,0.15)] text-sm text-[#201e1d] leading-relaxed">
                   {currentQ.scenario}
                 </div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 pt-1">
+                <h2 className="text-lg sm:text-xl font-extrabold text-[#201e1d] leading-snug">
                   {currentQ.question}
                 </h2>
               </div>
 
-              {/* Options List */}
-              <div className="space-y-2.5 pt-1">
+              {/* Options List (Modernist 2px border boxes) */}
+              <div className="space-y-2.5">
                 {currentQ.options.map((opt) => {
                   const isSelected = selectedAnswers[currentQ.id] === opt.key;
 
                   return (
-                    <button
+                    <div
                       key={opt.key}
                       onClick={() => handleSelectOption(currentQ.id, opt.key)}
-                      className={`w-full text-left p-3 sm:p-3.5 rounded-lg border transition-all flex items-start space-x-3 ${
+                      className={`w-full text-left p-3.5 border-2 transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
-                          ? 'border-[#0a66c2] bg-sky-50/70 ring-1 ring-[#0a66c2]'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          ? 'border-[#ec3013] bg-[#fff2ef]'
+                          : 'border-[rgba(32,30,29,0.15)] bg-[#eae9e9] hover:border-[#201e1d]'
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 rounded-full border text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 transition ${
+                        className={`w-6 h-6 border text-xs font-black flex items-center justify-center shrink-0 mt-0.5 select-none transition ${
                           isSelected
-                            ? 'border-[#0a66c2] bg-[#0a66c2] text-white'
-                            : 'border-slate-300 bg-slate-100 text-slate-600'
+                            ? 'border-[#ec3013] bg-[#ec3013] text-[#f3f2f2]'
+                            : 'border-slate-300 bg-white text-[#201e1d]'
                         }`}
                       >
                         {opt.key}
                       </div>
-                      <span className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                      <span className="text-sm text-[#201e1d] font-semibold leading-relaxed">
                         {opt.text}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
               {/* Navigation Bar */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-4 border-t-2 border-[rgba(32,30,29,0.15)]">
                 <button
                   onClick={handlePrev}
                   disabled={currentIdx === 0}
-                  className="px-4 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 disabled:opacity-30 transition flex items-center space-x-1"
+                  className="btn btn-secondary text-xs font-bold"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Previous</span>
@@ -585,19 +577,19 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
                     <button
                       onClick={calculateResult}
                       disabled={!selectedAnswers[currentQ.id]}
-                      className="inline-flex items-center space-x-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-full text-xs font-bold transition shadow-xs"
+                      className="btn btn-primary text-xs font-bold px-5"
                     >
                       <span>Submit & Grade Assessment</span>
-                      <Check className="w-3.5 h-3.5" />
+                      <span>→</span>
                     </button>
                   ) : (
                     <button
                       onClick={handleNext}
                       disabled={!selectedAnswers[currentQ.id]}
-                      className="inline-flex items-center space-x-1.5 px-5 py-2 bg-[#0a66c2] hover:bg-[#004182] disabled:opacity-40 text-white rounded-full text-xs font-semibold transition shadow-xs"
+                      className="btn btn-primary text-xs font-bold px-5"
                     >
                       <span>Next Question</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <span>→</span>
                     </button>
                   )}
                 </div>
@@ -605,141 +597,194 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
             </div>
           ) : (
             /* Results & Competency Diagnostic Report View */
-            <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-6 sm:p-8 space-y-6">
+            <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-6 sm:p-8 space-y-8">
               {/* Score Header Card */}
-              <div className="text-center space-y-3 pb-6 border-b border-slate-100">
-                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[#0a66c2] text-white text-3xl font-black shadow-md ring-4 ring-sky-100">
-                  {result.scorePercentage}%
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end pb-8 border-b-2 border-[rgba(32,30,29,0.15)]">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+                    Your PM Fit Score · Official Diagnostic
+                  </div>
+                  <div className="flex items-baseline gap-3 my-2">
+                    <span className="text-8xl sm:text-9xl font-black text-[#ec3013] leading-none tracking-tighter">
+                      {result.scorePercentage}
+                    </span>
+                    <span className="text-2xl font-bold text-[#7d7979]">/ 100</span>
+                  </div>
+                  <div className="text-2xl font-extrabold tracking-tight mt-3 text-[#201e1d]">
+                    {result.archetype}
+                  </div>
+                  <p className="text-sm text-[#201e1d] mt-2 max-w-md leading-relaxed">
+                    {result.summary}
+                  </p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span
-                    className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border ${
-                      result.scorePercentage >= 75
-                        ? 'text-emerald-800 bg-emerald-50 border-emerald-300'
-                        : result.scorePercentage >= 60
-                        ? 'text-sky-800 bg-sky-50 border-sky-300'
-                        : 'text-amber-800 bg-amber-50 border-amber-300'
-                    }`}
-                  >
-                    Assessment Rating: {result.assessmentLabel} ({result.totalCorrect} /{' '}
-                    {result.totalQuestions} Correct)
-                  </span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-                    Archetype: {result.archetype}
-                  </span>
-                </div>
+                {/* Score Bands Bar */}
+                <div className="border-t-2 border-[rgba(32,30,29,0.15)] pt-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#605d5d] mb-2">
+                    Score Distribution Bands
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 text-center">
+                    {[
+                      { label: 'Low fit', range: '0–39', active: result.scorePercentage < 40 },
+                      {
+                        label: 'Developing',
+                        range: '40–59',
+                        active: result.scorePercentage >= 40 && result.scorePercentage < 60,
+                      },
+                      {
+                        label: 'Good potential',
+                        range: '60–74',
+                        active: result.scorePercentage >= 60 && result.scorePercentage < 75,
+                      },
+                      {
+                        label: 'Strong PM fit',
+                        range: '75–89',
+                        active: result.scorePercentage >= 75 && result.scorePercentage < 90,
+                      },
+                      {
+                        label: 'Exceptional',
+                        range: '90–100',
+                        active: result.scorePercentage >= 90,
+                      },
+                    ].map((b, bi) => (
+                      <div key={bi}>
+                        <div
+                          className={`h-3 ${b.active ? 'bg-[#ec3013]' : 'bg-[#d7d3d3]'}`}
+                        />
+                        <div
+                          className={`text-[11px] mt-1.5 leading-tight ${
+                            b.active ? 'font-extrabold text-[#ae1800]' : 'text-slate-600'
+                          }`}
+                        >
+                          {b.label}
+                        </div>
+                        <div className="text-[10px] text-[#605d5d]">{b.range}</div>
+                      </div>
+                    ))}
+                  </div>
 
-                <h2 className="text-xl font-bold text-slate-900">
-                  Recommended Track: {result.recommendedRole}
-                </h2>
-
-                <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed">
-                  {result.summary}
-                </p>
-
-                {/* Profile Badge Button */}
-                <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    onClick={async () => {
-                      if (!user) {
-                        openAuthModal('signin');
-                        return;
-                      }
-                      setIsBadgeAddedToProfile(true);
-                      await updateProfile({ pmFitScore: result.scorePercentage });
-                      alert(
-                        `Certified PM Skill Badge (${result.scorePercentage}%) added to your public profile!`
-                      );
-                    }}
-                    className={`px-5 py-2 rounded-full text-xs font-semibold transition flex items-center space-x-1.5 ${
-                      isBadgeAddedToProfile
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
-                        : 'bg-[#0a66c2] text-white hover:bg-[#004182] shadow-xs'
-                    }`}
-                  >
-                    {isBadgeAddedToProfile ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Badge Displayed on Profile</span>
-                      </>
-                    ) : (
-                      <>
-                        <Award className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Add Certified PM Badge to Profile</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleRetake}
-                    className="px-4 py-2 rounded-full text-xs font-semibold text-slate-600 border border-slate-300 hover:bg-slate-50 transition flex items-center space-x-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Retake Assessment</span>
-                  </button>
+                  <div className="pt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!user) {
+                          openAuthModal('signin');
+                          return;
+                        }
+                        setIsBadgeAddedToProfile(true);
+                        await updateProfile({ pmFitScore: result.scorePercentage });
+                        alert(
+                          `Certified PM Skill Badge (${result.scorePercentage}%) added to your public profile!`
+                        );
+                      }}
+                      className="btn btn-primary text-xs font-bold"
+                    >
+                      <span>
+                        {isBadgeAddedToProfile
+                          ? '✓ Badge Displayed on Profile'
+                          : 'Add Certified Badge to Profile'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleRetake}
+                      className="btn btn-secondary text-xs font-bold"
+                    >
+                      <span>Retake Assessment</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* 10-Competency Category Breakdown Table */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
-                    <BarChart3 className="w-4 h-4 text-[#0a66c2]" />
-                    <span>Competency Diagnostic Breakdown (10 Categories)</span>
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    Scored out of {result.categoryScores[0]?.total || 5} per category
-                  </span>
-                </div>
-
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-                  {result.categoryScores.map((cat, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 bg-white hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h4 className="text-xs font-bold text-slate-900">
-                            {cat.category}
-                          </h4>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              cat.percentage >= 80
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : cat.percentage >= 60
-                                ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
-                          >
-                            {cat.level}
+              {/* 3-Column Diagnostic Bento Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)]">
+                {/* 1. Category Diagnostic Breakdown */}
+                <div className="bg-[#f3f2f2] p-6 space-y-3">
+                  <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-3">
+                    Competencies (10 Areas)
+                  </div>
+                  <div className="divide-y divide-[rgba(32,30,29,0.15)]">
+                    {result.categoryScores.map((cat, idx) => (
+                      <div key={idx} className="py-2.5">
+                        <div className="flex justify-between text-xs font-semibold mb-1">
+                          <span className="text-[#201e1d]">{cat.category}</span>
+                          <span className="font-extrabold text-[#ec3013]">
+                            {cat.score}/{cat.total} ({cat.percentage}%)
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Recommendation: {cat.recommendation}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center space-x-3 sm:w-44 shrink-0">
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-[#d7d3d3]">
                           <div
-                            className={`h-full rounded-full transition-all ${
-                              cat.percentage >= 80
-                                ? 'bg-emerald-500'
-                                : cat.percentage >= 60
-                                ? 'bg-[#0a66c2]'
-                                : 'bg-amber-500'
+                            className={`h-full ${
+                              cat.percentage >= 80 ? 'bg-[#201e1d]' : 'bg-[#ec3013]'
                             }`}
                             style={{ width: `${cat.percentage}%` }}
                           />
                         </div>
-                        <span className="text-xs font-bold text-slate-800 w-12 text-right">
-                          {cat.score}/{cat.total} ({cat.percentage}%)
-                        </span>
                       </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Natural Strengths & Growth Areas */}
+                <div className="bg-[#f3f2f2] p-6 space-y-6">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
+                      Key Strengths
                     </div>
-                  ))}
+                    <div className="space-y-1.5 text-sm font-semibold text-[#201e1d]">
+                      {result.strengths.map((str, i) => (
+                        <div key={i}>✓ {str}</div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-[#ae1800] font-bold mb-2">
+                      Growth Areas to Improve
+                    </div>
+                    <div className="space-y-1.5 text-sm font-semibold text-[#ae1800]">
+                      {result.growthAreas.map((ga, i) => (
+                        <div key={i}>→ {ga}</div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
+                      Recommended Track
+                    </div>
+                    <span className="tag tag-neutral text-xs font-bold">
+                      {result.recommendedRole}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Action Cards */}
+                <div className="bg-[#f3f2f2] p-6 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-3">
+                      Recommended Next Steps
+                    </div>
+                    <p className="text-xs text-[#605d5d] leading-relaxed mb-4">
+                      Review question-by-question explanations or jump directly to open roles matching your score.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById('answers-review-section');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="btn btn-secondary w-full justify-between text-xs font-bold"
+                    >
+                      <span>Review All 50 Answers</span>
+                      <span>↓</span>
+                    </button>
+                    <button
+                      onClick={handleRetake}
+                      className="btn btn-ghost w-full justify-start text-xs font-bold"
+                    >
+                      Retake Diagnostic
+                    </button>
+                  </div>
                 </div>
               </div>
 

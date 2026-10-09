@@ -2,21 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import {
-  X,
-  Lock,
-  Mail,
-  User,
-  Briefcase,
-  Building,
-  CheckCircle2,
-  AlertCircle,
-  Database,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Sparkles,
-} from 'lucide-react';
+import { X, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -39,7 +25,6 @@ export const AuthModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
@@ -90,39 +75,35 @@ export const AuthModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-md w-full shadow-2xl border border-[#e0dfdc] overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+      <div className="bg-[#f3f2f2] border-2 border-[#201e1d] max-w-md w-full shadow-2xl text-left relative animate-in fade-in zoom-in-95 duration-150 my-8">
         {/* Close Button */}
         <button
           onClick={closeAuthModal}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 transition z-10"
+          className="absolute top-4 right-4 btn btn-icon btn-secondary"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
-        {/* LinkedIn-style Header */}
-        <div className="p-6 pb-4 text-left border-b border-slate-100">
-          <div className="flex items-center space-x-2 mb-3">
-            <div className="w-8 h-8 rounded-md bg-[#0a66c2] text-white font-black text-lg flex items-center justify-center shadow-xs">
-              <span>pm</span>
-            </div>
-            <span className="font-extrabold text-[#191919] text-base tracking-tight">
-              PM<span className="text-[#0a66c2]">Verse</span>
-            </span>
+        {/* Modernist Header */}
+        <div className="p-6 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="font-black text-2xl tracking-tighter text-[#201e1d]">PMX</span>
+            <span className="w-2 h-2 bg-[#ec3013]"></span>
           </div>
 
-          <h2 className="text-xl font-bold text-slate-900">
-            {authModalTab === 'signin' ? 'Sign in' : 'Join the PM Network'}
+          <h2 className="text-xl font-black text-[#201e1d] m-0">
+            {authModalTab === 'signin' ? 'Sign in to PMX' : 'Join the Product Network'}
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-[#605d5d] mt-1">
             {authModalTab === 'signin'
-              ? 'Stay updated on your product world, discussions, and opportunities'
-              : 'Create your verified PM profile, connect with squads, and track skill tests'}
+              ? 'Stay updated on product frameworks, peer discussions, and open roles.'
+              : 'Create your verified PM profile, take the diagnostic, and connect with peers.'}
           </p>
         </div>
 
-        {/* LinkedIn Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50/50">
+        {/* Modernist Segmented Tabs */}
+        <div className="flex border-b-2 border-[rgba(32,30,29,0.15)] bg-[#eae9e9]">
           <button
             type="button"
             onClick={() => {
@@ -130,10 +111,10 @@ export const AuthModal: React.FC = () => {
               setError(null);
               setSuccessMessage(null);
             }}
-            className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
+            className={`flex-1 py-2.5 text-xs font-bold transition-colors border-r border-[rgba(32,30,29,0.15)] ${
               authModalTab === 'signin'
-                ? 'text-[#0a66c2] border-b-2 border-[#0a66c2] bg-white'
-                : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
             }`}
           >
             Sign In
@@ -147,8 +128,8 @@ export const AuthModal: React.FC = () => {
             }}
             className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
               authModalTab === 'signup'
-                ? 'text-[#0a66c2] border-b-2 border-[#0a66c2] bg-white'
-                : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-[#201e1d] text-[#f3f2f2]'
+                : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
             }`}
           >
             Join Now
@@ -156,31 +137,28 @@ export const AuthModal: React.FC = () => {
         </div>
 
         {/* Body Content */}
-        <div className="p-6 space-y-4 text-left">
+        <div className="p-6 space-y-4">
           {error && (
-            <div className="bg-rose-50 text-rose-800 border border-rose-200 p-3.5 rounded-lg text-xs space-y-2">
+            <div className="bg-rose-50 text-rose-900 border border-rose-300 p-3.5 text-xs space-y-2">
               <div className="flex items-start space-x-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-rose-600" />
-                <span className="font-semibold text-rose-900">{error}</span>
+                <span className="font-bold">{error}</span>
               </div>
               {error.toLowerCase().includes('rate limit') && (
-                <div className="pt-2 border-t border-rose-200 text-[11px] text-rose-800 leading-relaxed space-y-1.5">
-                  <p className="font-bold text-rose-900">How to fix this in Supabase (30 seconds):</p>
+                <div className="pt-2 border-t border-rose-200 text-[11px] leading-relaxed space-y-1">
+                  <p className="font-bold text-rose-900">How to fix in Supabase:</p>
                   <ol className="list-decimal pl-4 space-y-0.5 text-slate-700">
-                    <li>Open your <strong>Supabase Dashboard</strong></li>
-                    <li>Go to <strong>Authentication &rarr; Providers &rarr; Email</strong></li>
-                    <li>Toggle OFF <strong>&quot;Confirm email&quot;</strong> and click <strong>Save</strong></li>
+                    <li>Open your Supabase Dashboard</li>
+                    <li>Go to Authentication &rarr; Providers &rarr; Email</li>
+                    <li>Toggle OFF &quot;Confirm email&quot; and click Save</li>
                   </ol>
-                  <p className="text-[10px] text-slate-500">
-                    This allows users to create accounts and log in immediately without exhausting Supabase&apos;s free email quota.
-                  </p>
                 </div>
               )}
             </div>
           )}
 
           {successMessage && (
-            <div className="flex items-start space-x-2 bg-emerald-50 text-emerald-800 border border-emerald-200 p-3 rounded-md text-xs">
+            <div className="flex items-start space-x-2 bg-emerald-50 text-emerald-900 border border-emerald-300 p-3 text-xs font-semibold">
               <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
               <span>{successMessage}</span>
             </div>
@@ -190,7 +168,7 @@ export const AuthModal: React.FC = () => {
             {authModalTab === 'signup' && (
               <>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">
                     Full Name
                   </label>
                   <input
@@ -199,19 +177,19 @@ export const AuthModal: React.FC = () => {
                     placeholder="Enter your full name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none text-[#191919]"
+                    className="input"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-[#201e1d] mb-1">
                       PM Level
                     </label>
                     <select
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
-                      className="w-full text-xs px-2.5 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] outline-none bg-white text-[#191919]"
+                      className="input bg-white"
                     >
                       {pmRoles.map((r) => (
                         <option key={r} value={r}>
@@ -222,15 +200,15 @@ export const AuthModal: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Company / Squad
+                    <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                      Company
                     </label>
                     <input
                       type="text"
-                      placeholder="Company or Organization (optional)"
+                      placeholder="Organization"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
-                      className="w-full text-xs px-3 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] outline-none text-[#191919]"
+                      className="input"
                     />
                   </div>
                 </div>
@@ -238,7 +216,7 @@ export const AuthModal: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-[#201e1d] mb-1">
                 Email Address
               </label>
               <input
@@ -247,12 +225,12 @@ export const AuthModal: React.FC = () => {
                 placeholder="pm@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none text-[#191919]"
+                className="input"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-[#201e1d] mb-1">
                 Password
               </label>
               <div className="relative">
@@ -263,12 +241,12 @@ export const AuthModal: React.FC = () => {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full text-xs px-3 py-2 pr-10 border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none text-[#191919]"
+                  className="input pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -278,25 +256,22 @@ export const AuthModal: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 py-2.5 px-4 bg-[#0a66c2] hover:bg-[#004182] text-white text-xs font-semibold rounded-full transition shadow-xs flex items-center justify-center space-x-1.5 disabled:opacity-50"
+              className="btn btn-primary w-full py-2.5 text-xs font-bold mt-2"
             >
               {isLoading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Authenticating...</span>
               ) : (
-                <span>
-                  {authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMVerse'}
-                </span>
+                <span>{authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMX'}</span>
               )}
             </button>
           </form>
 
-          {/* Instant Demo Login for Offline / Quick Preview */}
           {!isConfigured && (
-            <div className="pt-2 border-t border-slate-100 text-center">
+            <div className="pt-2 border-t border-[rgba(32,30,29,0.15)] text-center">
               <button
                 type="button"
                 onClick={loginAsDemo}
-                className="w-full py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-full transition border border-slate-300"
+                className="btn btn-secondary w-full text-xs font-bold"
               >
                 Instant Demo Mode (Preview without credentials)
               </button>

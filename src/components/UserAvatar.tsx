@@ -89,13 +89,13 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     return (
       <div
         onClick={onClick}
-        className={`relative inline-flex items-center justify-center flex-shrink-0 rounded-full overflow-hidden ${sizeConfig.container} ${className}`}
+        className={`relative inline-flex items-center justify-center flex-shrink-0 border border-slate-300 overflow-hidden ${sizeConfig.container} ${className}`}
       >
         <img
           src={src}
           alt={alt || name || 'Profile Avatar'}
           onError={() => setImgError(true)}
-          className="w-full h-full object-cover rounded-full"
+          className="w-full h-full object-cover"
         />
       </div>
     );
@@ -104,7 +104,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`inline-flex items-center justify-center flex-shrink-0 rounded-full bg-gradient-to-tr from-[#0a66c2] via-[#094987] to-[#004182] text-white font-bold select-none shadow-sm tracking-wider ${sizeConfig.container} ${sizeConfig.text} ${className}`}
+      className={`inline-flex items-center justify-center flex-shrink-0 bg-[#201e1d] text-[#f3f2f2] font-black select-none tracking-tight ${sizeConfig.container} ${sizeConfig.text} ${className}`}
       title={name || email || 'PM Profile'}
     >
       <span>{initials}</span>

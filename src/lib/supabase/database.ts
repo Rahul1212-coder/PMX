@@ -1,5 +1,5 @@
 import { getSupabaseClient, isSupabaseConfigured } from './client';
-import { CommunityPost, AssessmentResult, UserProfile, SavedQuizResult, JobListing } from '@/types';
+import { CommunityPost, AssessmentResult, UserProfile, SavedQuizResult, JobListing, ConnectionInvitation } from '@/types';
 
 // Community Posts
 export async function getCommunityPostsFromDb(): Promise<CommunityPost[] | null> {
@@ -207,6 +207,13 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
 
     if (error || !data) return null;
 
+    let connectionsCount = 0;
+    try {
+      connectionsCount = await getUserConnectionsCountFromDb(userId);
+    } catch {
+      // ignore
+    }
+
     return {
       id: data.id,
       email: data.email || '',
@@ -215,6 +222,7 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
       company: data.company || 'Tech Company',
       avatarUrl: data.avatar_url || '',
       bio: data.bio || '',
+      connectionsCount,
       createdAt: data.created_at,
     };
   } catch {
@@ -271,6 +279,247 @@ export async function getOtherProfilesFromDb(currentUserId?: string): Promise<Us
   } catch {
     return [];
   }
+}
+
+// Connections & Network Invitations
+interface StoredConnectionRecord {
+  id: string;
+  requester_id: string;
+  receiver_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at?: string;
+}
+
+function getLocalConnections(): StoredConnectionRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('pmverse_connections');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalConnections(list: StoredConnectionRecord[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('pmverse_connections', JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+export async function getUserConnectionsCountFromDb(userId: string): Promise<number> {
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('connections')
+        .select('id')
+        .eq('status', 'accepted')
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
+
+      if (!error && data) {
+        return data.length;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const local = getLocalConnections();
+  return local.filter(
+    (c) => (c.requester_id === userId || c.receiver_id === userId) && c.status === 'accepted'
+  ).length;
+}
+
+export async function getUserNetworkData(userId: string): Promise<{
+  incomingInvitations: ConnectionInvitation[];
+  statusMap: Record<string, 'not_connected' | 'pending' | 'received' | 'connected'>;
+  connectedCount: number;
+}> {
+  let records: StoredConnectionRecord[] = [];
+  const supabase = getSupabaseClient();
+
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('connections')
+        .select('*')
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
+
+      if (!error && data) {
+        records = data;
+        const local = getLocalConnections();
+        const nonUserLocal = local.filter(
+          (c) => c.requester_id !== userId && c.receiver_id !== userId
+        );
+        saveLocalConnections([...nonUserLocal, ...data]);
+      } else {
+        records = getLocalConnections().filter(
+          (c) => c.requester_id === userId || c.receiver_id === userId
+        );
+      }
+    } catch {
+      records = getLocalConnections().filter(
+        (c) => c.requester_id === userId || c.receiver_id === userId
+      );
+    }
+  } else {
+    records = getLocalConnections().filter(
+      (c) => c.requester_id === userId || c.receiver_id === userId
+    );
+  }
+
+  const statusMap: Record<string, 'not_connected' | 'pending' | 'received' | 'connected'> = {};
+  const incomingInvitations: ConnectionInvitation[] = [];
+  let connectedCount = 0;
+
+  for (const c of records) {
+    if (c.status === 'accepted') {
+      const otherId = c.requester_id === userId ? c.receiver_id : c.requester_id;
+      statusMap[otherId] = 'connected';
+      connectedCount++;
+    } else if (c.status === 'pending') {
+      if (c.requester_id === userId) {
+        statusMap[c.receiver_id] = 'pending';
+      } else if (c.receiver_id === userId) {
+        statusMap[c.requester_id] = 'received';
+
+        let senderProfile: UserProfile | null = null;
+        try {
+          senderProfile = await getUserProfileFromDb(c.requester_id);
+        } catch {
+          // ignore
+        }
+
+        incomingInvitations.push({
+          id: c.id,
+          requesterId: c.requester_id,
+          receiverId: c.receiver_id,
+          name: senderProfile?.fullName || 'Product Manager',
+          role: senderProfile?.role || 'Associate PM',
+          company: senderProfile?.company || 'Tech Squad',
+          avatar: senderProfile?.avatarUrl || '',
+          mutual: 0,
+          createdAt: formatTimeAgo(new Date(c.created_at || Date.now())),
+        });
+      }
+    }
+  }
+
+  return { incomingInvitations, statusMap, connectedCount };
+}
+
+export async function sendConnectionRequestDb(requesterId: string, receiverId: string): Promise<boolean> {
+  const newRecord: StoredConnectionRecord = {
+    id: `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    requester_id: requesterId,
+    receiver_id: receiverId,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const local = getLocalConnections();
+  const existingIdx = local.findIndex(
+    (c) =>
+      (c.requester_id === requesterId && c.receiver_id === receiverId) ||
+      (c.requester_id === receiverId && c.receiver_id === requesterId)
+  );
+  if (existingIdx >= 0) {
+    local[existingIdx].status = 'pending';
+    local[existingIdx].requester_id = requesterId;
+    local[existingIdx].receiver_id = receiverId;
+  } else {
+    local.push(newRecord);
+  }
+  saveLocalConnections(local);
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('connections').upsert(
+        {
+          requester_id: requesterId,
+          receiver_id: receiverId,
+          status: 'pending',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'requester_id,receiver_id' }
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return true;
+}
+
+export async function acceptConnectionRequestDb(requesterId: string, receiverId: string): Promise<boolean> {
+  const local = getLocalConnections();
+  const existing = local.find(
+    (c) =>
+      (c.requester_id === requesterId && c.receiver_id === receiverId) ||
+      (c.requester_id === receiverId && c.receiver_id === requesterId)
+  );
+  if (existing) {
+    existing.status = 'accepted';
+    existing.updated_at = new Date().toISOString();
+  } else {
+    local.push({
+      id: `conn-${Date.now()}`,
+      requester_id: requesterId,
+      receiver_id: receiverId,
+      status: 'accepted',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+  saveLocalConnections(local);
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase
+        .from('connections')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .match({ requester_id: requesterId, receiver_id: receiverId });
+    } catch {
+      // ignore
+    }
+  }
+
+  return true;
+}
+
+export async function removeOrIgnoreConnectionDb(user1Id: string, user2Id: string): Promise<boolean> {
+  const local = getLocalConnections();
+  const filtered = local.filter(
+    (c) =>
+      !(
+        (c.requester_id === user1Id && c.receiver_id === user2Id) ||
+        (c.requester_id === user2Id && c.receiver_id === user1Id)
+      )
+  );
+  saveLocalConnections(filtered);
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase
+        .from('connections')
+        .delete()
+        .or(
+          `and(requester_id.eq.${user1Id},receiver_id.eq.${user2Id}),and(requester_id.eq.${user2Id},receiver_id.eq.${user1Id})`
+        );
+    } catch {
+      // ignore
+    }
+  }
+
+  return true;
 }
 
 // Saved Jobs

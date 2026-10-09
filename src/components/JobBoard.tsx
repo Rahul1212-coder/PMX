@@ -5,25 +5,18 @@ import { JobListing } from '../types';
 import {
   Briefcase,
   MapPin,
-  DollarSign,
   ExternalLink,
   Search,
   Bookmark,
-  BookmarkCheck,
-  Sparkles,
   Building2,
   PlusCircle,
-  LogIn,
   X,
   Check,
   Send,
-  Users,
   Clock,
-  ShieldCheck,
-  Bell,
-  FileCheck,
-  Award,
   ChevronRight,
+  ArrowRight,
+  Sliders,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -35,72 +28,72 @@ import {
 
 interface JobBoardProps {
   initialJobs: JobListing[];
+  initialActiveSubTab?: 'browse' | 'tracker';
+  onNavigateToMentor?: (prompt: string) => void;
 }
 
-export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
+interface ApplicationItem {
+  id: string;
+  jobId?: string;
+  title: string;
+  co: string;
+  stage: number;
+  when: string;
+}
+
+export const JobBoard: React.FC<JobBoardProps> = ({
+  initialJobs,
+  initialActiveSubTab = 'browse',
+  onNavigateToMentor,
+}) => {
   const { user, profile, openAuthModal, isConfigured } = useAuth();
   const [jobs, setJobs] = useState<JobListing[]>(initialJobs);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
-  const [locationSearch, setLocationSearch] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState<string>('All');
-  const [selectedDomain, setSelectedDomain] = useState<string>('All');
-  const [selectedType, setSelectedType] = useState<string>('All');
-  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [filterChip, setFilterChip] = useState('All');
+  const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'browse' | 'tracker'>(initialActiveSubTab);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [easyApplyJob, setEasyApplyJob] = useState<JobListing | null>(null);
-  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
 
-  // New Job Form State
+  // Application tracker stages
+  const STAGES = ['Saved', 'Applied', 'Screening', 'Interview', 'Final Round', 'Offer'];
+  const [applications, setApplications] = useState<ApplicationItem[]>([
+    { id: 'a1', title: 'Product Manager, Payments', co: 'Ledgerline', stage: 1, when: '3d ago' },
+    { id: 'a2', title: 'Senior PM, Growth', co: 'Northwind Labs', stage: 2, when: '1w ago' },
+    { id: 'a3', title: 'AI Product Manager', co: 'Helix', stage: 3, when: '2w ago' },
+    { id: 'a4', title: 'Product Manager', co: 'Tally', stage: 1, when: '5d ago' },
+    { id: 'a5', title: 'Senior PM, Billing', co: 'Recur', stage: 4, when: '3w ago' },
+    { id: 'a6', title: 'Product Lead', co: 'Paygrid', stage: 5, when: '1mo ago' },
+    { id: 'a7', title: 'Associate PM', co: 'Brightpath', stage: 0, when: 'today' },
+  ]);
+
+  // Post Job form
   const [newTitle, setNewTitle] = useState('');
   const [newCompany, setNewCompany] = useState('');
   const [newLevel, setNewLevel] = useState<JobListing['level']>('Product Manager');
   const [newDomain, setNewDomain] = useState<JobListing['domain']>('B2B SaaS');
   const [newLocation, setNewLocation] = useState('Remote / US');
   const [newType, setNewType] = useState<JobListing['type']>('Remote');
-  const [newSalary, setNewSalary] = useState('$140,000 - $180,000 + Equity');
+  const [newSalary, setNewSalary] = useState('$140k–$180k');
   const [newDescription, setNewDescription] = useState('');
-  const [newSkills, setNewSkills] = useState('Roadmapping, Discovery, SQL');
+  const [newSkills, setNewSkills] = useState('Product Strategy, Roadmapping, Analytics');
   const [newApplyUrl, setNewApplyUrl] = useState('');
 
-  const levels = ['All', 'Associate PM', 'Product Manager', 'Senior PM', 'Lead / Principal PM', 'VP of Product'];
-  const domains = ['All', 'Fintech', 'AI & ML', 'B2B SaaS', 'Healthtech', 'Developer Tools'];
-  const types = ['All', 'Remote', 'Hybrid', 'On-site'];
-
-  // Load real jobs and saved jobs from Supabase or localStorage
+  // Load real jobs from Supabase
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       if (isConfigured) {
         const dbJobs = await getJobListingsFromDb();
-        if (mounted && dbJobs) {
+        if (mounted && dbJobs && dbJobs.length > 0) {
           setJobs(dbJobs);
         }
-      } else if (typeof window !== 'undefined') {
-        const local = localStorage.getItem('pmverse_jobs');
-        if (local && mounted) {
-          try {
-            setJobs(JSON.parse(local));
-          } catch {
-            // ignore
-          }
-        }
       }
-
       if (user && isConfigured) {
         const ids = await getSavedJobIdsFromDb(user.id);
         if (mounted) {
           setSavedJobIds(new Set(ids));
-        }
-      } else if (typeof window !== 'undefined') {
-        const local = localStorage.getItem('pmverse_saved_jobs') || localStorage.getItem('prodin_saved_jobs');
-        if (local && mounted) {
-          try {
-            setSavedJobIds(new Set(JSON.parse(local)));
-          } catch {
-            // ignore
-          }
         }
       }
     }
@@ -110,39 +103,68 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
     };
   }, [user, isConfigured]);
 
-  const handleToggleSaveJob = async (jobId: string) => {
+  const toggleSave = async (jobId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!user) {
       openAuthModal('signin');
       return;
     }
 
-    const currentlySaved = savedJobIds.has(jobId);
-    const updated = new Set(savedJobIds);
-    if (currentlySaved) {
-      updated.delete(jobId);
+    const isCurrentlySaved = savedJobIds.has(jobId);
+    const nextSaved = new Set(savedJobIds);
+    if (isCurrentlySaved) {
+      nextSaved.delete(jobId);
     } else {
-      updated.add(jobId);
+      nextSaved.add(jobId);
     }
-    setSavedJobIds(updated);
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pmverse_saved_jobs', JSON.stringify(Array.from(updated)));
-    }
+    setSavedJobIds(nextSaved);
 
     if (isConfigured) {
-      await toggleSavedJobInDb(user.id, jobId, currentlySaved);
+      await toggleSavedJobInDb(user.id, jobId, isCurrentlySaved);
     }
+  };
+
+  const handleApply = (job: JobListing) => {
+    const existing = applications.find((a) => a.jobId === job.id || a.title === job.title);
+    if (!existing) {
+      setApplications((prev) => [
+        {
+          id: `app-${Date.now()}`,
+          jobId: job.id,
+          title: job.title,
+          co: job.company,
+          stage: 1,
+          when: 'just now',
+        },
+        ...prev,
+      ]);
+    }
+    if (job.applyUrl && job.applyUrl !== '#') {
+      window.open(job.applyUrl, '_blank');
+    }
+  };
+
+  const moveApplication = (appId: string) => {
+    setApplications((prev) =>
+      prev.map((app) =>
+        app.id === appId && app.stage < 5
+          ? { ...app, stage: app.stage + 1, when: 'just now' }
+          : app
+      )
+    );
   };
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newCompany.trim()) return;
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
 
     setIsPublishing(true);
-
-    const created: JobListing = {
+    const createdJob: JobListing = {
       id: `job-${Date.now()}`,
-      userId: user?.id,
+      userId: user.id,
       title: newTitle.trim(),
       company: newCompany.trim(),
       logo: '💼',
@@ -152,566 +174,542 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
       type: newType,
       salaryRange: newSalary.trim(),
       description: newDescription.trim(),
-      skills: newSkills
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      skills: newSkills.split(',').map((s) => s.trim()).filter(Boolean),
       applyUrl: newApplyUrl.trim() || '#',
-      featured: true,
       postedDate: 'Just now',
-      applicantsCount: 0,
+      featured: true,
+      matchScore: 88,
     };
 
-    const updatedJobs = [created, ...jobs];
-    setJobs(updatedJobs);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pmverse_jobs', JSON.stringify(updatedJobs));
-    }
-
     if (isConfigured) {
-      await insertJobListingToDb(created);
+      await insertJobListingToDb(createdJob);
     }
-
-    setNewTitle('');
-    setNewCompany('');
-    setNewDescription('');
+    setJobs((prev) => [createdJob, ...prev]);
     setIsPublishing(false);
     setIsPostModalOpen(false);
   };
 
-  const handleEasyApplySubmit = () => {
-    if (easyApplyJob) {
-      setAppliedJobIds((prev) => new Set(prev).add(easyApplyJob.id));
-      alert(`Application for ${easyApplyJob.title} at ${easyApplyJob.company} submitted with your verified PM profile!`);
-      setEasyApplyJob(null);
-    }
-  };
+  const chips = ['All', 'Remote', 'Fintech', 'AI', 'Senior', 'Entry level'];
 
-  const filteredJobs = jobs.filter((job) => {
-    const matchLevel = selectedLevel === 'All' || job.level === selectedLevel;
-    const matchDomain = selectedDomain === 'All' || job.domain === selectedDomain;
-    const matchType = selectedType === 'All' || job.type === selectedType;
-    const matchSaved = !showSavedOnly || savedJobIds.has(job.id);
-    const matchLocation =
-      !locationSearch ||
-      job.location.toLowerCase().includes(locationSearch.toLowerCase()) ||
-      job.type.toLowerCase().includes(locationSearch.toLowerCase());
-    const matchSearch =
-      !search ||
-      job.title.toLowerCase().includes(search.toLowerCase()) ||
-      job.company.toLowerCase().includes(search.toLowerCase()) ||
-      job.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()));
+  const filteredJobs = jobs.filter((j) => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      !q ||
+      j.title.toLowerCase().includes(q) ||
+      j.company.toLowerCase().includes(q) ||
+      j.location.toLowerCase().includes(q) ||
+      j.domain.toLowerCase().includes(q);
 
-    return matchLevel && matchDomain && matchType && matchSaved && matchLocation && matchSearch;
+    let matchesChip = true;
+    if (filterChip === 'Remote') matchesChip = j.type === 'Remote' || j.location.toLowerCase().includes('remote');
+    else if (filterChip === 'Fintech') matchesChip = j.domain === 'Fintech';
+    else if (filterChip === 'AI') matchesChip = j.domain.includes('AI') || j.title.includes('AI');
+    else if (filterChip === 'Senior') matchesChip = j.level.includes('Senior') || j.level.includes('Lead');
+    else if (filterChip === 'Entry level') matchesChip = j.level.includes('Associate') || j.level.includes('Intern');
+
+    return matchesSearch && matchesChip;
   });
 
+  const matchFactors = [
+    { name: 'Experience', w: 20, s: 18 },
+    { name: 'Skills & Frameworks', w: 30, s: 25 },
+    { name: 'Industry Background', w: 15, s: 15 },
+    { name: 'Location Preference', w: 10, s: 10 },
+    { name: 'Role Alignment', w: 15, s: 14 },
+    { name: 'Career Goals', w: 10, s: 9 },
+  ];
+
   return (
-    <div className="flex flex-col lg:flex-row gap-5 items-start text-left">
-      {/* Left Column: Job seeker shortcuts (LinkedIn Jobs layout) */}
-      <div className="w-full lg:w-64 flex-shrink-0 space-y-2">
-        <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-3.5">
-          <div className="divide-y divide-slate-100 text-xs font-semibold">
-            <button
-              onClick={() => setShowSavedOnly(false)}
-              className="w-full py-2.5 flex items-center justify-between text-slate-800 hover:text-[#0a66c2] text-left"
-            >
-              <span className="flex items-center space-x-2">
-                <Briefcase className="w-4 h-4 text-slate-500" />
-                <span>Explore PM Jobs</span>
-              </span>
-            </button>
+    <div className="space-y-6 text-left">
+      {/* ========================================================
+          1. JOB DETAIL VIEW
+         ======================================================== */}
+      {selectedJob ? (
+        <div className="space-y-6">
+          <button
+            onClick={() => setSelectedJob(null)}
+            className="btn btn-ghost text-xs font-bold pl-0"
+          >
+            ← All jobs
+          </button>
 
-            <button
-              onClick={() => setShowSavedOnly(true)}
-              className="w-full py-2.5 flex items-center justify-between text-slate-800 hover:text-[#0a66c2] text-left"
-            >
-              <span className="flex items-center space-x-2">
-                <Bookmark className="w-4 h-4 text-slate-500" />
-                <span>My Saved Jobs</span>
-              </span>
-              <span className="text-[#0a66c2] font-bold">{savedJobIds.size}</span>
-            </button>
-
-            <div className="py-2.5 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Bell className="w-4 h-4 text-slate-500" />
-                <span>PM Job Alerts</span>
-              </span>
-              <span className="text-slate-400">0</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <FileCheck className="w-4 h-4 text-slate-500" />
-                <span>Applied Jobs</span>
-              </span>
-              <span className="text-slate-400">{appliedJobIds.size}</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
-              <span className="flex items-center space-x-2">
-                <Award className="w-4 h-4 text-amber-600" />
-                <span>Interview Prep</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100">
-            <button
-              onClick={() => {
-                if (!user) openAuthModal('signin');
-                else setIsPostModalOpen(true);
-              }}
-              className="w-full py-1.5 px-3 rounded-full text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] hover:bg-[#ebf4fd] hover:border-2 transition flex items-center justify-center space-x-1.5"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>Post a PM Role</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Column: Search + Filters + Job Cards Stream */}
-      <div className="flex-1 min-w-0 w-full space-y-3">
-        {/* Search & Filter Header Box */}
-        <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">
-                Product Management Opportunities
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8 items-start">
+            <div className="min-w-0">
+              <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+                {selectedJob.company}
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight my-2 text-[#201e1d]">
+                {selectedJob.title}
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Targeted roles across Associate PM, Senior PM, and VP of Product squads.
-              </p>
-            </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowSavedOnly(!showSavedOnly)}
-                className={`px-3 py-1 text-xs font-semibold rounded-full border transition flex items-center space-x-1.5 ${
-                  showSavedOnly
-                    ? 'bg-[#0a66c2] text-white border-[#0a66c2]'
-                    : 'text-slate-600 border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Saved ({savedJobIds.size})</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Dual Search Input Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search title, skills, or company (e.g. Stripe, Linear)..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#edf3f8] hover:bg-[#e4ecf4] focus:bg-white focus:border-slate-400 focus:ring-1 focus:ring-slate-400 border border-transparent rounded-md outline-none text-[#191919]"
-              />
-            </div>
-
-            <div className="relative">
-              <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={locationSearch}
-                onChange={(e) => setLocationSearch(e.target.value)}
-                placeholder="City, state, or Remote..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#edf3f8] hover:bg-[#e4ecf4] focus:bg-white focus:border-slate-400 focus:ring-1 focus:ring-slate-400 border border-transparent rounded-md outline-none text-[#191919]"
-              />
-            </div>
-          </div>
-
-          {/* Filter Chips Bar */}
-          <div className="flex items-center gap-2 pt-3 overflow-x-auto pb-1">
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[#e0dfdc] bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
-            >
-              {levels.map((lvl) => (
-                <option key={lvl} value={lvl}>
-                  {lvl === 'All' ? 'Seniority Level: All' : lvl}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedDomain}
-              onChange={(e) => setSelectedDomain(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[#e0dfdc] bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
-            >
-              {domains.map((dom) => (
-                <option key={dom} value={dom}>
-                  {dom === 'All' ? 'Domain: All' : dom}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[#e0dfdc] bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
-            >
-              {types.map((tp) => (
-                <option key={tp} value={tp}>
-                  {tp === 'All' ? 'Workplace: All' : tp}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Section Header */}
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-sm font-bold text-slate-900">
-            Recommended PM Roles based on your profile
-          </h2>
-          <span className="text-xs text-slate-500">
-            {filteredJobs.length} roles available
-          </span>
-        </div>
-
-        {/* Job Cards Stream (LinkedIn Jobs style) */}
-        <div className="space-y-2.5">
-          {filteredJobs.length === 0 ? (
-            <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-8 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-sky-50 text-[#0a66c2] mx-auto flex items-center justify-center">
-                <Briefcase className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">
-                {showSavedOnly ? 'No saved PM roles yet' : 'No product management roles posted yet'}
-              </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                {showSavedOnly
-                  ? 'Click the bookmark icon on any job listing to save opportunities for quick access.'
-                  : 'Are you hiring for your product squad? Post an opening across APM, Senior PM, and Leadership squads to reach verified PMs.'}
-              </p>
-              {!showSavedOnly && (
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      if (!user) openAuthModal('signin');
-                      else setIsPostModalOpen(true);
-                    }}
-                    className="px-5 py-2 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
-                  >
-                    Post the First PM Role
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            filteredJobs.map((job) => {
-            const isSaved = savedJobIds.has(job.id);
-            const hasApplied = appliedJobIds.has(job.id);
-
-            return (
-              <div
-                key={job.id}
-                className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-4 hover:shadow-md transition"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start space-x-3.5 min-w-0">
-                    {/* Logo square */}
-                    <div className="w-12 h-12 rounded-md bg-slate-100 flex items-center justify-center text-2xl border border-slate-200 flex-shrink-0">
-                      {job.logo}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900 hover:text-[#0a66c2] hover:underline cursor-pointer transition">
-                          {job.title}
-                        </h3>
-                        {job.featured && (
-                          <span className="bg-sky-50 text-[#0a66c2] text-[10px] font-bold px-2 py-0.5 rounded-full border border-sky-200">
-                            Promoted
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-slate-800 font-semibold mt-0.5">
-                        {job.company}
-                      </p>
-
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 mt-1">
-                        <span className="flex items-center space-x-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{job.location} ({job.type})</span>
-                        </span>
-                        <span>•</span>
-                        <span className="font-semibold text-emerald-700">
-                          {job.salaryRange}
-                        </span>
-                      </div>
-
-                      <p className="text-[11px] text-slate-400 mt-1 flex items-center space-x-1">
-                        <Clock className="w-3 h-3" />
-                        <span>Actively recruiting • 2 days ago • Over 100 applicants</span>
-                      </p>
-
-                      {/* Skills match badge */}
-                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center space-x-1">
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span>Matches your PM profile</span>
-                        </span>
-                        {job.skills.map((skill, i) => (
-                          <span
-                            key={i}
-                            className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+              {/* 3-Column Stats Bar */}
+              <div className="grid grid-cols-3 border-y-2 border-[rgba(32,30,29,0.15)] my-4">
+                <div className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-[#605d5d] font-bold">
+                    Location
                   </div>
-
-                  {/* Bookmark Save Button */}
-                  <button
-                    onClick={() => handleToggleSaveJob(job.id)}
-                    className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-[#0a66c2] transition"
-                    title={isSaved ? 'Remove from saved' : 'Save job'}
-                  >
-                    {isSaved ? (
-                      <BookmarkCheck className="w-5 h-5 text-[#0a66c2] fill-[#0a66c2]" />
-                    ) : (
-                      <Bookmark className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
+                  <div className="font-extrabold text-xs sm:text-sm text-[#201e1d]">
+                    {selectedJob.location}
+                  </div>
                 </div>
+                <div className="p-3 border-l border-[rgba(32,30,29,0.15)]">
+                  <div className="text-[10px] uppercase tracking-wider text-[#605d5d] font-bold">
+                    Salary
+                  </div>
+                  <div className="font-extrabold text-xs sm:text-sm text-[#201e1d]">
+                    {selectedJob.salaryRange}
+                  </div>
+                </div>
+                <div className="p-3 border-l border-[rgba(32,30,29,0.15)]">
+                  <div className="text-[10px] uppercase tracking-wider text-[#605d5d] font-bold">
+                    Level
+                  </div>
+                  <div className="font-extrabold text-xs sm:text-sm text-[#201e1d]">
+                    {selectedJob.level}
+                  </div>
+                </div>
+              </div>
 
-                {/* Job Action Footer */}
-                <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <p className="text-xs text-slate-500 line-clamp-1 flex-1 mr-4">
-                    {job.description}
-                  </p>
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2 my-6">
+                <button
+                  onClick={() => handleApply(selectedJob)}
+                  className="btn btn-primary text-xs font-bold px-6"
+                >
+                  <span>Apply on company site</span>
+                  <span>↗</span>
+                </button>
+                <button
+                  onClick={(e) => toggleSave(selectedJob.id, e)}
+                  className="btn btn-secondary text-xs font-bold"
+                >
+                  <span>{savedJobIds.has(selectedJob.id) ? 'Saved' : 'Save job'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (onNavigateToMentor) {
+                      onNavigateToMentor(
+                        `Start a mock interview for the ${selectedJob.title} role at ${selectedJob.company}.`
+                      );
+                    }
+                  }}
+                  className="btn btn-secondary text-xs font-bold"
+                >
+                  <span>Prepare for interview</span>
+                </button>
+              </div>
 
-                  <div className="flex items-center space-x-2 flex-shrink-0">
-                    {hasApplied ? (
-                      <span className="px-4 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300 flex items-center space-x-1">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Applied</span>
+              <div className="space-y-4 pt-4 border-t border-[rgba(32,30,29,0.15)]">
+                <h4 className="text-base font-extrabold text-[#201e1d] m-0">About the Role</h4>
+                <p className="text-sm text-[#201e1d] leading-relaxed whitespace-pre-wrap">
+                  {selectedJob.description ||
+                    'Own the end-to-end product lifecycle for critical customer touchpoints. You will partner with engineering, design, and GTM leaders to drive measurable metrics outcomes.'}
+                </p>
+
+                <h4 className="text-base font-extrabold text-[#201e1d] pt-4 m-0">Skills & Tooling</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedJob.skills.map((sk, i) => (
+                    <span key={i} className="tag tag-neutral font-semibold text-xs">
+                      {sk}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Sidebar: Match Analysis Breakdown */}
+            <aside className="border-2 border-[#201e1d] p-6 bg-[#f3f2f2] space-y-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-6xl font-black text-[#ec3013] leading-none tracking-tighter">
+                  {selectedJob.matchScore || 88}%
+                </span>
+                <span className="font-extrabold text-xs uppercase tracking-wider text-[#201e1d]">
+                  Match
+                </span>
+              </div>
+              <div className="text-xs text-[#605d5d]">
+                Calculated from your verified profile competency and assessment diagnostic.
+              </div>
+
+              <div className="divide-y divide-[rgba(32,30,29,0.15)] pt-2">
+                {matchFactors.map((f, i) => (
+                  <div key={i} className="py-2">
+                    <div className="flex justify-between text-xs font-semibold mb-1">
+                      <span>
+                        {f.name} <span className="text-slate-400">· {f.w}%</span>
                       </span>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          if (!user) {
-                            openAuthModal('signin');
-                            return;
-                          }
-                          setEasyApplyJob(job);
-                        }}
-                        className="px-4 py-1.5 rounded-full text-xs font-semibold bg-[#0a66c2] text-white hover:bg-[#004182] transition shadow-xs flex items-center space-x-1"
-                      >
-                        <Send className="w-3 h-3" />
-                        <span>Easy Apply</span>
-                      </button>
-                    )}
+                      <span className="font-bold">
+                        {f.s} / {f.w}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-[#d7d3d3]">
+                      <div
+                        className="h-full bg-[#201e1d]"
+                        style={{ width: `${(f.s / f.w) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                    {job.applyUrl && job.applyUrl !== '#' && (
-                      <a
-                        href={job.applyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 text-slate-500 hover:text-slate-800 rounded-full hover:bg-slate-100"
-                        title="Company application page"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
+              <div className="pt-2">
+                <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
+                  Why It Fits
+                </div>
+                <div className="text-xs space-y-1 font-semibold text-[#201e1d]">
+                  <div>✓ Verified background in product delivery</div>
+                  <div>✓ Matches your target domain: {selectedJob.domain}</div>
+                  <div>✓ Strong fit for role seniority level</div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (onNavigateToMentor) {
+                    onNavigateToMentor(
+                      `Help me build a 4-week plan to prepare for ${selectedJob.title} at ${selectedJob.company}.`
+                    );
+                  }
+                }}
+                className="btn btn-secondary w-full justify-between text-xs font-bold mt-4"
+              >
+                <span>Close gaps with AI Mentor</span>
+                <span>→</span>
+              </button>
+            </aside>
+          </div>
+        </div>
+      ) : activeSubTab === 'tracker' ? (
+        /* ========================================================
+            2. APPLICATION TRACKER (KANBAN BOARD)
+           ======================================================== */
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight m-0 text-[#201e1d]">
+              Applications Tracker
+            </h1>
+            <div className="flex border-2 border-[rgba(32,30,29,0.15)] text-xs font-bold">
+              <button
+                onClick={() => setActiveSubTab('browse')}
+                className="py-2 px-4 hover:bg-[rgba(32,30,29,0.06)]"
+              >
+                Browse Roles
+              </button>
+              <button className="py-2 px-4 bg-[#201e1d] text-[#f3f2f2]">
+                My Applications · {applications.length}
+              </button>
+            </div>
+          </div>
+
+          {/* Kanban Columns */}
+          <div className="grid grid-auto-flow grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)] overflow-x-auto">
+            {STAGES.map((stgName, stgIdx) => {
+              const stageItems = applications.filter((a) => a.stage === stgIdx);
+              const isFinal = stgIdx === 5;
+
+              return (
+                <div
+                  key={stgName}
+                  className="bg-[#f3f2f2] p-3.5 min-h-[380px] flex flex-col justify-between"
+                >
+                  <div>
+                    <div
+                      className={`flex justify-between items-baseline pb-2 mb-3 border-b-2 ${
+                        isFinal ? 'border-[#ec3013]' : 'border-[#201e1d]'
+                      }`}
+                    >
+                      <span className="font-extrabold text-xs text-[#201e1d]">{stgName}</span>
+                      <span className="font-black text-lg text-[#201e1d]">
+                        {stageItems.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {stageItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 text-left space-y-1"
+                        >
+                          <div className="font-extrabold text-xs text-[#201e1d] line-clamp-2">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-[#605d5d]">
+                            {item.co} · {item.when}
+                          </div>
+                          {stgIdx < 5 && (
+                            <button
+                              onClick={() => moveApplication(item.id)}
+                              className="btn btn-ghost text-[10px] font-bold p-0 mt-1"
+                            >
+                              Move to {STAGES[stgIdx + 1]} →
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          }))}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* ========================================================
+            3. BROWSE JOBS (MODERNIST LIST VIEW)
+           ======================================================== */
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight m-0 text-[#201e1d]">
+              Product Jobs
+            </h1>
 
-      {/* Easy Apply Modal (LinkedIn style) */}
-      {easyApplyJob && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-lg max-w-md w-full p-5 space-y-4 shadow-2xl border border-[#e0dfdc] text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-lg border border-slate-200">
-                  {easyApplyJob.logo}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsPostModalOpen(true)}
+                className="btn btn-secondary text-xs font-bold"
+              >
+                + Post a Role
+              </button>
+              <div className="flex border-2 border-[rgba(32,30,29,0.15)] text-xs font-bold">
+                <button className="py-2 px-4 bg-[#201e1d] text-[#f3f2f2]">Browse</button>
+                <button
+                  onClick={() => setActiveSubTab('tracker')}
+                  className="py-2 px-4 hover:bg-[rgba(32,30,29,0.06)]"
+                >
+                  Tracker · {applications.length}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Box with 2px Modernist Border */}
+          <div className="flex border-2 border-[#201e1d] bg-[#f3f2f2]">
+            <span className="grid place-items-center px-3.5">
+              <Search className="w-4 h-4 text-[#201e1d]" />
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search roles, companies or industries — try “Fintech” or “Remote”"
+              className="input border-0 bg-transparent text-sm sm:text-base min-h-[48px] pl-0 font-medium"
+            />
+          </div>
+
+          {/* Filter Chips */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {chips.map((chip) => {
+              const isActive = filterChip === chip;
+              return (
+                <button
+                  key={chip}
+                  onClick={() => setFilterChip(chip)}
+                  className={`text-xs font-bold py-1.5 px-3 border transition-colors ${
+                    isActive
+                      ? 'bg-[#201e1d] text-[#f3f2f2] border-[#201e1d]'
+                      : 'bg-transparent text-[#201e1d] border-[rgba(32,30,29,0.15)] hover:border-[#201e1d]'
+                  }`}
+                >
+                  {chip}
+                </button>
+              );
+            })}
+            <div className="flex-1" />
+            <span className="text-xs text-[#605d5d]">
+              {filteredJobs.length} roles · sorted by match
+            </span>
+          </div>
+
+          {/* Job Rows */}
+          <div className="border-t-2 border-[rgba(32,30,29,0.15)] divide-y divide-[rgba(32,30,29,0.15)]">
+            {filteredJobs.map((j) => (
+              <div
+                key={j.id}
+                onClick={() => setSelectedJob(j)}
+                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[rgba(32,30,29,0.03)] px-1 transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="font-extrabold text-lg sm:text-xl text-[#201e1d] leading-snug hover:text-[#ae1800] transition-colors">
+                    {j.title}
+                  </div>
+                  <div className="text-xs text-slate-600 my-1">
+                    {j.company} · {j.location}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-[11px] mt-2">
+                    <span className="tag tag-neutral">{j.salaryRange}</span>
+                    <span className="tag tag-neutral">{j.level}</span>
+                    <span className="tag tag-neutral">{j.domain}</span>
+                    <span className="text-[#605d5d] self-center ml-1">
+                      Posted {j.postedDate || 'recently'}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    Apply to {easyApplyJob.company}
-                  </h3>
-                  <p className="text-xs text-slate-500">{easyApplyJob.title}</p>
+
+                <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-[#ec3013] leading-none">
+                      {j.matchScore || 88}%
+                    </div>
+                    <div className="text-[10px] uppercase font-bold tracking-wider text-[#605d5d]">
+                      Match
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => toggleSave(j.id, e)}
+                    className="btn btn-icon btn-secondary"
+                    aria-label="Save Job"
+                  >
+                    <Bookmark
+                      className="w-4 h-4"
+                      fill={savedJobIds.has(j.id) ? 'currentColor' : 'none'}
+                    />
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setEasyApplyJob(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            ))}
 
-            <div className="space-y-3 text-xs">
-              <div className="bg-sky-50/60 p-3 rounded-md border border-sky-100">
-                <p className="font-semibold text-slate-800">
-                  Verified Candidate Profile
-                </p>
-                <p className="text-slate-600 mt-0.5">
-                  Your PM identity (<strong>{profile?.fullName || user?.email}</strong>) and verified assessment fit score (88%) will be submitted directly to {easyApplyJob.company}.
-                </p>
+            {filteredJobs.length === 0 && (
+              <div className="py-12 text-center space-y-2">
+                <div className="font-extrabold text-base text-[#201e1d]">
+                  No roles match that search criteria.
+                </div>
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setFilterChip('All');
+                  }}
+                  className="btn btn-ghost text-xs font-bold"
+                >
+                  Clear search and filters
+                </button>
               </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Contact Email
-                </label>
-                <input
-                  type="email"
-                  disabled
-                  value={profile?.email || user?.email || ''}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-slate-600 cursor-not-allowed"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Brief Note to Hiring Squad (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Share a sentence about a relevant product outcome you delivered or why you're excited about this squad..."
-                  className="w-full p-2.5 border border-slate-200 rounded-md focus:outline-none focus:border-[#0a66c2]"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setEasyApplyJob(null)}
-                className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-full"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEasyApplySubmit}
-                className="px-5 py-1.5 text-xs font-semibold text-white bg-[#0a66c2] hover:bg-[#004182] rounded-full transition shadow-xs"
-              >
-                Submit Application
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Post a Job Modal */}
+      {/* ========================================================
+          POST A PM ROLE MODAL
+         ======================================================== */}
       {isPostModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-lg max-w-lg w-full p-5 space-y-4 shadow-2xl border border-[#e0dfdc] text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Post a Product Management Role</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 overflow-y-auto">
+          <div className="bg-[#f3f2f2] border-2 border-[#201e1d] max-w-lg w-full p-6 text-left space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[rgba(32,30,29,0.15)]">
+              <div>
+                <h3 className="font-extrabold text-lg text-[#201e1d]">Post a Verified PM Role</h3>
+                <p className="text-xs text-[#605d5d]">Reach high-caliber product managers on PMX</p>
+              </div>
               <button
                 onClick={() => setIsPostModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="btn btn-icon btn-secondary"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleCreateJob} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title</label>
+                <label className="block text-xs font-bold text-[#201e1d] mb-1">Job Title</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Senior PM - AI Workflows"
+                  placeholder="e.g. Senior PM, Monetization"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md focus:border-[#0a66c2] outline-none"
+                  className="input"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Company</label>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">Company</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Linear"
+                    placeholder="e.g. Stripe, Figma"
                     value={newCompany}
                     onChange={(e) => setNewCompany(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md focus:border-[#0a66c2] outline-none"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Seniority Level</label>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">Domain</label>
                   <select
-                    value={newLevel}
-                    onChange={(e) => setNewLevel(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md outline-none"
+                    value={newDomain}
+                    onChange={(e) => setNewDomain(e.target.value as any)}
+                    className="input bg-white"
                   >
-                    <option value="Associate PM">Associate PM</option>
-                    <option value="Product Manager">Product Manager</option>
-                    <option value="Senior PM">Senior PM</option>
-                    <option value="Lead / Principal PM">Lead / Principal PM</option>
-                    <option value="VP of Product">VP of Product</option>
+                    <option value="Fintech">Fintech</option>
+                    <option value="AI & ML">AI & ML</option>
+                    <option value="B2B SaaS">B2B SaaS</option>
+                    <option value="Healthtech">Healthtech</option>
+                    <option value="Developer Tools">Developer Tools</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Location</label>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">Location</label>
                   <input
                     type="text"
-                    placeholder="San Francisco, CA / Remote"
+                    required
                     value={newLocation}
                     onChange={(e) => setNewLocation(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md outline-none"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Salary Range</label>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">Salary Range</label>
                   <input
                     type="text"
-                    placeholder="$160,000 - $210,000"
+                    required
                     value={newSalary}
                     onChange={(e) => setNewSalary(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md outline-none"
+                    className="input"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Description</label>
+                <label className="block text-xs font-bold text-[#201e1d] mb-1">Role Description</label>
                 <textarea
-                  rows={3}
                   required
-                  placeholder="Describe squad mission, key problems to solve, and requirements..."
+                  rows={3}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-md outline-none"
+                  placeholder="Summary of responsibilities and scope..."
+                  className="input"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                  External Application Link
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://company.com/careers/pm-role"
+                  value={newApplyUrl}
+                  onChange={(e) => setNewApplyUrl(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-[rgba(32,30,29,0.15)]">
                 <button
                   type="button"
                   onClick={() => setIsPostModalOpen(false)}
-                  className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-full"
+                  className="btn btn-secondary text-xs font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPublishing}
-                  className="px-5 py-1.5 text-xs font-semibold text-white bg-[#0a66c2] hover:bg-[#004182] rounded-full transition shadow-xs"
+                  className="btn btn-primary text-xs font-bold px-5"
                 >
-                  {isPublishing ? 'Publishing...' : 'Publish Role'}
+                  {isPublishing ? 'Publishing...' : 'Publish to PMX Board'}
                 </button>
               </div>
             </form>

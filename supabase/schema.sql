@@ -199,7 +199,37 @@ CREATE POLICY "Users can view their own quiz results"
 CREATE POLICY "Users can insert their own quiz results"
   ON public.quiz_results FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+-- 7. PEER CONNECTIONS & INVITATIONS TABLE (LinkedIn-style Networking)
+CREATE TABLE IF NOT EXISTS public.connections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  requester_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  receiver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(requester_id, receiver_id)
+);
+
+ALTER TABLE public.connections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view connections they belong to"
+  ON public.connections FOR SELECT
+  USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
+
+CREATE POLICY "Users can create connection requests"
+  ON public.connections FOR INSERT
+  WITH CHECK (auth.uid() = requester_id);
+
+CREATE POLICY "Users can update connection status"
+  ON public.connections FOR UPDATE
+  USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
+
+CREATE POLICY "Users can delete connections"
+  ON public.connections FOR DELETE
+  USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
+
 -- ==============================================================================
 -- CLEAN RESET COMMAND (Run this in SQL editor if you want to wipe old dummy data):
--- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results;
+-- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results, public.connections;
 -- ==============================================================================
+

@@ -64,15 +64,28 @@ export interface PmConnection {
   id: string;
   name: string;
   headline: string;
-  role: 'Associate PM' | 'Product Manager' | 'Senior PM' | 'Lead / Principal PM' | 'Director / VP of Product';
+  role: 'Associate PM' | 'Product Manager' | 'Senior PM' | 'Lead / Principal PM' | 'Director / VP of Product' | string;
   company: string;
   avatar: string;
   coverPhoto: string;
   mutualConnections: number;
   location: string;
   skills: string[];
-  status: 'connected' | 'pending' | 'not_connected';
+  status: 'connected' | 'pending' | 'received' | 'not_connected';
   bio: string;
+}
+
+export interface ConnectionInvitation {
+  id: string;
+  requesterId: string;
+  receiverId: string;
+  name: string;
+  role: string;
+  company: string;
+  avatar: string;
+  mutual?: number;
+  note?: string;
+  createdAt: string;
 }
 
 export interface PmConcept {
