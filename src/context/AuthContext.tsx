@@ -232,6 +232,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
+        if (error.message.toLowerCase().includes('rate limit')) {
+          return {
+            error:
+              'Email rate limit exceeded: Supabase free tier limits confirmation emails to ~3-4/hour. Disable "Confirm email" in Supabase Auth settings to enable instant signups.',
+          };
+        }
         return { error: error.message };
       }
 

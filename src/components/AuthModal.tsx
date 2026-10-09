@@ -158,9 +158,24 @@ export const AuthModal: React.FC = () => {
         {/* Body Content */}
         <div className="p-6 space-y-4 text-left">
           {error && (
-            <div className="flex items-start space-x-2 bg-rose-50 text-rose-800 border border-rose-200 p-3 rounded-md text-xs">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-rose-600" />
-              <span>{error}</span>
+            <div className="bg-rose-50 text-rose-800 border border-rose-200 p-3.5 rounded-lg text-xs space-y-2">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-rose-600" />
+                <span className="font-semibold text-rose-900">{error}</span>
+              </div>
+              {error.toLowerCase().includes('rate limit') && (
+                <div className="pt-2 border-t border-rose-200 text-[11px] text-rose-800 leading-relaxed space-y-1.5">
+                  <p className="font-bold text-rose-900">How to fix this in Supabase (30 seconds):</p>
+                  <ol className="list-decimal pl-4 space-y-0.5 text-slate-700">
+                    <li>Open your <strong>Supabase Dashboard</strong></li>
+                    <li>Go to <strong>Authentication &rarr; Providers &rarr; Email</strong></li>
+                    <li>Toggle OFF <strong>&quot;Confirm email&quot;</strong> and click <strong>Save</strong></li>
+                  </ol>
+                  <p className="text-[10px] text-slate-500">
+                    This allows users to create accounts and log in immediately without exhausting Supabase&apos;s free email quota.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
