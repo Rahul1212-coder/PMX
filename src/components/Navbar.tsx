@@ -47,7 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     ? [
         {
           id: 'n-welcome',
-          text: `Welcome to PMX, ${profile?.fullName || 'Product Manager'}! Your profile is connected. Explore the PM Fit assessment, AI Mentor, and job matches.`,
+          text: `Welcome to PMVerse, ${profile?.fullName || 'Product Manager'}! Your profile is connected. Explore the PM Fit assessment, AI Mentor, and job matches.`,
           time: 'Just now',
           unread: true,
         },
@@ -89,13 +89,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-50 bg-[#f3f2f2] border-b-2 border-[rgba(32,30,29,0.15)] flex-none">
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 flex items-center justify-between h-14 gap-6">
-        {/* Left: Modernist PMX Brand Logo */}
+        {/* Left: Modernist PMVerse Brand Logo */}
         <div
           onClick={() => setActiveTab('home')}
           className="flex items-baseline gap-2 cursor-pointer flex-shrink-0 select-none group"
         >
           <span className="font-extrabold text-2xl tracking-tighter text-[#201e1d] group-hover:text-[#ec3013] transition-colors">
-            PMX
+            PMVerse
           </span>
           <span className="w-2 h-2 bg-[#ec3013] inline-block mb-0.5"></span>
         </div>

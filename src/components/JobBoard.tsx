@@ -24,21 +24,16 @@ import {
   toggleSavedJobInDb,
   getJobListingsFromDb,
   insertJobListingToDb,
+  getJobApplicationsFromDb,
+  upsertJobApplicationInDb,
+  deleteJobApplicationInDb,
 } from '@/lib/supabase/database';
+import { JobApplication, ApplicationStage } from '../types';
 
 interface JobBoardProps {
   initialJobs: JobListing[];
   initialActiveSubTab?: 'browse' | 'tracker';
   onNavigateToMentor?: (prompt: string) => void;
-}
-
-interface ApplicationItem {
-  id: string;
-  jobId?: string;
-  title: string;
-  co: string;
-  stage: number;
-  when: string;
 }
 
 export const JobBoard: React.FC<JobBoardProps> = ({
@@ -55,18 +50,16 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'browse' | 'tracker'>(initialActiveSubTab);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isAddAppModalOpen, setIsAddAppModalOpen] = useState(false);
 
-  // Application tracker stages
-  const STAGES = ['Saved', 'Applied', 'Screening', 'Interview', 'Final Round', 'Offer'];
-  const [applications, setApplications] = useState<ApplicationItem[]>([
-    { id: 'a1', title: 'Product Manager, Payments', co: 'Ledgerline', stage: 1, when: '3d ago' },
-    { id: 'a2', title: 'Senior PM, Growth', co: 'Northwind Labs', stage: 2, when: '1w ago' },
-    { id: 'a3', title: 'AI Product Manager', co: 'Helix', stage: 3, when: '2w ago' },
-    { id: 'a4', title: 'Product Manager', co: 'Tally', stage: 1, when: '5d ago' },
-    { id: 'a5', title: 'Senior PM, Billing', co: 'Recur', stage: 4, when: '3w ago' },
-    { id: 'a6', title: 'Product Lead', co: 'Paygrid', stage: 5, when: '1mo ago' },
-    { id: 'a7', title: 'Associate PM', co: 'Brightpath', stage: 0, when: 'today' },
-  ]);
+  // New application form state
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualCompany, setManualCompany] = useState('');
+  const [manualStage, setManualStage] = useState<ApplicationStage>('Applied');
+
+  // Real Application tracker stages
+  const STAGES: ApplicationStage[] = ['Saved', 'Applied', 'Screening', 'Interview', 'Final Round', 'Offer'];
+  const [applications, setApplications] = useState<JobApplication[]>([]);
 
   // Post Job form
   const [newTitle, setNewTitle] = useState('');
@@ -80,7 +73,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [newSkills, setNewSkills] = useState('Product Strategy, Roadmapping, Analytics');
   const [newApplyUrl, setNewApplyUrl] = useState('');
 
-  // Load real jobs from Supabase
+  // Load real jobs & applications from database
   useEffect(() => {
     let mounted = true;
     async function loadData() {
@@ -90,10 +83,16 @@ export const JobBoard: React.FC<JobBoardProps> = ({
           setJobs(dbJobs);
         }
       }
-      if (user && isConfigured) {
-        const ids = await getSavedJobIdsFromDb(user.id);
+      if (user) {
+        if (isConfigured) {
+          const ids = await getSavedJobIdsFromDb(user.id);
+          if (mounted) {
+            setSavedJobIds(new Set(ids));
+          }
+        }
+        const apps = await getJobApplicationsFromDb(user.id);
         if (mounted) {
-          setSavedJobIds(new Set(ids));
+          setApplications(apps);
         }
       }
     }
@@ -124,34 +123,74 @@ export const JobBoard: React.FC<JobBoardProps> = ({
     }
   };
 
-  const handleApply = (job: JobListing) => {
-    const existing = applications.find((a) => a.jobId === job.id || a.title === job.title);
+  const handleApply = async (job: JobListing) => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+
+    const existing = applications.find((a) => a.jobId === job.id || (a.jobTitle === job.title && a.company === job.company));
     if (!existing) {
-      setApplications((prev) => [
-        {
-          id: `app-${Date.now()}`,
-          jobId: job.id,
-          title: job.title,
-          co: job.company,
-          stage: 1,
-          when: 'just now',
-        },
-        ...prev,
-      ]);
+      const newApp: JobApplication = {
+        id: `app-${Date.now()}`,
+        userId: user.id,
+        jobId: job.id,
+        jobTitle: job.title,
+        company: job.company,
+        stage: 'Applied',
+        location: job.location,
+        salaryRange: job.salaryRange,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setApplications((prev) => [newApp, ...prev]);
+      await upsertJobApplicationInDb(newApp);
     }
     if (job.applyUrl && job.applyUrl !== '#') {
       window.open(job.applyUrl, '_blank');
     }
   };
 
-  const moveApplication = (appId: string) => {
-    setApplications((prev) =>
-      prev.map((app) =>
-        app.id === appId && app.stage < 5
-          ? { ...app, stage: app.stage + 1, when: 'just now' }
-          : app
-      )
-    );
+  const moveApplication = async (appId: string) => {
+    const target = applications.find((a) => a.id === appId);
+    if (!target) return;
+
+    const currentIdx = STAGES.indexOf(target.stage);
+    if (currentIdx >= 0 && currentIdx < STAGES.length - 1) {
+      const nextStage = STAGES[currentIdx + 1];
+      const updated: JobApplication = {
+        ...target,
+        stage: nextStage,
+        updatedAt: new Date().toISOString(),
+      };
+      setApplications((prev) => prev.map((a) => (a.id === appId ? updated : a)));
+      await upsertJobApplicationInDb(updated);
+    }
+  };
+
+  const handleAddManualApplication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
+    if (!manualTitle.trim() || !manualCompany.trim()) return;
+
+    const newApp: JobApplication = {
+      id: `app-${Date.now()}`,
+      userId: user.id,
+      jobTitle: manualTitle.trim(),
+      company: manualCompany.trim(),
+      stage: manualStage,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setApplications((prev) => [newApp, ...prev]);
+    await upsertJobApplicationInDb(newApp);
+    setManualTitle('');
+    setManualCompany('');
+    setIsAddAppModalOpen(false);
   };
 
   const handleCreateJob = async (e: React.FormEvent) => {
@@ -404,7 +443,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
           {/* Kanban Columns */}
           <div className="grid grid-auto-flow grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)] overflow-x-auto">
             {STAGES.map((stgName, stgIdx) => {
-              const stageItems = applications.filter((a) => a.stage === stgIdx);
+              const stageItems = applications.filter((a) => a.stage === stgName);
               const isFinal = stgIdx === 5;
 
               return (
@@ -428,22 +467,36 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                       {stageItems.map((item) => (
                         <div
                           key={item.id}
-                          className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 text-left space-y-1"
+                          className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 text-left space-y-1 relative group"
                         >
                           <div className="font-extrabold text-xs text-[#201e1d] line-clamp-2">
-                            {item.title}
+                            {item.jobTitle}
                           </div>
                           <div className="text-[11px] text-[#605d5d]">
-                            {item.co} · {item.when}
+                            {item.company} · {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
                           </div>
-                          {stgIdx < 5 && (
+                          <div className="flex items-center justify-between pt-1">
+                            {stgIdx < 5 && (
+                              <button
+                                onClick={() => moveApplication(item.id)}
+                                className="btn btn-ghost text-[10px] font-bold p-0 text-[#ae1800] hover:underline"
+                              >
+                                Move to {STAGES[stgIdx + 1]} →
+                              </button>
+                            )}
                             <button
-                              onClick={() => moveApplication(item.id)}
-                              className="btn btn-ghost text-[10px] font-bold p-0 mt-1"
+                              onClick={async () => {
+                                if (user) {
+                                  setApplications((prev) => prev.filter((a) => a.id !== item.id));
+                                  await deleteJobApplicationInDb(item.id, user.id);
+                                }
+                              }}
+                              className="text-[10px] text-stone-400 hover:text-rose-600 transition-colors ml-auto"
+                              title="Delete application"
                             >
-                              Move to {STAGES[stgIdx + 1]} →
+                              Remove
                             </button>
-                          )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -597,7 +650,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
             <div className="flex items-center justify-between pb-3 border-b-2 border-[rgba(32,30,29,0.15)]">
               <div>
                 <h3 className="font-extrabold text-lg text-[#201e1d]">Post a Verified PM Role</h3>
-                <p className="text-xs text-[#605d5d]">Reach high-caliber product managers on PMX</p>
+                <p className="text-xs text-[#605d5d]">Reach high-caliber product managers on PMVerse</p>
               </div>
               <button
                 onClick={() => setIsPostModalOpen(false)}
@@ -709,7 +762,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                   disabled={isPublishing}
                   className="btn btn-primary text-xs font-bold px-5"
                 >
-                  {isPublishing ? 'Publishing...' : 'Publish to PMX Board'}
+                  {isPublishing ? 'Publishing...' : 'Publish to PMVerse Board'}
                 </button>
               </div>
             </form>

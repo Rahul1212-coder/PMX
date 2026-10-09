@@ -323,7 +323,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto text-left">
-      {/* Modernist PMX Assessment Header */}
+      {/* Modernist PMVerse Assessment Header */}
       <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
           <div>

@@ -136,7 +136,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         <div className="flex items-center justify-between p-5 pb-3 border-b-2 border-[rgba(32,30,29,0.15)]">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-[#ae1800] font-bold">
-              PMX Verification
+              PMVerse Verification
             </div>
             <h2 className="text-xl font-black text-[#201e1d] m-0">Edit Public Profile</h2>
           </div>

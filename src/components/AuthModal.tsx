@@ -88,12 +88,12 @@ export const AuthModal: React.FC = () => {
         {/* Modernist Header */}
         <div className="p-6 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
           <div className="flex items-baseline gap-2 mb-2">
-            <span className="font-black text-2xl tracking-tighter text-[#201e1d]">PMX</span>
+            <span className="font-black text-2xl tracking-tighter text-[#201e1d]">PMVerse</span>
             <span className="w-2 h-2 bg-[#ec3013]"></span>
           </div>
 
           <h2 className="text-xl font-black text-[#201e1d] m-0">
-            {authModalTab === 'signin' ? 'Sign in to PMX' : 'Join the Product Network'}
+            {authModalTab === 'signin' ? 'Sign in to PMVerse' : 'Join the Product Network'}
           </h2>
           <p className="text-xs text-[#605d5d] mt-1">
             {authModalTab === 'signin'
@@ -261,7 +261,7 @@ export const AuthModal: React.FC = () => {
               {isLoading ? (
                 <span>Authenticating...</span>
               ) : (
-                <span>{authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMX'}</span>
+                <span>{authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMVerse'}</span>
               )}
             </button>
           </form>

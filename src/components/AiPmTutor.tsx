@@ -285,7 +285,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
                       isUser ? 'text-[#605d5d]' : 'text-[#ae1800]'
                     }`}
                   >
-                    {isUser ? 'You' : 'PMX Mentor'}
+                    {isUser ? 'You' : 'PMVerse Mentor'}
                   </div>
                   <div className="flex flex-col gap-3 max-w-2xl">
                     {blocks.map((b, bi) => (
@@ -308,7 +308,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
             {thinking && (
               <div className="grid grid-cols-[80px_minmax(0,1fr)] sm:grid-cols-[110px_1fr] gap-4 py-4 border-t-2 border-[rgba(32,30,29,0.15)]">
                 <div className="text-xs uppercase tracking-wider font-bold text-[#ae1800]">
-                  PMX Mentor
+                  PMVerse Mentor
                 </div>
                 <div className="text-sm text-[#605d5d] font-bold">Thinking{dots}</div>
               </div>

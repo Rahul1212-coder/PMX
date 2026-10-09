@@ -1,5 +1,15 @@
 import { getSupabaseClient, isSupabaseConfigured } from './client';
-import { CommunityPost, AssessmentResult, UserProfile, SavedQuizResult, JobListing, ConnectionInvitation } from '@/types';
+import {
+  CommunityPost,
+  AssessmentResult,
+  UserProfile,
+  SavedQuizResult,
+  JobListing,
+  ConnectionInvitation,
+  JobApplication,
+  ChallengeSubmission,
+  ApplicationStage,
+} from '@/types';
 
 // Community Posts
 export async function getCommunityPostsFromDb(): Promise<CommunityPost[] | null> {
@@ -621,3 +631,229 @@ function formatTimeAgo(date: Date): string {
   if (days < 30) return `${days}d ago`;
   return date.toLocaleDateString();
 }
+
+// Job Applications Tracker
+export async function getJobApplicationsFromDb(userId: string): Promise<JobApplication[]> {
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('job_applications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((r: any) => ({
+          id: r.id,
+          userId: r.user_id,
+          jobId: r.job_id,
+          jobTitle: r.job_title,
+          company: r.company,
+          stage: r.stage as ApplicationStage,
+          location: r.location,
+          salaryRange: r.salary_range,
+          notes: r.notes,
+          appliedDate: r.applied_date,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('pmverse_user_applications');
+      if (raw) {
+        const parsed: JobApplication[] = JSON.parse(raw);
+        return parsed.filter((a) => a.userId === userId || !a.userId);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
+export async function upsertJobApplicationInDb(app: JobApplication): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('pmverse_user_applications');
+      let list: JobApplication[] = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex((a) => a.id === app.id);
+      if (idx >= 0) {
+        list[idx] = app;
+      } else {
+        list = [app, ...list];
+      }
+      localStorage.setItem('pmverse_user_applications', JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('job_applications').upsert({
+        id: app.id,
+        user_id: app.userId,
+        job_id: app.jobId || null,
+        job_title: app.jobTitle,
+        company: app.company,
+        stage: app.stage,
+        location: app.location || null,
+        salary_range: app.salaryRange || null,
+        notes: app.notes || null,
+        updated_at: new Date().toISOString(),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function deleteJobApplicationInDb(appId: string, userId: string): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('pmverse_user_applications');
+      if (raw) {
+        const list: JobApplication[] = JSON.parse(raw);
+        const filtered = list.filter((a) => a.id !== appId);
+        localStorage.setItem('pmverse_user_applications', JSON.stringify(filtered));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('job_applications').delete().match({ id: appId, user_id: userId });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Weekly Challenge Submissions
+export async function getChallengeSubmissionsFromDb(challengeId: string): Promise<ChallengeSubmission[]> {
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('challenge_submissions')
+        .select('*')
+        .eq('challenge_id', challengeId)
+        .order('upvotes', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((r: any) => ({
+          id: r.id,
+          challengeId: r.challenge_id,
+          challengeTitle: r.challenge_title,
+          userId: r.user_id,
+          authorName: r.author_name,
+          authorRole: r.author_role,
+          authorAvatar: r.author_avatar,
+          problemStatement: r.problem_statement,
+          solutionProposal: r.solution_proposal,
+          keyMetrics: r.key_metrics,
+          upvotes: r.upvotes || 1,
+          aiFeedback: r.ai_feedback,
+          createdAt: formatTimeAgo(new Date(r.created_at)),
+        }));
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(`pmverse_challenge_${challengeId}`);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
+export async function submitChallengeSolutionToDb(submission: ChallengeSubmission): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(`pmverse_challenge_${submission.challengeId}`);
+      const list: ChallengeSubmission[] = raw ? JSON.parse(raw) : [];
+      localStorage.setItem(
+        `pmverse_challenge_${submission.challengeId}`,
+        JSON.stringify([submission, ...list])
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('challenge_submissions').insert({
+        id: submission.id,
+        challenge_id: submission.challengeId,
+        challenge_title: submission.challengeTitle,
+        user_id: submission.userId,
+        author_name: submission.authorName,
+        author_role: submission.authorRole,
+        author_avatar: submission.authorAvatar || null,
+        problem_statement: submission.problemStatement,
+        solution_proposal: submission.solutionProposal,
+        key_metrics: submission.keyMetrics,
+        upvotes: submission.upvotes || 1,
+        ai_feedback: submission.aiFeedback || null,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function upvoteChallengeSubmissionInDb(submissionId: string, challengeId: string): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(`pmverse_challenge_${challengeId}`);
+      if (raw) {
+        const list: ChallengeSubmission[] = JSON.parse(raw);
+        const updated = list.map((s) => (s.id === submissionId ? { ...s, upvotes: s.upvotes + 1 } : s));
+        localStorage.setItem(`pmverse_challenge_${challengeId}`, JSON.stringify(updated));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data } = await supabase.from('challenge_submissions').select('upvotes').eq('id', submissionId).single();
+      if (data) {
+        await supabase.from('challenge_submissions').update({ upvotes: (data.upvotes || 0) + 1 }).eq('id', submissionId);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+

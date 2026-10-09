@@ -228,8 +228,78 @@ CREATE POLICY "Users can delete connections"
   ON public.connections FOR DELETE
   USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
 
+-- 8. JOB APPLICATIONS TRACKER TABLE
+CREATE TABLE IF NOT EXISTS public.job_applications (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  job_id TEXT,
+  job_title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  stage TEXT NOT NULL CHECK (stage IN ('Saved', 'Applied', 'Screening', 'Interview', 'Final Round', 'Offer')),
+  location TEXT,
+  salary_range TEXT,
+  notes TEXT,
+  applied_date TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.job_applications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own job applications"
+  ON public.job_applications FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own job applications"
+  ON public.job_applications FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own job applications"
+  ON public.job_applications FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own job applications"
+  ON public.job_applications FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- 9. WEEKLY CHALLENGE SUBMISSIONS TABLE
+CREATE TABLE IF NOT EXISTS public.challenge_submissions (
+  id TEXT PRIMARY KEY,
+  challenge_id TEXT NOT NULL,
+  challenge_title TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  author_name TEXT NOT NULL,
+  author_role TEXT NOT NULL DEFAULT 'Product Manager',
+  author_avatar TEXT,
+  problem_statement TEXT NOT NULL,
+  solution_proposal TEXT NOT NULL,
+  key_metrics TEXT NOT NULL,
+  upvotes INTEGER DEFAULT 1,
+  ai_feedback JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.challenge_submissions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Challenge submissions are viewable by everyone"
+  ON public.challenge_submissions FOR SELECT
+  USING (true);
+
+CREATE POLICY "Authenticated users can create challenge submissions"
+  ON public.challenge_submissions FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own challenge submissions"
+  ON public.challenge_submissions FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own challenge submissions"
+  ON public.challenge_submissions FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- ==============================================================================
 -- CLEAN RESET COMMAND (Run this in SQL editor if you want to wipe old dummy data):
--- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results, public.connections;
+-- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results, public.connections, public.job_applications, public.challenge_submissions;
 -- ==============================================================================
+
 

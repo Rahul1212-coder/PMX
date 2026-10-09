@@ -9,11 +9,13 @@ import { JobBoard } from '@/components/JobBoard';
 import { CommunityFeed } from '@/components/CommunityFeed';
 import { NetworkConnect } from '@/components/NetworkConnect';
 import { LearnHub } from '@/components/LearnHub';
+import { WeeklyChallengeModal } from '@/components/WeeklyChallengeModal';
 import { INITIAL_POSTS, INITIAL_JOBS } from '@/data/mockData';
 import { Home, Sparkles, Award, Briefcase, Users } from 'lucide-react';
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState<NavTabType>('home');
+  const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [mentorStarterPrompt, setMentorStarterPrompt] = useState<string>('');
   const [mentorStarterMode, setMentorStarterMode] = useState<
     'explain' | 'coach' | 'case' | 'prd' | 'interview'
@@ -44,7 +46,7 @@ export default function Page() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f3f2f2] text-[#201e1d] selection:bg-[rgba(236,48,19,0.25)]">
-      {/* 1. Modernist PMX Header */}
+      {/* 1. Modernist PMVerse Header */}
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* 2. Main Content Area */}
@@ -55,6 +57,7 @@ export default function Page() {
             setActiveTab={setActiveTab}
             onOpenTopic={handleOpenLearnTopic}
             onOpenCase={() => handleAskMentor('Orders dropped 15% in one city — diagnose', 'case')}
+            onOpenChallenge={() => setIsChallengeModalOpen(true)}
           />
         )}
 
@@ -82,7 +85,10 @@ export default function Page() {
 
         {/* TAB 5: Community Feed */}
         {activeTab === 'community' && (
-          <CommunityFeed initialPosts={INITIAL_POSTS} />
+          <CommunityFeed
+            initialPosts={INITIAL_POSTS}
+            onOpenChallenge={() => setIsChallengeModalOpen(true)}
+          />
         )}
 
         {/* TAB 6: Network & Invitations */}
@@ -180,6 +186,12 @@ export default function Page() {
           <span>Feed</span>
         </button>
       </nav>
+
+      {/* 5. Weekly Challenge Modal */}
+      <WeeklyChallengeModal
+        isOpen={isChallengeModalOpen}
+        onClose={() => setIsChallengeModalOpen(false)}
+      />
     </div>
   );
 }

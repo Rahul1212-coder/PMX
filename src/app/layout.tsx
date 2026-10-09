@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'PMX | Modern Product Management Network & Intelligence',
+  title: 'PMVerse | Modern Product Management Network & Intelligence',
   description: 'The premier career and competency platform for Product Managers. AI Mentor, 50-Question PM Competency Diagnostic, verified Job Board, Community, and Knowledge Hub.',
   icons: {
     icon: '/pmverse-icon.png',

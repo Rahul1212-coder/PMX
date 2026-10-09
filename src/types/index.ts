@@ -215,3 +215,46 @@ export interface PmCaseStudy {
     description: string;
   }[];
 }
+
+export type ApplicationStage = 'Saved' | 'Applied' | 'Screening' | 'Interview' | 'Final Round' | 'Offer';
+
+export interface JobApplication {
+  id: string;
+  userId: string;
+  jobId?: string;
+  jobTitle: string;
+  company: string;
+  stage: ApplicationStage;
+  location?: string;
+  salaryRange?: string;
+  notes?: string;
+  appliedDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChallengeSubmission {
+  id: string;
+  challengeId: string;
+  challengeTitle: string;
+  userId: string;
+  authorName: string;
+  authorRole: string;
+  authorAvatar?: string;
+  problemStatement: string;
+  solutionProposal: string;
+  keyMetrics: string;
+  upvotes: number;
+  hasUpvoted?: boolean;
+  aiFeedback?: {
+    overallScore: number;
+    productSenseScore: number;
+    feasibilityScore: number;
+    metricsScore: number;
+    strengths: string[];
+    improvements: string[];
+    summary: string;
+  };
+  createdAt: string;
+}
+

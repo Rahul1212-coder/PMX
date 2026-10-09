@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CommunityPost, Comment } from '../types';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
@@ -13,9 +13,13 @@ import { MessageSquare, Bookmark, Share2, Send, Plus } from 'lucide-react';
 
 interface CommunityFeedProps {
   initialPosts: CommunityPost[];
+  onOpenChallenge?: () => void;
 }
 
-export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) => {
+export const CommunityFeed: React.FC<CommunityFeedProps> = ({
+  initialPosts,
+  onOpenChallenge,
+}) => {
   const { user, profile, openAuthModal, isConfigured } = useAuth();
   const [posts, setPosts] = useState<CommunityPost[]>(initialPosts);
   const [selectedCat, setSelectedCat] = useState<string>('All');
@@ -38,12 +42,38 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
     'Interview',
   ];
 
-  const contributors = [
-    { i: 'PR', name: 'Priya Raman', badge: 'PM Mentor', pts: 1240 },
-    { i: 'SL', name: 'Sara Lind', badge: 'Expert', pts: 980 },
-    { i: 'DO', name: 'Daniel Okafor', badge: 'Top Contributor', pts: 712 },
-    { i: 'LM', name: 'Lucas Meyer', badge: 'Contributor', pts: 318 },
-  ];
+  // Derive real contributors from active community posts and engagement
+  const activeContributors = useMemo(() => {
+    if (!posts || posts.length === 0) return [];
+    const map = new Map<string, { id: string; name: string; initials: string; badge: string; pts: number }>();
+    posts.forEach((p) => {
+      const name = p.author?.name || 'Product Manager';
+      const initials = name
+        .split(' ')
+        .filter(Boolean)
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase() || 'PM';
+      const badge = p.author?.role || 'Community PM';
+      const points = (p.upvotes || 0) * 10 + 25; // 25 pts per post + 10 pts per upvote
+      const existing = map.get(name);
+      if (existing) {
+        existing.pts += points;
+      } else {
+        map.set(name, {
+          id: p.id,
+          name,
+          initials,
+          badge,
+          pts: points,
+        });
+      }
+    });
+    return Array.from(map.values())
+      .sort((a, b) => b.pts - a.pts)
+      .slice(0, 5);
+  }, [posts]);
 
   // Load real posts from Supabase on mount
   useEffect(() => {
@@ -396,45 +426,57 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
           {/* Vermilion Weekly Challenge Card */}
           <div className="bg-[#ec3013] text-[#f3f2f2] p-6 space-y-3">
             <div className="text-xs uppercase tracking-widest font-bold opacity-90">
-              Challenge #23 · 3 Days Left
+              Weekly Challenge · Active
             </div>
             <div className="text-2xl font-black leading-snug">
               Improve onboarding for a music streaming app.
             </div>
             <p className="text-xs opacity-90 leading-relaxed">
-              412 submissions. Reviewed by the community and the AI Mentor.
+              Submit your product teardown for AI Rubric evaluation and peer review.
             </p>
             <button
               onClick={() => {
-                setComposerText('My solution for Challenge #23 (Music Onboarding): ');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                if (onOpenChallenge) {
+                  onOpenChallenge();
+                } else {
+                  setComposerText('My solution for Challenge #23 (Music Onboarding): ');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
               }}
               className="btn w-full justify-between mt-2 bg-[#f3f2f2] text-[#201e1d] hover:bg-[#eae9e9] text-xs font-bold"
             >
-              <span>Submit answer</span>
+              <span>Solve Challenge</span>
               <span>→</span>
             </button>
           </div>
 
           {/* Top Contributors List */}
-          <div className="border-t-2 border-[rgba(32,30,29,0.15)] pt-3">
+          <div className="border-t-2 border-[rgba(32,30,29,0.15)] pt-3 text-left">
             <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold pb-2">
               Top Contributors This Week
             </div>
-            <div className="divide-y divide-[rgba(32,30,29,0.15)]">
-              {contributors.map((u, i) => (
-                <div key={i} className="flex gap-3 items-center py-2.5">
-                  <span className="w-8 h-8 grid place-items-center bg-[#d7d3d3] text-[#201e1d] font-black text-xs shrink-0">
-                    {u.i}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-extrabold text-xs text-[#201e1d] truncate">{u.name}</div>
-                    <div className="text-[11px] text-[#605d5d] truncate">{u.badge}</div>
+            {activeContributors.length > 0 ? (
+              <div className="divide-y divide-[rgba(32,30,29,0.15)]">
+                {activeContributors.map((u, i) => (
+                  <div key={u.id || i} className="flex gap-3 items-center py-2.5">
+                    <span className="w-8 h-8 grid place-items-center bg-[#d7d3d3] text-[#201e1d] font-black text-xs shrink-0">
+                      {u.initials}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-extrabold text-xs text-[#201e1d] truncate">{u.name}</div>
+                      <div className="text-[11px] text-[#605d5d] truncate">{u.badge}</div>
+                    </div>
+                    <span className="font-black text-xs text-[#ec3013]">{u.pts} pts</span>
                   </div>
-                  <span className="font-black text-xs text-[#ec3013]">{u.pts}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-3 text-left">
+                <p className="text-xs text-[#605d5d] leading-relaxed">
+                  No ranked contributor activity yet this week. Share an insight or discussion above to get featured!
+                </p>
+              </div>
+            )}
           </div>
         </aside>
       </div>
