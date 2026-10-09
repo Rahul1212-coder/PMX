@@ -27,42 +27,61 @@ export default function Home() {
         setSearchQuery={setSearchQuery}
       />
 
-      {/* Main 3-Column LinkedIn Layout Container */}
+      {/* Main Content Container adapting to tab layout like LinkedIn */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-5">
-        <div className="flex flex-col md:flex-row gap-4 lg:gap-5 items-start">
-          {/* Left Column: User Profile Card & Followed PM Topics */}
-          <div className="w-full md:w-56 lg:w-60 flex-shrink-0">
-            <LeftSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-          </div>
+        {/* 1. Community Feed: Classic 3-Column LinkedIn Layout */}
+        {activeTab === 'community' && (
+          <div className="flex flex-col md:flex-row gap-4 lg:gap-5 items-start">
+            {/* Left Column: User Profile Card & Followed PM Topics */}
+            <div className="w-full md:w-56 lg:w-60 flex-shrink-0">
+              <LeftSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            </div>
 
-          {/* Center Column: Primary Active Feed / Network / Jobs / Tutor / Quiz */}
-          <div className="flex-1 min-w-0 w-full space-y-4">
-            {activeTab === 'community' && (
+            {/* Center Column: Feed */}
+            <div className="flex-1 min-w-0 w-full">
               <CommunityFeed initialPosts={INITIAL_POSTS} />
-            )}
+            </div>
 
-            {activeTab === 'connect' && (
-              <NetworkConnect />
-            )}
+            {/* Right Column: PM News & Trending Discussions */}
+            <div className="hidden lg:block w-72 lg:w-80 flex-shrink-0">
+              <RightSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            </div>
+          </div>
+        )}
 
-            {activeTab === 'jobs' && (
-              <JobBoard initialJobs={INITIAL_JOBS} />
-            )}
+        {/* 2. My Network: LinkedIn Network 2-Column Layout */}
+        {activeTab === 'connect' && (
+          <NetworkConnect />
+        )}
 
-            {activeTab === 'ai-tutor' && (
+        {/* 3. Jobs: LinkedIn Jobs 2-Column Layout */}
+        {activeTab === 'jobs' && (
+          <JobBoard initialJobs={INITIAL_JOBS} />
+        )}
+
+        {/* 4. PM Learning & AI Copilot: Identity Sidebar + Learning Center */}
+        {activeTab === 'ai-tutor' && (
+          <div className="flex flex-col md:flex-row gap-4 lg:gap-5 items-start">
+            <div className="w-full md:w-56 lg:w-60 flex-shrink-0">
+              <LeftSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            </div>
+            <div className="flex-1 min-w-0 w-full">
               <AiPmTutor initialConcepts={INITIAL_CONCEPTS} />
-            )}
+            </div>
+          </div>
+        )}
 
-            {activeTab === 'assessment' && (
+        {/* 5. PM Skill Assessment: Identity Sidebar + Certification Quiz */}
+        {activeTab === 'assessment' && (
+          <div className="flex flex-col md:flex-row gap-4 lg:gap-5 items-start">
+            <div className="w-full md:w-56 lg:w-60 flex-shrink-0">
+              <LeftSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            </div>
+            <div className="flex-1 min-w-0 w-full">
               <AssessmentQuiz questions={ASSESSMENT_QUESTIONS} />
-            )}
+            </div>
           </div>
-
-          {/* Right Column: PM News & Trending Discussions, Recommendations & Widgets */}
-          <div className="hidden lg:block w-72 lg:w-80 flex-shrink-0">
-            <RightSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );

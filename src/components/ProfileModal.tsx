@@ -11,7 +11,6 @@ import {
   Trash2,
   Check,
   AlertCircle,
-  Sparkles,
   Building,
   Briefcase,
   User,
@@ -112,7 +111,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             ctx.drawImage(img, 0, 0, width, height);
             const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
             setAvatarUrl(compressedDataUrl);
-            setStatusMessage({ type: 'success', text: 'Profile picture ready! Click "Save Changes" below.' });
+            setStatusMessage({ type: 'success', text: 'Photo ready! Click "Save" below.' });
           } else {
             setAvatarUrl(event.target?.result as string);
           }
@@ -138,13 +137,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleApplyUrl = () => {
     if (!urlInput.trim()) return;
     setAvatarUrl(urlInput.trim());
-    setStatusMessage({ type: 'success', text: 'Image URL applied! Click "Save Changes" to save.' });
+    setStatusMessage({ type: 'success', text: 'Image URL applied! Click "Save" to finish.' });
   };
 
   const handleRemovePhoto = () => {
     setAvatarUrl('');
     setUrlInput('');
-    setStatusMessage({ type: 'success', text: 'Profile picture removed. Initials will be used.' });
+    setStatusMessage({ type: 'success', text: 'Photo removed. Initials will be used.' });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -172,7 +171,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         setStatusMessage({ type: 'success', text: 'Profile updated successfully!' });
         setTimeout(() => {
           onClose();
-        }, 600);
+        }, 500);
       }
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message || 'Failed to update profile' });
@@ -184,35 +183,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const initials = getInitials(fullName, profile?.email || user?.email);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-purple-100 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-8 text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-lg w-full shadow-2xl border border-[#e0dfdc] overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-8 text-left">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#1c053a] via-[#3b0764] to-[#581c87] p-5 text-white flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center border border-white/20">
-              <Camera className="w-4 h-4 text-purple-300" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold">Edit PM Profile & Picture</h2>
-              <p className="text-[11px] text-purple-200">
-                Personalize your PMVerse identity and avatar
-              </p>
-            </div>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Edit intro & profile photo</h2>
+            <p className="text-xs text-slate-500">
+              Personalize your public product management identity
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-purple-200 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
+            className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSave} className="p-5 sm:p-6 space-y-5">
+        <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Status Message */}
           {statusMessage && (
             <div
-              className={`flex items-start space-x-2 p-3 rounded-xl text-xs ${
+              className={`flex items-start space-x-2 p-3 rounded-md text-xs ${
                 statusMessage.type === 'success'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : 'bg-rose-50 text-rose-800 border border-rose-200'
@@ -228,9 +222,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           )}
 
           {/* Profile Picture Section */}
-          <div className="bg-purple-50/50 rounded-2xl p-4 border border-purple-100/80">
-            <label className="text-xs font-bold text-slate-800 block mb-3">
-              Profile Picture
+          <div className="bg-slate-50/70 rounded-lg p-4 border border-slate-200">
+            <label className="text-xs font-bold text-slate-800 block mb-2.5">
+              Profile Photo
             </label>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -241,10 +235,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   name={fullName}
                   email={profile?.email || user?.email}
                   size="3xl"
-                  className="ring-4 ring-purple-200/70 shadow-md"
+                  className="border-2 border-white shadow-sm ring-1 ring-slate-300"
                 />
                 {!avatarUrl && (
-                  <span className="absolute -bottom-1 -right-1 bg-purple-700 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white">
+                  <span className="absolute -bottom-1 -right-1 bg-[#0a66c2] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white">
                     Initials
                   </span>
                 )}
@@ -253,7 +247,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {/* Action Buttons */}
               <div className="flex-1 w-full space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  {/* Upload from Device */}
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -265,56 +258,53 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-purple-700 text-white hover:bg-purple-800 transition shadow-sm"
+                    className="flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#0a66c2] text-white hover:bg-[#004182] transition shadow-xs"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    <span>{isUploading ? 'Processing...' : 'Upload Photo'}</span>
+                    <span>{isUploading ? 'Processing...' : 'Upload photo'}</span>
                   </button>
 
-                  {/* Toggle Image URL Input */}
                   <button
                     type="button"
                     onClick={() => setShowUrlInput(!showUrlInput)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 transition"
                   >
-                    <LinkIcon className="w-3.5 h-3.5 text-purple-600" />
+                    <LinkIcon className="w-3.5 h-3.5 text-slate-500" />
                     <span>Image URL</span>
                   </button>
 
-                  {/* Remove Photo */}
                   {avatarUrl && (
                     <button
                       type="button"
                       onClick={handleRemovePhoto}
-                      className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium rounded-xl text-rose-600 hover:bg-rose-50 transition border border-rose-200"
+                      className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-full text-rose-600 hover:bg-rose-50 transition border border-rose-200"
                       title="Clear photo to use initials"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Use Initials</span>
+                      <span>Use initials</span>
                     </button>
                   )}
                 </div>
 
                 <p className="text-[11px] text-slate-500">
                   {avatarUrl
-                    ? 'Custom photo set. You can replace it or switch back to initials anytime.'
+                    ? 'Custom photo set. You can replace it or revert back to initials anytime.'
                     : `No photo added yet. Your profile displays "${initials}" initials.`}
                 </p>
 
-                {/* Optional Image URL Input Field */}
                 {showUrlInput && (
-                  <div className="flex items-center space-x-1.5 pt-1.5">
+                  <div className="flex items-center space-x-1.5 pt-1">
                     <input
                       type="url"
                       value={urlInput}
                       onChange={(e) => setUrlInput(e.target.value)}
                       placeholder="https://example.com/your-photo.jpg"
-                      className="flex-1 px-3 py-1.5 text-xs border border-purple-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-600"
+                      className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] outline-none"
                     />
                     <button
                       type="button"
                       onClick={handleApplyUrl}
-                      className="px-2.5 py-1.5 bg-purple-100 text-purple-800 text-xs font-semibold rounded-lg hover:bg-purple-200 transition"
+                      className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-200 transition"
                     >
                       Apply
                     </button>
@@ -324,9 +314,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
 
             {/* Quick Presets */}
-            <div className="mt-3.5 pt-3 border-t border-purple-100">
+            <div className="mt-3.5 pt-3 border-t border-slate-200">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
-                Or select a professional PM avatar preset:
+                Or choose a professional PM avatar preset:
               </span>
               <div className="flex items-center space-x-2 overflow-x-auto pb-1">
                 {PRESET_AVATARS.map((url, idx) => (
@@ -335,10 +325,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     type="button"
                     onClick={() => {
                       setAvatarUrl(url);
-                      setStatusMessage({ type: 'success', text: 'Preset avatar selected! Click Save Changes.' });
+                      setStatusMessage({ type: 'success', text: 'Preset avatar selected! Click Save.' });
                     }}
-                    className={`relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border-2 transition hover:scale-110 ${
-                      avatarUrl === url ? 'border-purple-600 ring-2 ring-purple-300' : 'border-slate-200'
+                    className={`relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border-2 transition hover:scale-105 ${
+                      avatarUrl === url ? 'border-[#0a66c2] ring-2 ring-sky-200' : 'border-slate-200'
                     }`}
                   >
                     <img src={url} alt={`Preset ${idx + 1}`} className="w-full h-full object-cover" />
@@ -348,12 +338,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          {/* Profile Fields */}
-          <div className="space-y-3.5">
+          {/* Form Fields */}
+          <div className="space-y-3">
             <div>
-              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1.5 mb-1">
-                <User className="w-3.5 h-3.5 text-purple-600" />
-                <span>Full Name *</span>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Full Name *
               </label>
               <input
                 type="text"
@@ -361,51 +350,48 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="e.g. Alex Rivera"
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-slate-700 flex items-center space-x-1.5 mb-1">
-                  <Briefcase className="w-3.5 h-3.5 text-purple-600" />
-                  <span>PM Role / Title</span>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Headline / Role
                 </label>
                 <input
                   type="text"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   placeholder="e.g. Senior Product Manager"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 flex items-center space-x-1.5 mb-1">
-                  <Building className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Company / Organization</span>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Company / Organization
                 </label>
                 <input
                   type="text"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
                   placeholder="e.g. Stripe, Linear, Stealth AI"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1.5 mb-1">
-                <FileText className="w-3.5 h-3.5 text-purple-600" />
-                <span>Bio / Headline</span>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                About / PM Philosophy
               </label>
               <textarea
-                rows={2}
+                rows={3}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Briefly describe your PM focus, frameworks, or domain experience..."
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none resize-none"
               />
             </div>
           </div>
@@ -420,16 +406,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+                className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-full transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving || isUploading}
-                className="px-5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white shadow-md shadow-purple-600/20 transition disabled:opacity-60"
+                className="px-5 py-1.5 text-xs font-semibold rounded-full bg-[#0a66c2] hover:bg-[#004182] text-white shadow-xs transition disabled:opacity-60"
               >
-                {isSaving ? 'Saving...' : 'Save Changes'}
+                {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

@@ -1,7 +1,24 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Home, Users, Briefcase, Sparkles, Compass, Bell, Search, ChevronDown, LogIn, LogOut, Database, Bookmark, Award, Check, Camera, User } from 'lucide-react';
+import {
+  Home,
+  Users,
+  Briefcase,
+  Sparkles,
+  Award,
+  Bell,
+  Search,
+  ChevronDown,
+  LogIn,
+  LogOut,
+  Bookmark,
+  Camera,
+  Compass,
+  CheckCircle2,
+  ExternalLink,
+  Shield,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
 
@@ -39,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'n-3',
-      text: 'Linear just posted a new Senior Product Manager role matching your skills.',
+      text: 'Linear just posted a new Senior Product Manager role matching your profile.',
       time: '3h ago',
       unread: false,
     },
@@ -49,8 +66,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'community' as const, label: 'Home', icon: Home },
     { id: 'connect' as const, label: 'My Network', icon: Users, badge: '2' },
     { id: 'jobs' as const, label: 'Jobs', icon: Briefcase },
-    { id: 'ai-tutor' as const, label: 'AI Tutor', icon: Sparkles },
-    { id: 'assessment' as const, label: 'Fit Test', icon: Compass },
+    { id: 'ai-tutor' as const, label: 'Learning', icon: Sparkles },
+    { id: 'assessment' as const, label: 'Skill Test', icon: Award },
   ];
 
   // Close dropdowns on outside click
@@ -67,40 +84,45 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const displayName = profile?.fullName || user?.user_metadata?.full_name || (user ? (user.email ? user.email.split('@')[0] : 'Product Manager') : 'Guest PM');
+  const displayRole = profile?.role
+    ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
+    : (user ? 'Associate PM' : 'Sign in to personalize');
+
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-purple-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
-          {/* Left: Brand Logo & Search Bar */}
-          <div className="flex items-center space-x-3 flex-1 max-w-md">
-            {/* PMVerse brand icon & logo */}
+    <header className="sticky top-0 z-50 bg-white border-b border-[#e0dfdc] shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-[53px]">
+          {/* Left: Brand & LinkedIn-style Search Input */}
+          <div className="flex items-center space-x-2.5 flex-1 max-w-sm sm:max-w-md">
+            {/* Square PM logo badge (LinkedIn iconic aesthetic) */}
             <div
-              className="flex items-center space-x-2.5 cursor-pointer flex-shrink-0"
+              className="flex items-center space-x-2 cursor-pointer flex-shrink-0"
               onClick={() => setActiveTab('community')}
             >
-              <div className="w-9 h-9 rounded-xl bg-purple-900/10 border border-purple-200/60 flex items-center justify-center p-1 shadow-sm">
-                <img src="/pmverse-icon.png" alt="PMVerse Icon" className="w-full h-full object-contain" />
+              <div className="w-[34px] h-[34px] rounded-md bg-[#0a66c2] text-white font-black text-xl flex items-center justify-center shadow-sm select-none">
+                <span>pm</span>
               </div>
-              <span className="hidden xl:inline-block font-black text-slate-900 text-lg tracking-tight">
-                PM<span className="bg-gradient-to-r from-purple-700 to-indigo-600 bg-clip-text text-transparent">Verse</span>
+              <span className="hidden xl:inline-block font-extrabold text-[#191919] text-base tracking-tight">
+                PM<span className="text-[#0a66c2]">Verse</span>
               </span>
             </div>
 
-            {/* PM Search Input */}
-            <div className="relative w-full max-w-xs hidden sm:block">
-              <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
+            {/* LinkedIn-style Search Input */}
+            <div className="relative w-full max-w-[280px]">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
-                placeholder="Search PMs, frameworks, teardowns..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-purple-50/50 hover:bg-purple-50 border border-purple-100 focus:border-purple-300 focus:bg-white rounded-xl transition outline-none"
+                placeholder="Search PMs, frameworks, jobs..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#edf3f8] hover:bg-[#e4ecf4] focus:bg-white focus:border-slate-400 focus:ring-1 focus:ring-slate-400 border border-transparent rounded-md transition outline-none text-[#191919] placeholder:text-slate-500"
               />
             </div>
           </div>
 
-          {/* Center/Right: Vertical Navigation Icons */}
-          <nav className="flex items-center space-x-1 sm:space-x-3 md:space-x-4">
+          {/* Right: Vertical Navigation Icons */}
+          <nav className="flex items-center space-x-1 sm:space-x-1 md:space-x-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -108,23 +130,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex flex-col items-center justify-center px-2 sm:px-3 py-1 relative group cursor-pointer transition ${
-                    isActive ? 'text-purple-700' : 'text-slate-500 hover:text-purple-900'
+                  className={`flex flex-col items-center justify-center min-w-[56px] sm:min-w-[64px] h-[52px] relative group cursor-pointer transition ${
+                    isActive ? 'text-[#191919]' : 'text-slate-500 hover:text-slate-900'
                   }`}
                 >
                   <div className="relative">
-                    <Icon className="w-5 h-5 sm:w-5 sm:h-5" />
+                    <Icon className={`w-5 h-5 transition ${isActive ? 'text-[#0a66c2]' : 'text-slate-600 group-hover:text-slate-900'}`} />
                     {item.badge && (
                       <span className="absolute -top-1.5 -right-2 bg-rose-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                         {item.badge}
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-medium hidden md:inline mt-0.5">
+                  <span className={`text-[11px] font-medium hidden md:inline mt-0.5 ${isActive ? 'text-[#191919] font-bold' : 'text-slate-600'}`}>
                     {item.label}
                   </span>
                   {isActive && (
-                    <span className="absolute bottom-[-9px] left-0 right-0 h-[2px] bg-purple-700 rounded-full" />
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#191919]" />
                   )}
                 </button>
               );
@@ -134,39 +156,39 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`flex flex-col items-center justify-center px-2 sm:px-3 py-1 relative text-slate-500 hover:text-purple-900 transition ${
-                  isNotificationsOpen ? 'text-purple-700' : ''
+                className={`flex flex-col items-center justify-center min-w-[56px] sm:min-w-[64px] h-[52px] relative text-slate-500 hover:text-slate-900 transition ${
+                  isNotificationsOpen ? 'text-[#191919]' : ''
                 }`}
               >
                 <div className="relative">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute -top-1.5 -right-2 bg-purple-700 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-slate-600 hover:text-slate-900" />
+                  <span className="absolute -top-1.5 -right-2 bg-[#0a66c2] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                     3
                   </span>
                 </div>
-                <span className="text-[11px] font-medium hidden md:inline mt-0.5">
+                <span className="text-[11px] font-medium hidden md:inline mt-0.5 text-slate-600">
                   Notifications
                 </span>
               </button>
 
               {/* Notifications Dropdown */}
               {isNotificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-purple-100 py-2 z-50 animate-in fade-in zoom-in-95">
-                  <div className="px-4 py-2 border-b border-purple-50 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">Notifications</span>
-                    <span className="text-[11px] text-purple-700 font-semibold cursor-pointer hover:underline">
+                <div className="absolute right-0 mt-1 w-80 bg-white rounded-lg shadow-xl border border-[#e0dfdc] py-2 z-50 animate-in fade-in zoom-in-95">
+                  <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">Notifications</span>
+                    <span className="text-[11px] text-[#0a66c2] font-semibold cursor-pointer hover:underline">
                       Mark all as read
                     </span>
                   </div>
-                  <div className="divide-y divide-purple-50 max-h-80 overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
                     {notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={`p-3 text-xs hover:bg-purple-50/50 cursor-pointer transition flex items-start space-x-2 ${
-                          n.unread ? 'bg-purple-50/30' : ''
+                        className={`p-3 text-xs hover:bg-slate-50 cursor-pointer transition flex items-start space-x-2 ${
+                          n.unread ? 'bg-sky-50/50' : ''
                         }`}
                       >
-                        <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.unread ? 'bg-purple-600' : 'bg-transparent'}`} />
+                        <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.unread ? 'bg-[#0a66c2]' : 'bg-transparent'}`} />
                         <div>
                           <p className="text-slate-700 leading-snug">{n.text}</p>
                           <span className="text-[10px] text-slate-400 mt-1 block">{n.time}</span>
@@ -178,82 +200,78 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
 
-            {/* Profile ("Me") Menu with User Avatar / Initials */}
+            {/* Profile ("Me") Menu (LinkedIn style) */}
             <div className="relative pl-1 border-l border-slate-200" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex flex-col items-center justify-center px-1.5 py-0.5 text-slate-600 hover:text-purple-900 transition"
+                className="flex flex-col items-center justify-center min-w-[50px] sm:min-w-[56px] h-[52px] text-slate-600 hover:text-slate-900 transition"
               >
                 <UserAvatar
                   src={profile?.avatarUrl}
-                  name={profile?.fullName || user?.user_metadata?.full_name}
+                  name={displayName}
                   email={profile?.email || user?.email}
                   size="xs"
-                  className="border border-purple-200 shadow-xs"
+                  className="border border-slate-300 shadow-xs"
                 />
                 <div className="hidden md:flex items-center space-x-0.5 mt-0.5">
                   <span className="text-[11px] font-medium text-slate-700">
                     {profile?.fullName ? profile.fullName.split(' ')[0] : (user ? (user.email ? user.email.split('@')[0] : 'PM') : 'Me')}
                   </span>
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                  <ChevronDown className="w-3 h-3 text-slate-500" />
                 </div>
               </button>
 
-              {/* Profile Dropdown */}
+              {/* LinkedIn-style Profile Dropdown */}
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-purple-100 py-2 z-50 text-left animate-in fade-in zoom-in-95">
-                  {/* User Card Top */}
-                  <div className="px-4 py-3 border-b border-purple-100 flex items-start space-x-3 bg-purple-50/30">
-                    <div
-                      className="relative group cursor-pointer flex-shrink-0"
-                      onClick={() => {
-                        setIsDropdownOpen(false);
-                        if (user) {
-                          openProfileModal();
-                        } else {
-                          openAuthModal('signin');
-                        }
-                      }}
-                      title="Click to change profile picture"
-                    >
+                <div className="absolute right-0 mt-1 w-72 bg-white rounded-lg shadow-xl border border-[#e0dfdc] py-2 z-50 text-left animate-in fade-in zoom-in-95">
+                  {/* User Profile Header Card */}
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <div className="flex items-start space-x-3">
                       <UserAvatar
                         src={profile?.avatarUrl}
-                        name={profile?.fullName || user?.user_metadata?.full_name}
+                        name={displayName}
                         email={profile?.email || user?.email}
                         size="lg"
-                        className="border-2 border-white shadow-sm ring-2 ring-purple-200/70"
+                        className="border border-slate-300 shadow-sm flex-shrink-0"
                       />
-                      <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                        <Camera className="w-3.5 h-3.5 text-white" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 truncate">
+                          {displayName}
+                        </p>
+                        <p className="text-xs text-slate-600 line-clamp-2 mt-0.5">
+                          {displayRole}
+                        </p>
                       </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900 truncate">
-                        {profile?.fullName || user?.user_metadata?.full_name || (user ? (user.email ? user.email.split('@')[0] : 'Product Manager') : 'Guest PM')}
-                      </p>
-                      <p className="text-[11px] text-slate-500 line-clamp-1">
-                        {profile?.role || 'Associate PM'}{profile?.company ? ` @ ${profile.company}` : ''}
-                      </p>
-                      {user?.email && (
-                        <p className="text-[10px] text-purple-700 truncate font-medium mt-0.5">
-                          {user.email}
-                        </p>
-                      )}
-                    </div>
+
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        if (user) openProfileModal();
+                        else openAuthModal('signin');
+                      }}
+                      className="mt-3 w-full py-1 text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] hover:bg-[#ebf4fd] hover:border-2 rounded-full transition text-center"
+                    >
+                      {user ? 'View / Edit PM Profile' : 'Sign In to Profile'}
+                    </button>
                   </div>
 
-                  {/* Actions */}
-                  <div className="py-1 text-xs">
+                  {/* Section: Manage */}
+                  <div className="py-1.5 border-b border-slate-100 text-xs">
+                    <span className="px-4 py-1 text-[11px] font-bold text-slate-800 uppercase tracking-wider block">
+                      Manage
+                    </span>
+
                     {user && (
                       <button
                         onClick={() => {
                           openProfileModal();
                           setIsDropdownOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-purple-800 hover:bg-purple-50 flex items-center space-x-2 font-semibold"
+                        className="w-full text-left px-4 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
                       >
-                        <Camera className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Edit Profile & Photo</span>
+                        <Camera className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Change Profile Picture</span>
                       </button>
                     )}
 
@@ -262,10 +280,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setActiveTab('connect');
                         setIsDropdownOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-slate-700 hover:bg-purple-50 flex items-center space-x-2"
+                      className="w-full text-left px-4 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
                     >
-                      <Users className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Manage PM Network (480+)</span>
+                      <Users className="w-3.5 h-3.5 text-slate-500" />
+                      <span>PM Network (480+)</span>
                     </button>
 
                     <button
@@ -273,9 +291,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setActiveTab('jobs');
                         setIsDropdownOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-slate-700 hover:bg-purple-50 flex items-center space-x-2"
+                      className="w-full text-left px-4 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
                     >
-                      <Bookmark className="w-3.5 h-3.5 text-purple-600" />
+                      <Bookmark className="w-3.5 h-3.5 text-slate-500" />
                       <span>Saved PM Jobs</span>
                     </button>
 
@@ -284,22 +302,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setActiveTab('assessment');
                         setIsDropdownOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-slate-700 hover:bg-purple-50 flex items-center space-x-2"
+                      className="w-full text-left px-4 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
                     >
-                      <Award className="w-3.5 h-3.5 text-amber-500" />
-                      <span>PM Fit Score: 88% (Certified)</span>
+                      <Award className="w-3.5 h-3.5 text-amber-600" />
+                      <span>PM Skill Certification</span>
                     </button>
                   </div>
 
-                  {/* Sign In / Sign Out */}
-                  <div className="border-t border-purple-100 pt-1">
+                  {/* Section: Account & Auth */}
+                  <div className="pt-1.5 text-xs">
                     {user ? (
                       <button
                         onClick={() => {
                           signOut();
                           setIsDropdownOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center space-x-2"
+                        className="w-full text-left px-4 py-2 font-semibold text-rose-600 hover:bg-rose-50 flex items-center space-x-2"
                       >
                         <LogOut className="w-3.5 h-3.5" />
                         <span>Sign Out</span>
@@ -310,15 +328,25 @@ export const Navbar: React.FC<NavbarProps> = ({
                           openAuthModal('signin');
                           setIsDropdownOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 flex items-center space-x-2"
+                        className="w-full text-left px-4 py-2 font-semibold text-[#0a66c2] hover:bg-[#ebf4fd] flex items-center space-x-2"
                       >
                         <LogIn className="w-3.5 h-3.5" />
-                        <span>Sign In to PM Profile</span>
+                        <span>Sign In</span>
                       </button>
                     )}
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* LinkedIn Premium Promo Link */}
+            <div className="hidden lg:flex items-center pl-3 border-l border-slate-200">
+              <button
+                onClick={() => setActiveTab('assessment')}
+                className="text-[11px] text-[#915907] hover:underline leading-tight text-center max-w-[80px]"
+              >
+                Try PM Pro Verified
+              </button>
             </div>
           </nav>
         </div>

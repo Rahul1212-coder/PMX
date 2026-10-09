@@ -104,7 +104,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`inline-flex items-center justify-center flex-shrink-0 rounded-full bg-gradient-to-tr from-purple-800 via-purple-600 to-indigo-600 text-white font-bold select-none shadow-inner tracking-wider ${sizeConfig.container} ${sizeConfig.text} ${className}`}
+      className={`inline-flex items-center justify-center flex-shrink-0 rounded-full bg-gradient-to-tr from-[#0a66c2] via-[#094987] to-[#004182] text-white font-bold select-none shadow-sm tracking-wider ${sizeConfig.container} ${sizeConfig.text} ${className}`}
       title={name || email || 'PM Profile'}
     >
       <span>{initials}</span>
