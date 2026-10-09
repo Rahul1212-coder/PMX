@@ -270,11 +270,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return { error: 'Supabase client not initialized' };
 
     try {
+      const siteRedirectUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== 'undefined' ? window.location.origin : undefined);
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+          emailRedirectTo: siteRedirectUrl,
           data: {
             full_name: meta.fullName,
             role: meta.role,
