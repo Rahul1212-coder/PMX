@@ -25,7 +25,7 @@ interface AssessmentQuizProps {
 }
 
 export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => {
-  const { user, openAuthModal, isConfigured } = useAuth();
+  const { user, profile, updateProfile, openAuthModal, isConfigured } = useAuth();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [result, setResult] = useState<AssessmentResult | null>(null);
@@ -150,10 +150,13 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
     setResult(calculated);
 
     // Save to Supabase
-    if (user && isConfigured) {
-      const ok = await saveQuizResultToDb(user.id, calculated);
-      if (ok) {
-        setIsSavedToDb(true);
+    if (user) {
+      updateProfile({ pmFitScore: calculated.scorePercentage }).catch(() => {});
+      if (isConfigured) {
+        const ok = await saveQuizResultToDb(user.id, calculated);
+        if (ok) {
+          setIsSavedToDb(true);
+        }
       }
     }
   };
@@ -290,8 +293,15 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ questions }) => 
             {/* LinkedIn Add Badge to Profile Button */}
             <div className="pt-2">
               <button
-                onClick={() => {
+                onClick={async () => {
+                  if (!user) {
+                    openAuthModal('signin');
+                    return;
+                  }
                   setIsBadgeAddedToProfile(true);
+                  if (result) {
+                    await updateProfile({ pmFitScore: result.scorePercentage });
+                  }
                   alert('Certified PM Skill Badge added to your profile! Recruiter match score boosted.');
                 }}
                 className={`px-5 py-2 rounded-full text-xs font-semibold transition flex items-center justify-center space-x-1.5 mx-auto ${

@@ -235,12 +235,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: error.message };
       }
 
-      // Check if email confirmation is required
-      if (data.user && !data.session) {
-        return { message: 'Account created! Please check your email inbox to confirm your email before signing in.' };
-      }
-
       if (data.user) {
+        const initialProfile: UserProfile = {
+          id: data.user.id,
+          email: data.user.email || email,
+          fullName: meta.fullName.trim() || 'Product Manager',
+          role: meta.role.trim() || 'Associate PM',
+          company: meta.company.trim() || 'Independent PM',
+          avatarUrl: '',
+          connectionsCount: 0,
+          profileViews: 0,
+          postImpressions: 0,
+        };
+        // Directly sync user profile to Supabase database
+        await upsertUserProfileInDb(initialProfile).catch(() => {});
+
+        // Check if email confirmation is required
+        if (!data.session) {
+          return { message: 'Account created! Please check your email inbox to confirm your email before signing in.' };
+        }
+
         setUser(data.user);
         setSession(data.session);
         await loadUserProfile(data.user);

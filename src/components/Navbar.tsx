@@ -157,9 +157,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <div className="relative">
                   <Bell className="w-5 h-5 text-slate-600 hover:text-slate-900" />
-                  <span className="absolute -top-1.5 -right-2 bg-[#0a66c2] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    3
-                  </span>
+                  {notifications.filter((n) => n.unread).length > 0 && (
+                    <span className="absolute -top-1.5 -right-2 bg-[#0a66c2] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {notifications.filter((n) => n.unread).length}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[11px] font-medium hidden md:inline mt-0.5 text-slate-600">
                   Notifications
@@ -278,7 +280,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-4 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
                     >
                       <Users className="w-3.5 h-3.5 text-slate-500" />
-                      <span>PM Network (480+)</span>
+                      <span>PM Network</span>
                     </button>
 
                     <button

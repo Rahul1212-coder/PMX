@@ -141,7 +141,7 @@ export const NetworkConnect: React.FC = () => {
                 <Layers className="w-4 h-4 text-slate-500" />
                 <span>PM Groups</span>
               </span>
-              <span className="font-semibold text-slate-500">4</span>
+              <span className="font-semibold text-slate-500">0</span>
             </div>
 
             <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
@@ -149,7 +149,7 @@ export const NetworkConnect: React.FC = () => {
                 <Calendar className="w-4 h-4 text-slate-500" />
                 <span>Events & Teardowns</span>
               </span>
-              <span className="font-semibold text-slate-500">2</span>
+              <span className="font-semibold text-slate-500">0</span>
             </div>
 
             <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
@@ -345,7 +345,7 @@ export const NetworkConnect: React.FC = () => {
                   </div>
 
                   <p className="text-[11px] text-slate-400 mt-1">
-                    {pm.mutualConnections} mutual PM connections
+                    {pm.mutualConnections > 0 ? `${pm.mutualConnections} mutual PM connections` : 'Verified PM Member'}
                   </p>
 
                   {/* Skills tags */}

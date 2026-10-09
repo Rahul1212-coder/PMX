@@ -22,7 +22,11 @@ export async function getCommunityPostsFromDb(): Promise<CommunityPost[] | null>
     if (!data) return [];
 
     // Filter out any legacy dummy mock seed posts
-    const realPosts = data.filter((row: any) => !['post-1', 'post-2', 'post-3'].includes(row.id));
+    const realPosts = data.filter(
+      (row: any) =>
+        !['post-1', 'post-2', 'post-3', 'post-4'].includes(row.id) &&
+        !['Elena Rostova', 'Marcus Chen', 'Sarah Jenkins', 'Liam Vance'].includes(row.author_name)
+    );
 
     return realPosts.map((row: any) => ({
       id: row.id,

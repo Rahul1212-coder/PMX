@@ -162,9 +162,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
       userId: user?.id,
       author: {
         name: profile?.fullName || user?.user_metadata?.full_name || 'Product Manager',
-        role: profile?.role || 'Senior Product Manager',
-        company: profile?.company || 'High Growth SaaS',
-        headline: `${profile?.role || 'Senior PM'} @ ${profile?.company || 'High Growth SaaS'} | Product Craft`,
+        role: profile?.role || 'Product Manager',
+        company: profile?.company || 'Independent PM',
+        headline: profile?.role ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}` : 'Product Manager',
         avatar: profile?.avatarUrl || '',
       },
       title: newTitle.trim(),

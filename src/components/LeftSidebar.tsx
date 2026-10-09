@@ -22,10 +22,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
     'outcome-roadmaps',
   ];
 
-  const displayName = profile?.fullName || user?.user_metadata?.full_name || (user ? (user.email ? user.email.split('@')[0] : 'Product Manager') : 'Product Leader');
+  const displayName = profile?.fullName || user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'Product Manager');
   const displayRole = profile?.role
     ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
-    : (user ? 'Associate PM | Exploring Opportunities' : 'Staff PM @ Stripe | Ex-Google APM | FinTech & AI');
+    : (user ? 'Product Manager' : 'Product Management Platform');
 
   return (
     <aside className="w-full space-y-2">
@@ -203,25 +203,34 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
           ))}
         </div>
 
-        {/* Groups & Events */}
+        {/* Groups & Topics */}
         <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1.5">
-          <span className="text-[11px] font-bold text-[#0a66c2] block">Groups</span>
-          <button
-            onClick={() => setActiveTab('connect')}
-            className="w-full text-left text-xs text-slate-600 hover:text-[#0a66c2] truncate block"
-          >
-            Ex-Google & Stripe PM Squad (3.2k)
-          </button>
+          <span className="text-[11px] font-bold text-[#0a66c2] block">Product Groups</span>
           <button
             onClick={() => setActiveTab('connect')}
             className="w-full text-left text-xs text-slate-600 hover:text-[#0a66c2] truncate block"
           >
             AI Native Product Managers
           </button>
+          <button
+            onClick={() => setActiveTab('connect')}
+            className="w-full text-left text-xs text-slate-600 hover:text-[#0a66c2] truncate block"
+          >
+            Product-Led Growth (PLG)
+          </button>
+          <button
+            onClick={() => setActiveTab('connect')}
+            className="w-full text-left text-xs text-slate-600 hover:text-[#0a66c2] truncate block"
+          >
+            Continuous Discovery & Roadmaps
+          </button>
 
-          <div className="pt-1 flex items-center justify-between text-xs text-[#0a66c2] font-semibold cursor-pointer hover:underline">
-            <span>Events (2)</span>
-            <Plus className="w-3.5 h-3.5" />
+          <div
+            onClick={() => setActiveTab('connect')}
+            className="pt-1 flex items-center justify-between text-xs text-[#0a66c2] font-semibold cursor-pointer hover:underline"
+          >
+            <span>Explore PM Network</span>
+            <Compass className="w-3.5 h-3.5" />
           </div>
         </div>
 

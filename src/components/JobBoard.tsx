@@ -159,7 +159,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
       applyUrl: newApplyUrl.trim() || '#',
       featured: true,
       postedDate: 'Just now',
-      applicantsCount: 1,
+      applicantsCount: 0,
     };
 
     const updatedJobs = [created, ...jobs];
@@ -237,7 +237,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
                 <Bell className="w-4 h-4 text-slate-500" />
                 <span>PM Job Alerts</span>
               </span>
-              <span className="text-slate-400">3</span>
+              <span className="text-slate-400">0</span>
             </div>
 
             <div className="py-2.5 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">

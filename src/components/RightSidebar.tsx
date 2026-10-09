@@ -16,28 +16,28 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ activeTab, setActive
   const trendingNews = [
     {
       title: 'Linear Method vs Traditional Agile',
-      time: '1h ago',
-      readers: '1,420 PMs discussing',
+      time: 'Product Strategy',
+      readers: 'Trending Discussion',
     },
     {
       title: 'AI PRDs replacing 30-page feature specs',
-      time: '3h ago',
-      readers: '3,890 PMs discussing',
+      time: 'AI & Tech',
+      readers: 'Popular Topic',
     },
     {
-      title: '2026 PM Compensation Benchmarks released',
-      time: '5h ago',
-      readers: '950 PMs reading',
+      title: '2026 PM Career Ladders & Competency Models',
+      time: 'Career Growth',
+      readers: 'Industry Guide',
     },
     {
       title: 'Outcome bets in Enterprise B2B SaaS',
-      time: '1d ago',
-      readers: '2,100 PMs discussing',
+      time: 'Execution',
+      readers: 'Case Study',
     },
     {
-      title: 'How Notion evaluates LLM latency & UX',
-      time: '1d ago',
-      readers: '1,780 PMs reading',
+      title: 'How product teams evaluate LLM latency & UX',
+      time: 'Technical PM',
+      readers: 'Deep Dive',
     },
   ];
 
@@ -46,21 +46,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ activeTab, setActive
       id: 'g-1',
       name: 'AI Product Leaders Guild',
       desc: 'Prompt UX, latency evaluation & agent architecture',
-      members: '12.4k PMs',
+      members: 'Community Guild',
       icon: '🤖',
     },
     {
       id: 'g-2',
       name: 'PLG & Growth Guild',
       desc: 'Self-serve onboarding, freemium & conversion loops',
-      members: '8.9k PMs',
+      members: 'Community Guild',
       icon: '📈',
     },
     {
       id: 'g-3',
       name: 'High-Agency PM Craft',
       desc: 'Linear method, outcome roadmaps & autonomous squads',
-      members: '6.2k PMs',
+      members: 'Community Guild',
       icon: '⚡',
     },
   ];

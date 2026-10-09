@@ -181,7 +181,7 @@ export const AuthModal: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Alex Vance"
+                    placeholder="Enter your full name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none text-[#191919]"
@@ -212,7 +212,7 @@ export const AuthModal: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Stripe, Linear"
+                      placeholder="Company or Organization (optional)"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       className="w-full text-xs px-3 py-2 border border-slate-300 rounded-md focus:border-[#0a66c2] outline-none text-[#191919]"

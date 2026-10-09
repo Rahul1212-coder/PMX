@@ -349,7 +349,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Alex Rivera"
+                placeholder="Enter your full name"
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] outline-none"
               />
             </div>
