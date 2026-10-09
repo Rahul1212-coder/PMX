@@ -116,6 +116,7 @@ export interface JobListing {
   description: string;
   skills: string[];
   applyUrl: string;
+  source?: string;
   isSaved?: boolean;
   applicantsCount?: number;
   matchScore?: number;

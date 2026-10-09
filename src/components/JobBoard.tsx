@@ -17,6 +17,8 @@ import {
   ChevronRight,
   ArrowRight,
   Sliders,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -51,6 +53,8 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isAddAppModalOpen, setIsAddAppModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // New application form state
   const [manualTitle, setManualTitle] = useState('');
@@ -73,16 +77,69 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [newSkills, setNewSkills] = useState('Product Strategy, Roadmapping, Analytics');
   const [newApplyUrl, setNewApplyUrl] = useState('');
 
+  // Handle live job aggregation
+  const handleSyncLiveJobs = async () => {
+    setIsSyncing(true);
+    setSyncMessage('Aggregating live PM jobs from Arbeitnow, RemoteOK & Jobicy...');
+    try {
+      const res = await fetch('/api/jobs/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data?.jobs && data.jobs.length > 0) {
+        setJobs(data.jobs);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pmverse_synced_jobs', JSON.stringify(data.jobs));
+        }
+        setSyncMessage(`✓ Synced ${data.jobs.length} live product manager roles!`);
+        setTimeout(() => setSyncMessage(null), 4000);
+      }
+    } catch (err) {
+      console.error('Failed to sync live jobs:', err);
+      setSyncMessage('Sync finished.');
+      setTimeout(() => setSyncMessage(null), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Load real jobs & applications from database
   useEffect(() => {
     let mounted = true;
     async function loadData() {
+      let loadedJobs: JobListing[] = [];
       if (isConfigured) {
         const dbJobs = await getJobListingsFromDb();
-        if (mounted && dbJobs && dbJobs.length > 0) {
-          setJobs(dbJobs);
+        if (dbJobs && dbJobs.length > 0) {
+          loadedJobs = dbJobs;
         }
       }
+
+      if (loadedJobs.length === 0 && typeof window !== 'undefined') {
+        const cached = localStorage.getItem('pmverse_synced_jobs');
+        if (cached) {
+          try {
+            loadedJobs = JSON.parse(cached);
+          } catch {}
+        }
+      }
+
+      // If still empty, automatically pull from /api/jobs/sync
+      if (loadedJobs.length === 0) {
+        try {
+          const res = await fetch('/api/jobs/sync');
+          const data = await res.json();
+          if (data?.jobs && data.jobs.length > 0) {
+            loadedJobs = data.jobs;
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('pmverse_synced_jobs', JSON.stringify(data.jobs));
+            }
+          }
+        } catch {}
+      }
+
+      if (mounted && loadedJobs.length > 0) {
+        setJobs(loadedJobs);
+      }
+
       if (user) {
         if (isConfigured) {
           const ids = await getSavedJobIdsFromDb(user.id);
@@ -124,30 +181,32 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   };
 
   const handleApply = async (job: JobListing) => {
-    if (!user) {
-      openAuthModal('signin');
-      return;
+    // 1. Always open official company posting URL directly in new tab
+    if (job.applyUrl && job.applyUrl !== '#') {
+      window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
     }
 
-    const existing = applications.find((a) => a.jobId === job.id || (a.jobTitle === job.title && a.company === job.company));
-    if (!existing) {
-      const newApp: JobApplication = {
-        id: `app-${Date.now()}`,
-        userId: user.id,
-        jobId: job.id,
-        jobTitle: job.title,
-        company: job.company,
-        stage: 'Applied',
-        location: job.location,
-        salaryRange: job.salaryRange,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setApplications((prev) => [newApp, ...prev]);
-      await upsertJobApplicationInDb(newApp);
-    }
-    if (job.applyUrl && job.applyUrl !== '#') {
-      window.open(job.applyUrl, '_blank');
+    // 2. If logged in, simultaneously record application in user's PMVerse tracker
+    if (user) {
+      const existing = applications.find(
+        (a) => a.jobId === job.id || (a.jobTitle === job.title && a.company === job.company)
+      );
+      if (!existing) {
+        const newApp: JobApplication = {
+          id: `app-${Date.now()}`,
+          userId: user.id,
+          jobId: job.id,
+          jobTitle: job.title,
+          company: job.company,
+          stage: 'Applied',
+          location: job.location,
+          salaryRange: job.salaryRange,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setApplications((prev) => [newApp, ...prev]);
+        await upsertJobApplicationInDb(newApp);
+      }
     }
   };
 
@@ -516,7 +575,16 @@ export const JobBoard: React.FC<JobBoardProps> = ({
               Product Jobs
             </h1>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleSyncLiveJobs}
+                disabled={isSyncing}
+                className="btn btn-secondary text-xs font-bold flex items-center gap-1.5"
+                title="Aggregate live PM jobs from open tech boards (Arbeitnow, RemoteOK, Jobicy)"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#ec3013]' : ''}`} />
+                <span>{isSyncing ? 'Syncing...' : 'Sync Live PM Jobs'}</span>
+              </button>
               <button
                 onClick={() => setIsPostModalOpen(true)}
                 className="btn btn-secondary text-xs font-bold"
@@ -534,6 +602,13 @@ export const JobBoard: React.FC<JobBoardProps> = ({
               </div>
             </div>
           </div>
+
+          {syncMessage && (
+            <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] text-xs font-bold text-[#ae1800] flex items-center justify-between animate-in fade-in duration-150">
+              <span>{syncMessage}</span>
+              <button onClick={() => setSyncMessage(null)} className="text-[#605d5d] hover:text-[#201e1d]">✕</button>
+            </div>
+          )}
 
           {/* Search Box with 2px Modernist Border */}
           <div className="flex border-2 border-[#201e1d] bg-[#f3f2f2]">

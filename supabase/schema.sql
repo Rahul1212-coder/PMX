@@ -166,8 +166,11 @@ CREATE POLICY "Users can delete their own posts"
 CREATE POLICY "Job listings are viewable by everyone"
   ON public.job_listings FOR SELECT USING (true);
 
-CREATE POLICY "Authenticated users can create job listings"
-  ON public.job_listings FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Anyone can insert job listings"
+  ON public.job_listings FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update job listings"
+  ON public.job_listings FOR UPDATE USING (true);
 
 CREATE POLICY "Users can delete their own job listings"
   ON public.job_listings FOR DELETE USING (auth.uid() = user_id);
