@@ -108,28 +108,72 @@ export interface JobListing {
   matchScore?: number;
 }
 
+export type AssessmentCategory =
+  | 'Product Thinking'
+  | 'Product Strategy'
+  | 'Root Cause Analysis (RCA)'
+  | 'Metrics & Analytics'
+  | 'Prioritization'
+  | 'User Research & Discovery'
+  | 'Product Execution & Delivery'
+  | 'Growth & Monetization'
+  | 'Stakeholder Management'
+  | 'Technical & Systems Thinking';
+
+export interface AssessmentQuestionOption {
+  key: 'A' | 'B' | 'C' | 'D';
+  text: string;
+}
+
 export interface AssessmentQuestion {
   id: number;
-  dimension: 'Empathy & Discovery' | 'Analytical & Metrics' | 'Prioritization' | 'Stakeholder Management' | 'Execution & Delivery';
+  category: AssessmentCategory;
+  title: string;
   scenario: string;
-  options: {
-    text: string;
-    score: number; // 1 to 4
-    rationale: string;
-  }[];
+  question: string;
+  options: AssessmentQuestionOption[];
+  correctOption: 'A' | 'B' | 'C' | 'D';
+  explanation: string;
+  competencyTested: string;
+}
+
+export interface CategoryScore {
+  category: AssessmentCategory;
+  score: number;
+  total: number;
+  percentage: number;
+  level: string;
+  recommendation: string;
+}
+
+export interface AnswerReviewItem {
+  questionId: number;
+  category: AssessmentCategory;
+  title: string;
+  scenario: string;
+  selectedOption: 'A' | 'B' | 'C' | 'D' | null;
+  correctOption: 'A' | 'B' | 'C' | 'D';
+  isCorrect: boolean;
+  explanation: string;
+  competencyTested: string;
 }
 
 export interface AssessmentResult {
   scorePercentage: number;
+  totalCorrect: number;
+  totalQuestions: number;
   archetype: string;
+  assessmentLabel: 'Beginner' | 'Developing' | 'Competent' | 'Strong' | 'Advanced';
   summary: string;
-  dimensionScores: {
+  categoryScores: CategoryScore[];
+  dimensionScores?: {
     dimension: string;
-    score: number; // 0-100%
+    score: number;
   }[];
   strengths: string[];
   growthAreas: string[];
   recommendedRole: string;
+  answersReview?: AnswerReviewItem[];
 }
 
 export interface SavedQuizResult {
@@ -143,4 +187,18 @@ export interface SavedQuizResult {
     score: number;
   }[];
   createdAt: string;
+}
+
+export interface PmCaseStudy {
+  id: string;
+  title: string;
+  category: string;
+  scenario: string;
+  contextPoints: string[];
+  tasks: string[];
+  rubric: {
+    dimension: string;
+    weight: string;
+    description: string;
+  }[];
 }

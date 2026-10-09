@@ -322,7 +322,7 @@ export async function saveQuizResultToDb(userId: string, result: AssessmentResul
       score_percentage: result.scorePercentage,
       archetype: result.archetype,
       summary: result.summary,
-      dimension_scores: result.dimensionScores,
+      dimension_scores: result.categoryScores || result.dimensionScores || [],
       strengths: result.strengths,
       growth_areas: result.growthAreas,
       recommended_role: result.recommendedRole,
