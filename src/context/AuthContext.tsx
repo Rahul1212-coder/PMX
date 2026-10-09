@@ -270,9 +270,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return { error: 'Supabase client not initialized' };
 
     try {
+      const PRODUCTION_SITE_URL = 'https://pmverse.in';
       const siteRedirectUrl =
         process.env.NEXT_PUBLIC_SITE_URL ||
-        (typeof window !== 'undefined' ? window.location.origin : undefined);
+        (typeof window !== 'undefined' && !window.location.origin.includes('localhost')
+          ? window.location.origin
+          : PRODUCTION_SITE_URL);
 
       const { data, error } = await supabase.auth.signUp({
         email,
