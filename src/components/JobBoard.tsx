@@ -2,9 +2,32 @@
 
 import React, { useState, useEffect } from 'react';
 import { JobListing } from '../types';
-import { Briefcase, MapPin, DollarSign, ExternalLink, Search, Bookmark, BookmarkCheck, Sparkles, Building2, PlusCircle, LogIn, X } from 'lucide-react';
+import {
+  Briefcase,
+  MapPin,
+  DollarSign,
+  ExternalLink,
+  Search,
+  Bookmark,
+  BookmarkCheck,
+  Sparkles,
+  Building2,
+  PlusCircle,
+  LogIn,
+  X,
+  Check,
+  Send,
+  Users,
+  Clock,
+  ShieldCheck,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { getSavedJobIdsFromDb, toggleSavedJobInDb, getJobListingsFromDb, insertJobListingToDb } from '@/lib/supabase/database';
+import {
+  getSavedJobIdsFromDb,
+  toggleSavedJobInDb,
+  getJobListingsFromDb,
+  insertJobListingToDb,
+} from '@/lib/supabase/database';
 
 interface JobBoardProps {
   initialJobs: JobListing[];
@@ -15,12 +38,15 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
   const [jobs, setJobs] = useState<JobListing[]>(initialJobs);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [locationSearch, setLocationSearch] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string>('All');
   const [selectedDomain, setSelectedDomain] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string>('All');
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [easyApplyJob, setEasyApplyJob] = useState<JobListing | null>(null);
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
 
   // New Job Form State
   const [newTitle, setNewTitle] = useState('');
@@ -29,7 +55,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
   const [newDomain, setNewDomain] = useState<JobListing['domain']>('B2B SaaS');
   const [newLocation, setNewLocation] = useState('Remote / US');
   const [newType, setNewType] = useState<JobListing['type']>('Remote');
-  const [newSalary, setNewSalary] = useState('$130,000 - $160,000');
+  const [newSalary, setNewSalary] = useState('$140,000 - $180,000 + Equity');
   const [newDescription, setNewDescription] = useState('');
   const [newSkills, setNewSkills] = useState('Roadmapping, Discovery, SQL');
   const [newApplyUrl, setNewApplyUrl] = useState('');
@@ -44,8 +70,12 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
     async function loadData() {
       if (isConfigured) {
         const dbJobs = await getJobListingsFromDb();
-        if (mounted && dbJobs) {
-          setJobs(dbJobs);
+        if (mounted && dbJobs && dbJobs.length > 0) {
+          setJobs((prev) => {
+            const existingIds = new Set(dbJobs.map((j) => j.id));
+            const uniqueInitial = prev.filter((j) => !existingIds.has(j.id));
+            return [...dbJobs, ...uniqueInitial];
+          });
         }
       }
 
@@ -55,7 +85,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
           setSavedJobIds(new Set(ids));
         }
       } else if (typeof window !== 'undefined') {
-        const local = localStorage.getItem('pmverse_saved_jobs') || localStorage.getItem('prodcraft_saved_jobs');
+        const local = localStorage.getItem('prodin_saved_jobs') || localStorage.getItem('pmverse_saved_jobs');
         if (local && mounted) {
           try {
             setSavedJobIds(new Set(JSON.parse(local)));
@@ -87,7 +117,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
     setSavedJobIds(updated);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('pmverse_saved_jobs', JSON.stringify(Array.from(updated)));
+      localStorage.setItem('prodin_saved_jobs', JSON.stringify(Array.from(updated)));
     }
 
     if (isConfigured && user) {
@@ -116,6 +146,8 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
       skills: newSkills.split(',').map((s) => s.trim()).filter(Boolean),
       applyUrl: newApplyUrl.trim() || '#',
       postedDate: 'Just now',
+      applicantsCount: 1,
+      matchScore: 90,
     };
 
     setJobs([newJob, ...jobs]);
@@ -131,39 +163,45 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
     setIsPublishing(false);
   };
 
+  const handleEasyApplySubmit = () => {
+    if (!easyApplyJob) return;
+    setAppliedJobIds((prev) => new Set(prev).add(easyApplyJob.id));
+    alert(`Success! Application submitted for ${easyApplyJob.title} at ${easyApplyJob.company}. The recruiting team has received your PM profile.`);
+    setEasyApplyJob(null);
+  };
+
   const filteredJobs = jobs.filter((job) => {
     const matchLevel = selectedLevel === 'All' || job.level === selectedLevel;
     const matchDomain = selectedDomain === 'All' || job.domain === selectedDomain;
     const matchType = selectedType === 'All' || job.type === selectedType;
     const matchSaved = !showSavedOnly || savedJobIds.has(job.id);
+    const matchLocation = !locationSearch || job.location.toLowerCase().includes(locationSearch.toLowerCase());
     const matchSearch =
       job.title.toLowerCase().includes(search.toLowerCase()) ||
       job.company.toLowerCase().includes(search.toLowerCase()) ||
       job.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()));
 
-    return matchLevel && matchDomain && matchType && matchSaved && matchSearch;
+    return matchLevel && matchDomain && matchType && matchSaved && matchLocation && matchSearch;
   });
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-[#1c053a] via-[#2d0957] to-[#4c1d95] rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-purple-500/20">
-        <div className="absolute -right-6 -bottom-6 w-56 h-56 opacity-15 pointer-events-none">
-          <img src="/pmverse-icon.png" alt="PMVerse Icon" className="w-full h-full object-contain" />
-        </div>
-
-        <div className="max-w-3xl relative z-10">
-          <div className="inline-flex items-center space-x-2 bg-white/10 text-purple-200 border border-white/20 px-3.5 py-1 rounded-full text-xs font-bold mb-3 backdrop-blur-md">
-            <Briefcase className="w-3.5 h-3.5 text-purple-300" />
-            <span>Product Opportunities</span>
+    <div className="space-y-3 text-left">
+      {/* LinkedIn Jobs Top Search & Action Card */}
+      <div className="bg-white rounded-lg border border-slate-200/90 shadow-sm p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
+              <span>Product Management Jobs</span>
+              <span className="bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-full border border-emerald-200">
+                Verified
+              </span>
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Explore opportunities across APM cohorts, hypergrowth scaleups, and AI platforms.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight">
-            PMVerse Verified Job Board
-          </h1>
-          <p className="mt-2 text-purple-100/90 text-sm sm:text-base leading-relaxed">
-            Real opportunities posted by product leaders and squads. Transparent compensation, mission clarity, and direct applications.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => {
                 if (!user) {
@@ -172,250 +210,327 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
                 }
                 setIsPostModalOpen(true);
               }}
-              className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg shadow-purple-900/40 transition-all hover:scale-[1.02] text-xs sm:text-sm"
+              className="px-3.5 py-1.5 text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] hover:bg-sky-50 rounded-full transition flex items-center space-x-1.5"
             >
-              <PlusCircle className="w-4 h-4" />
+              <PlusCircle className="w-3.5 h-3.5" />
               <span>Post a PM Role</span>
             </button>
 
-            {!user && (
-              <button
-                onClick={() => openAuthModal('signin')}
-                className="inline-flex items-center space-x-2 bg-white/10 hover:bg-white/20 text-white font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition text-xs sm:text-sm backdrop-blur-md"
-              >
-                <LogIn className="w-4 h-4 text-purple-300" />
-                <span>Sign in to Bookmark</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Filter and Search Controls */}
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-purple-100 shadow-sm space-y-4">
-        {/* Search */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-3.5" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by job title, company name, or core skills (e.g. AI, SQL, Linear, Stripe)..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-purple-50/30 border border-purple-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition"
-          />
-        </div>
-
-        {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Role Level</label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="w-full text-xs bg-purple-50/40 border border-purple-100 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-            >
-              {levels.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Domain</label>
-            <select
-              value={selectedDomain}
-              onChange={(e) => setSelectedDomain(e.target.value)}
-              className="w-full text-xs bg-purple-50/40 border border-purple-100 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-            >
-              {domains.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Workplace Type</label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="w-full text-xs bg-purple-50/40 border border-purple-100 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-            >
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Bookmarks</label>
             <button
-              type="button"
               onClick={() => setShowSavedOnly(!showSavedOnly)}
-              className={`w-full text-xs rounded-xl p-2.5 font-bold transition border flex items-center justify-center space-x-1.5 ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition flex items-center space-x-1.5 ${
                 showSavedOnly
-                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-transparent shadow-md shadow-purple-500/20'
-                  : 'bg-purple-50/50 text-purple-900 border-purple-100 hover:bg-purple-100'
+                  ? 'bg-[#0a66c2] text-white border-[#0a66c2]'
+                  : 'text-slate-600 border-slate-300 hover:bg-slate-50'
               }`}
             >
-              <Bookmark className="w-3.5 h-3.5 text-purple-500" />
-              <span>Saved Roles ({savedJobIds.size})</span>
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Saved ({savedJobIds.size})</span>
             </button>
           </div>
         </div>
+
+        {/* Dual Search Bar (Title + Location) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by title, skill, or company..."
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+            />
+          </div>
+
+          <div className="relative">
+            <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={locationSearch}
+              onChange={(e) => setLocationSearch(e.target.value)}
+              placeholder="City, state, or Remote..."
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+            />
+          </div>
+        </div>
+
+        {/* Filter Chips Bar */}
+        <div className="flex items-center gap-2 pt-3 overflow-x-auto pb-1">
+          {/* Level selector */}
+          <select
+            value={selectedLevel}
+            onChange={(e) => setSelectedLevel(e.target.value)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
+          >
+            {levels.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                {lvl === 'All' ? 'Seniority Level: All' : lvl}
+              </option>
+            ))}
+          </select>
+
+          {/* Domain selector */}
+          <select
+            value={selectedDomain}
+            onChange={(e) => setSelectedDomain(e.target.value)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
+          >
+            {domains.map((dom) => (
+              <option key={dom} value={dom}>
+                {dom === 'All' ? 'Domain: All' : dom}
+              </option>
+            ))}
+          </select>
+
+          {/* Workplace Mode selector */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 outline-none hover:bg-slate-50 cursor-pointer"
+          >
+            {types.map((tp) => (
+              <option key={tp} value={tp}>
+                {tp === 'All' ? 'Workplace: All' : tp}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Jobs List */}
-      <div className="space-y-4">
+      {/* Jobs Feed (LinkedIn Job Cards) */}
+      <div className="space-y-3">
         {filteredJobs.map((job) => {
           const isSaved = savedJobIds.has(job.id);
+          const hasApplied = appliedJobIds.has(job.id);
+
           return (
             <div
               key={job.id}
-              className={`bg-white rounded-3xl p-6 border transition-all ${
+              className={`bg-white rounded-lg border transition-all p-4 sm:p-5 ${
                 job.featured
-                  ? 'border-purple-300 shadow-md ring-1 ring-purple-500/20'
-                  : 'border-purple-100/80 shadow-sm hover:border-purple-200 hover:shadow-md'
+                  ? 'border-sky-300 ring-1 ring-sky-200/60 shadow-sm'
+                  : 'border-slate-200/90 shadow-sm hover:border-slate-300'
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-100 text-xl flex items-center justify-center border border-purple-200 flex-shrink-0">
-                    {job.logo || '💼'}
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                {/* Left: Info */}
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-2xl border border-slate-200 flex-shrink-0">
+                    {job.logo}
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                      <h2 className="text-base font-bold text-slate-900">{job.title}</h2>
+
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-bold text-slate-900 hover:text-[#0a66c2] cursor-pointer transition">
+                        {job.title}
+                      </h2>
                       {job.featured && (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                          <Sparkles className="w-3 h-3 text-purple-600" />
-                          <span>Featured</span>
+                        <span className="bg-sky-50 text-[#0a66c2] text-[10px] font-bold px-2 py-0.5 rounded-full border border-sky-200">
+                          Featured
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center space-x-3 text-xs text-slate-500 flex-wrap gap-y-1">
-                      <span className="font-semibold text-purple-950 flex items-center space-x-1">
-                        <Building2 className="w-3.5 h-3.5 text-purple-500" />
-                        <span>{job.company}</span>
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center space-x-1">
-                        <MapPin className="w-3.5 h-3.5 text-purple-400" />
-                        <span>{job.location} ({job.type})</span>
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center space-x-1 font-bold text-emerald-600">
-                        <DollarSign className="w-3.5 h-3.5" />
-                        <span>{job.salaryRange}</span>
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-                      {job.description}
+                    <p className="text-xs text-slate-700 font-semibold mt-0.5">
+                      {job.company}
                     </p>
 
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      <span className="text-[11px] font-bold bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-lg">
-                        {job.level}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 mt-1">
+                      <span className="flex items-center space-x-1">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        <span>{job.location} ({job.type})</span>
                       </span>
-                      <span className="text-[11px] font-semibold bg-purple-50 text-purple-700 px-2.5 py-0.5 rounded-lg border border-purple-100">
-                        {job.domain}
+
+                      <span>•</span>
+
+                      <span className="flex items-center space-x-1 text-emerald-700 font-bold">
+                        <DollarSign className="w-3 h-3 text-emerald-600" />
+                        <span>{job.salaryRange}</span>
                       </span>
-                      {job.skills.map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[11px] bg-slate-50 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-lg"
-                        >
-                          {skill}
-                        </span>
-                      ))}
+
+                      {job.applicantsCount && (
+                        <>
+                          <span>•</span>
+                          <span className="text-slate-400">
+                            {job.applicantsCount} applicants
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-purple-50">
-                  <div className="text-[11px] text-slate-400 font-medium">
-                    Posted {job.postedDate}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleToggleSaveJob(job.id)}
-                      title={isSaved ? 'Remove from saved' : 'Save job'}
-                      className={`p-2 rounded-xl transition border ${
-                        isSaved
-                          ? 'bg-purple-100 text-purple-700 border-purple-300 shadow-sm'
-                          : 'bg-white text-slate-400 border-purple-100 hover:text-purple-700 hover:bg-purple-50'
-                      }`}
-                    >
-                      {isSaved ? <BookmarkCheck className="w-4 h-4 text-purple-700" /> : <Bookmark className="w-4 h-4" />}
-                    </button>
+                {/* Right: Actions */}
+                <div className="flex items-center space-x-2 self-end sm:self-start flex-shrink-0">
+                  <button
+                    onClick={() => handleToggleSaveJob(job.id)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition"
+                    title={isSaved ? 'Unsave Job' : 'Save Job'}
+                  >
+                    {isSaved ? (
+                      <BookmarkCheck className="w-5 h-5 text-[#0a66c2]" />
+                    ) : (
+                      <Bookmark className="w-5 h-5" />
+                    )}
+                  </button>
 
-                    <a
-                      href={job.applyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md shadow-purple-500/20 transition-all hover:scale-[1.02]"
+                  {hasApplied ? (
+                    <span className="px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Applied</span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (!user) {
+                          openAuthModal('signin');
+                          return;
+                        }
+                        setEasyApplyJob(job);
+                      }}
+                      className="px-4 py-1.5 rounded-full text-xs font-semibold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-sm flex items-center space-x-1"
                     >
-                      <span>Apply</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Easy Apply</span>
+                    </button>
+                  )}
                 </div>
+              </div>
+
+              {/* Match Score Indicator (LinkedIn style) */}
+              <div className="mt-3 py-1.5 px-3 bg-sky-50/70 rounded-md border border-sky-100 flex items-center justify-between text-xs text-sky-900">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-[#0a66c2] animate-pulse" />
+                  <span>
+                    <strong>94% Match</strong> with your PM Skill Profile & Experience
+                  </span>
+                </div>
+                <span className="text-[11px] text-[#0a66c2] font-semibold">
+                  1 Connection works here
+                </span>
+              </div>
+
+              {/* Description */}
+              <p className="mt-2.5 text-xs text-slate-600 leading-relaxed">
+                {job.description}
+              </p>
+
+              {/* Skills and Domain Footer */}
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">
+                    Skills:
+                  </span>
+                  {job.skills.map((skill, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+
+                <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+                  {job.domain}
+                </span>
               </div>
             </div>
           );
         })}
 
         {filteredJobs.length === 0 && (
-          <div className="text-center py-16 px-6 bg-white rounded-3xl border border-purple-100/80 shadow-sm space-y-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-purple-100 to-violet-50 rounded-2xl flex items-center justify-center p-2 border border-purple-200/60 shadow-sm">
-              <Briefcase className="w-8 h-8 text-purple-600" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h3 className="text-lg font-bold text-slate-900">
-                {search || showSavedOnly ? 'No matching job opportunities' : 'No PM Roles Posted Yet'}
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                {showSavedOnly
-                  ? 'You haven’t bookmarked any jobs yet. Browse listings and click the bookmark icon to save roles.'
-                  : 'Be the first to post a product opportunity in PMVerse! Whether hiring for APMs or Staff Product Managers, connect with talented builders.'}
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (!user) {
-                    openAuthModal('signin');
-                    return;
-                  }
-                  setIsPostModalOpen(true);
-                }}
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-purple-500/20 transition-all hover:scale-[1.02] text-xs"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>{user ? 'Post First PM Role' : 'Sign In to Post a Role'}</span>
-              </button>
-            </div>
+          <div className="bg-white rounded-lg border border-slate-200/90 p-8 text-center">
+            <p className="text-slate-500 text-sm">No product roles found matching your filters.</p>
           </div>
         )}
       </div>
 
-      {/* Modal for Posting a Job */}
-      {isPostModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-purple-100 my-8">
-            <div className="flex items-center justify-between border-b border-purple-50 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Post a PM Opportunity</h3>
-                <p className="text-xs text-purple-700">Reach motivated Product Managers across PMVerse</p>
+      {/* Easy Apply Modal (LinkedIn style 1-click apply) */}
+      {easyApplyJob && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl max-w-lg w-full p-5 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-xl border">
+                  {easyApplyJob.logo}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Easy Apply to {easyApplyJob.company}
+                  </h3>
+                  <p className="text-xs text-slate-500">{easyApplyJob.title}</p>
+                </div>
               </div>
+
+              <button
+                onClick={() => setEasyApplyJob(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                <p className="font-bold text-slate-900">Applicant Information</p>
+                <div className="grid grid-cols-2 gap-2 text-slate-600">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">NAME</span>
+                    <span className="font-semibold">{profile?.fullName || 'Alex Rivera'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">CURRENT ROLE</span>
+                    <span className="font-semibold">{profile?.role || 'Staff PM @ Stripe'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">EMAIL</span>
+                    <span className="font-semibold">{profile?.email || 'pm@tech.com'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">CERTIFIED PM SCORE</span>
+                    <span className="font-semibold text-emerald-600">88% (High-Agency Leader)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Brief Note to the Hiring Squad (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Share a sentence about a relevant product outcome you delivered..."
+                  className="w-full p-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setEasyApplyJob(null)}
+                className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-full"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEasyApplySubmit}
+                className="px-5 py-1.5 text-xs font-semibold text-white bg-[#0a66c2] hover:bg-[#004182] rounded-full transition shadow-sm"
+              >
+                Submit Application
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post a Job Modal */}
+      {isPostModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl max-w-lg w-full p-5 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Post a Product Management Role</h3>
               <button
                 onClick={() => setIsPostModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1"
@@ -424,149 +539,96 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateJob} className="space-y-3.5">
+            <form onSubmit={handleCreateJob} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Job Title</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Title</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Senior Product Manager - Growth"
+                  placeholder="e.g. Senior PM - AI Workflows"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Company</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Company</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Acme SaaS"
+                    placeholder="e.g. Linear"
                     value={newCompany}
                     onChange={(e) => setNewCompany(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] outline-none"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Location</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. San Francisco / Remote"
-                    value={newLocation}
-                    onChange={(e) => setNewLocation(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Level</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Seniority Level</label>
                   <select
                     value={newLevel}
                     onChange={(e) => setNewLevel(e.target.value as any)}
-                    className="w-full text-xs p-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none"
                   >
-                    {levels.filter((l) => l !== 'All').map((l) => (
-                      <option key={l} value={l}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Domain</label>
-                  <select
-                    value={newDomain}
-                    onChange={(e) => setNewDomain(e.target.value as any)}
-                    className="w-full text-xs p-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                  >
-                    {domains.filter((d) => d !== 'All').map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Type</label>
-                  <select
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value as any)}
-                    className="w-full text-xs p-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                  >
-                    <option value="Remote">Remote</option>
-                    <option value="Hybrid">Hybrid</option>
-                    <option value="On-site">On-site</option>
+                    <option value="Associate PM">Associate PM</option>
+                    <option value="Product Manager">Product Manager</option>
+                    <option value="Senior PM">Senior PM</option>
+                    <option value="Lead / Principal PM">Lead / Principal PM</option>
+                    <option value="VP of Product">VP of Product</option>
                   </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Compensation Range</label>
-                <input
-                  type="text"
-                  placeholder="e.g. $140,000 - $180,000 + Equity"
-                  value={newSalary}
-                  onChange={(e) => setNewSalary(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Location</label>
+                  <input
+                    type="text"
+                    placeholder="San Francisco, CA / Remote"
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Salary Range</label>
+                  <input
+                    type="text"
+                    placeholder="$160,000 - $210,000"
+                    value={newSalary}
+                    onChange={(e) => setNewSalary(e.target.value)}
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Role Description & Mission</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Description</label>
                 <textarea
-                  required
                   rows={3}
-                  placeholder="Describe squad objectives, scope, and key deliverables..."
+                  required
+                  placeholder="Describe squad mission, key problems to solve, and requirements..."
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Skills (comma separated)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. PLG, Experimentation, SQL, Roadmapping"
-                  value={newSkills}
-                  onChange={(e) => setNewSkills(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Application URL</label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://company.com/careers/pm"
-                  value={newApplyUrl}
-                  onChange={(e) => setNewApplyUrl(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2 border-t border-purple-50">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsPostModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-full"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPublishing}
-                  className="px-5 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl shadow-md shadow-purple-500/20 transition flex items-center space-x-1.5"
+                  className="px-5 py-1.5 text-xs font-semibold text-white bg-[#0a66c2] hover:bg-[#004182] rounded-full transition shadow-sm"
                 >
-                  {isPublishing ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <span>Publish Role</span>
-                  )}
+                  {isPublishing ? 'Publishing...' : 'Publish Role'}
                 </button>
               </div>
             </form>

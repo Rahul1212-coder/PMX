@@ -3,8 +3,8 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'PMVerse | The Product Management Universe',
-  description: 'Join PMVerse — The all-in-one ecosystem for Product Managers. Community discussions, AI Copilot, verified PM jobs, and diagnostic assessments.',
+  title: 'ProdIn | The Product Management Network & Platform',
+  description: 'The professional network for Product Managers. Community feed, PM network connections, verified PM job board, AI framework tutor, and career fit diagnostics.',
   icons: {
     icon: '/pmverse-icon.png',
     apple: '/pmverse-icon.png',
@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased selection:bg-purple-600 selection:text-white">
+      <body className="antialiased selection:bg-[#0a66c2] selection:text-white bg-[#f3f2ef]">
         <Providers>{children}</Providers>
       </body>
     </html>

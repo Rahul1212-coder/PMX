@@ -9,6 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        linkedin: {
+          blue: "#0a66c2",
+          hover: "#004182",
+          light: "#e8f3fc",
+          canvas: "#f3f2ef",
+          card: "#ffffff",
+          border: "#e0e0e0",
+          text: "#191919",
+          muted: "#666666",
+        },
         brand: {
           50: "#faf5ff",
           100: "#f3e8ff",
@@ -25,10 +35,10 @@ const config: Config = {
         pmverse: {
           deep: "#230554",
           dark: "#1c053a",
-          primary: "#7c3aed",
-          vibrant: "#9333ea",
-          neon: "#a855f7",
-          light: "#f5f3ff",
+          primary: "#0a66c2",
+          vibrant: "#0284c7",
+          neon: "#38bdf8",
+          light: "#f0f9ff",
         },
       },
     },

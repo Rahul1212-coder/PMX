@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name TEXT DEFAULT 'Product Manager',
   role TEXT DEFAULT 'Associate PM',
   company TEXT DEFAULT 'Independent PM',
-  avatar_url TEXT DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+  avatar_url TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -96,7 +96,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'role', 'Product Manager'),
     COALESCE(NEW.raw_user_meta_data->>'company', 'Independent PM'),
-    COALESCE(NEW.raw_user_meta_data->>'avatar_url', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face')
+    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;

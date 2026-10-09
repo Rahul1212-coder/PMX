@@ -14,8 +14,11 @@ interface AuthContextType {
   isConfigured: boolean;
   isAuthModalOpen: boolean;
   authModalTab: 'signin' | 'signup';
+  isProfileModalOpen: boolean;
   openAuthModal: (tab?: 'signin' | 'signup') => void;
   closeAuthModal: () => void;
+  openProfileModal: () => void;
+  closeProfileModal: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, meta: { fullName: string; role: string; company: string }) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
@@ -31,7 +34,7 @@ const DEMO_PROFILE: UserProfile = {
   fullName: 'Alex Vance',
   role: 'Senior Product Manager',
   company: 'Linear / Stealth AI',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+  avatarUrl: '', // Clean initials avatar by default
   bio: 'Building outcome-driven product squads and AI-native workflows.',
 };
 
@@ -42,27 +45,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const configured = isSupabaseConfigured();
 
   const loadUserProfile = async (supabaseUser: User) => {
     try {
       const dbProfile = await getUserProfileFromDb(supabaseUser.id);
+      const metadata = supabaseUser.user_metadata || {};
+      const metaName = metadata.full_name || metadata.name || supabaseUser.email?.split('@')[0] || '';
+      const metaRole = metadata.role || 'Product Manager';
+      const metaCompany = metadata.company || 'Independent PM';
+      const metaAvatar = metadata.avatar_url || '';
+
       if (dbProfile) {
+        // Enforce user's actual name if DB profile had default or empty name
+        if ((!dbProfile.fullName || dbProfile.fullName === 'Product Manager') && metaName) {
+          dbProfile.fullName = metaName;
+        }
+        // Strip out legacy dummy Unsplash URLs if stored from prior default schemas
+        if (
+          dbProfile.avatarUrl &&
+          (dbProfile.avatarUrl.includes('photo-1534528741775-53994a69daeb') ||
+            dbProfile.avatarUrl.includes('photo-1535713875002-d1d0cf377fde'))
+        ) {
+          dbProfile.avatarUrl = '';
+        }
         setProfile(dbProfile);
       } else {
-        // Fallback profile from user metadata
-        const metadata = supabaseUser.user_metadata || {};
+        // Fallback profile from user metadata - NO dummy Unsplash avatar!
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
-          fullName: metadata.full_name || supabaseUser.email?.split('@')[0] || 'Product Manager',
-          role: metadata.role || 'Associate PM',
-          company: metadata.company || 'Tech Company',
-          avatarUrl: metadata.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+          fullName: metaName || 'Product Manager',
+          role: metaRole,
+          company: metaCompany,
+          avatarUrl: metaAvatar,
         };
         setProfile(fallbackProfile);
-        // Persist to DB if possible
         upsertUserProfileInDb(fallbackProfile).catch(() => {});
       }
     } catch {
@@ -132,6 +152,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
+  const openProfileModal = () => {
+    setIsProfileModalOpen(true);
+  };
+
+  const closeProfileModal = () => {
+    setIsProfileModalOpen(false);
+  };
+
   const signIn = async (email: string, password: string) => {
     if (!configured) {
       loginAsDemo();
@@ -143,13 +171,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return { error: 'Supabase client not initialized' };
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         return { error: error.message };
+      }
+
+      if (data?.user) {
+        setUser(data.user);
+        setSession(data.session);
+        await loadUserProfile(data.user);
       }
 
       closeAuthModal();
@@ -195,6 +229,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { message: 'Account created! Please check your email inbox to confirm your email before signing in.' };
       }
 
+      if (data.user) {
+        setUser(data.user);
+        setSession(data.session);
+        await loadUserProfile(data.user);
+      }
+
       closeAuthModal();
       return { message: 'Account created and signed in successfully!' };
     } catch (err: any) {
@@ -222,12 +262,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user || !profile) return { error: 'Not authenticated' };
+    if (!user && !profile) return { error: 'Not authenticated' };
 
-    const updated = { ...profile, ...updates };
+    const current = profile || {
+      id: user?.id || 'guest',
+      email: user?.email || '',
+      fullName: 'Product Manager',
+      role: 'Associate PM',
+      company: 'Tech Company',
+    };
+
+    const updated = { ...current, ...updates };
     setProfile(updated);
 
-    if (configured) {
+    if (configured && user) {
       const ok = await upsertUserProfileInDb(updated);
       if (!ok) return { error: 'Failed to update database profile' };
     } else {
@@ -257,8 +305,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isConfigured: configured,
         isAuthModalOpen,
         authModalTab,
+        isProfileModalOpen,
         openAuthModal,
         closeAuthModal,
+        openProfileModal,
+        closeProfileModal,
         signIn,
         signUp,
         signOut,

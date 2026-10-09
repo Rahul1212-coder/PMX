@@ -31,7 +31,7 @@ export async function getCommunityPostsFromDb(): Promise<CommunityPost[] | null>
         name: row.author_name || 'PM Community Member',
         role: row.author_role || 'Product Manager',
         company: row.author_company || 'Tech Company',
-        avatar: row.author_avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+        avatar: row.author_avatar || '',
       },
       title: row.title,
       content: row.content,

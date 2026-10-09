@@ -6,6 +6,12 @@ export interface UserProfile {
   company: string;
   avatarUrl?: string;
   bio?: string;
+  headline?: string;
+  location?: string;
+  connectionsCount?: number;
+  profileViews?: number;
+  postImpressions?: number;
+  pmFitScore?: number;
   createdAt?: string;
 }
 
@@ -17,6 +23,8 @@ export interface CommunityPost {
     role: string;
     company: string;
     avatar: string;
+    headline?: string;
+    isConnection?: boolean;
   };
   title: string;
   content: string;
@@ -24,7 +32,15 @@ export interface CommunityPost {
   tags: string[];
   upvotes: number;
   hasUpvoted?: boolean;
+  userReaction?: 'like' | 'celebrate' | 'insightful' | 'love' | null;
+  reactions?: {
+    likes: number;
+    celebrates: number;
+    insightfuls: number;
+    loves: number;
+  };
   commentsCount: number;
+  comments?: Comment[];
   createdAt: string;
   pinned?: boolean;
 }
@@ -36,10 +52,27 @@ export interface Comment {
     name: string;
     role: string;
     avatar: string;
+    company?: string;
   };
   content: string;
   createdAt: string;
   likes: number;
+  hasLiked?: boolean;
+}
+
+export interface PmConnection {
+  id: string;
+  name: string;
+  headline: string;
+  role: 'Associate PM' | 'Product Manager' | 'Senior PM' | 'Lead / Principal PM' | 'Director / VP of Product';
+  company: string;
+  avatar: string;
+  coverPhoto: string;
+  mutualConnections: number;
+  location: string;
+  skills: string[];
+  status: 'connected' | 'pending' | 'not_connected';
+  bio: string;
 }
 
 export interface PmConcept {
@@ -71,6 +104,8 @@ export interface JobListing {
   skills: string[];
   applyUrl: string;
   isSaved?: boolean;
+  applicantsCount?: number;
+  matchScore?: number;
 }
 
 export interface AssessmentQuestion {

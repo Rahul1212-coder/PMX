@@ -1,9 +1,26 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CommunityPost } from '../types';
-import { ThumbsUp, MessageSquare, Tag, PlusCircle, Search, Pin, Share2, Database, LogIn } from 'lucide-react';
+import { CommunityPost, Comment } from '../types';
+import {
+  ThumbsUp,
+  MessageSquare,
+  Repeat2,
+  Send,
+  Image as ImageIcon,
+  BarChart2,
+  FileText,
+  MoreHorizontal,
+  Plus,
+  Check,
+  Globe,
+  Share2,
+  Sparkles,
+  Tag,
+  X,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { UserAvatar } from './UserAvatar';
 import {
   getCommunityPostsFromDb,
   insertCommunityPostToDb,
@@ -15,18 +32,18 @@ interface CommunityFeedProps {
 }
 
 export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) => {
-  const { user, profile, openAuthModal, isConfigured } = useAuth();
+  const { user, profile, openAuthModal, openProfileModal, isConfigured } = useAuth();
   const [posts, setPosts] = useState<CommunityPost[]>(initialPosts);
-  const [isDbLoaded, setIsDbLoaded] = useState(false);
-  const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null);
+  const [commentInput, setCommentInput] = useState<{ [postId: string]: string }>({});
 
-  // New post state
+  // New post modal state
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityPost['category']>('Strategy');
-  const [newTags, setNewTags] = useState('Product, Strategy');
+  const [newTags, setNewTags] = useState('ProductStrategy, Roadmaps');
   const [isPublishing, setIsPublishing] = useState(false);
 
   const categories = ['All', 'Strategy', 'Execution', 'AI & Tech', 'Career & Transition', 'Case Study'];
@@ -38,8 +55,12 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
       if (isConfigured) {
         const dbPosts = await getCommunityPostsFromDb();
         if (mounted && dbPosts && dbPosts.length > 0) {
-          setPosts(dbPosts);
-          setIsDbLoaded(true);
+          // Merge db posts with initial sample posts
+          setPosts((prev) => {
+            const existingIds = new Set(dbPosts.map((p) => p.id));
+            const uniqueInitial = prev.filter((p) => !existingIds.has(p.id));
+            return [...dbPosts, ...uniqueInitial];
+          });
         }
       }
     }
@@ -49,43 +70,75 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
     };
   }, [isConfigured]);
 
-  const handleUpvote = async (id: string) => {
+  const handleReactionToggle = async (postId: string, reactionType: 'like' | 'celebrate' | 'insightful' | 'love' = 'like') => {
     if (!user) {
       openAuthModal('signin');
       return;
     }
 
-    const currentPost = posts.find((p) => p.id === id);
-    if (!currentPost) return;
-
-    const willUpvote = !currentPost.hasUpvoted;
-
-    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
-        if (p.id === id) {
+        if (p.id === postId) {
+          const isCurrentlyReacted = p.userReaction !== null && p.userReaction !== undefined;
+          const newReaction = isCurrentlyReacted ? null : reactionType;
+          const upvoteDelta = isCurrentlyReacted ? -1 : 1;
+
           return {
             ...p,
-            upvotes: willUpvote ? p.upvotes + 1 : Math.max(0, p.upvotes - 1),
-            hasUpvoted: willUpvote,
+            userReaction: newReaction,
+            upvotes: Math.max(0, p.upvotes + upvoteDelta),
+            hasUpvoted: !isCurrentlyReacted,
           };
         }
         return p;
       })
     );
 
-    // Sync to Supabase
+    // Sync to database if available
     if (isConfigured && user) {
-      await togglePostUpvoteInDb(id, user.id, !willUpvote);
+      const targetPost = posts.find((p) => p.id === postId);
+      if (targetPost) {
+        await togglePostUpvoteInDb(postId, user.id, targetPost.hasUpvoted || false);
+      }
     }
   };
 
-  const handleStartPost = () => {
+  const handleAddComment = (postId: string) => {
     if (!user) {
       openAuthModal('signin');
       return;
     }
-    setIsModalOpen(true);
+
+    const text = commentInput[postId];
+    if (!text || !text.trim()) return;
+
+    const newComment: Comment = {
+      id: `comment-${Date.now()}`,
+      postId,
+      author: {
+        name: profile?.fullName || 'You (Product Manager)',
+        role: profile?.role ? `${profile.role} @ ${profile.company || 'Tech'}` : 'Product Manager',
+        avatar: profile?.avatarUrl || '',
+      },
+      content: text.trim(),
+      createdAt: 'Just now',
+      likes: 0,
+    };
+
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            commentsCount: p.commentsCount + 1,
+            comments: [newComment, ...(p.comments || [])],
+          };
+        }
+        return p;
+      })
+    );
+
+    setCommentInput((prev) => ({ ...prev, [postId]: '' }));
   };
 
   const handleCreatePost = async (e: React.FormEvent) => {
@@ -94,106 +147,140 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
 
     setIsPublishing(true);
 
-    const newPost: CommunityPost = {
+    const postToCreate: CommunityPost = {
       id: `post-${Date.now()}`,
       userId: user?.id,
       author: {
-        name: profile?.fullName || 'Product Manager',
-        role: profile?.role || 'Associate PM',
-        company: profile?.company || 'Tech Company',
-        avatar:
-          profile?.avatarUrl ||
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+        name: profile?.fullName || 'You (Product Manager)',
+        role: profile?.role || 'Senior Product Manager',
+        company: profile?.company || 'High Growth SaaS',
+        headline: `${profile?.role || 'Senior PM'} @ ${profile?.company || 'High Growth SaaS'} | Product Craft`,
+        avatar: profile?.avatarUrl || '',
       },
       title: newTitle.trim(),
       content: newContent.trim(),
       category: newCategory,
-      tags: newTags.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: newTags
+        .split(',')
+        .map((t) => t.trim().replace(/^#/, ''))
+        .filter(Boolean),
       upvotes: 1,
       hasUpvoted: true,
+      userReaction: 'like',
+      reactions: {
+        likes: 1,
+        celebrates: 0,
+        insightfuls: 0,
+        loves: 0,
+      },
       commentsCount: 0,
+      comments: [],
       createdAt: 'Just now',
     };
 
-    // Optimistic UI update
-    setPosts([newPost, ...posts]);
-    setNewTitle('');
-    setNewContent('');
-    setIsModalOpen(false);
+    setPosts([postToCreate, ...posts]);
 
-    // Sync to Supabase Database
-    if (isConfigured) {
-      await insertCommunityPostToDb(newPost);
+    if (isConfigured && user) {
+      await insertCommunityPostToDb(postToCreate);
     }
 
+    setNewTitle('');
+    setNewContent('');
     setIsPublishing(false);
+    setIsModalOpen(false);
   };
 
   const filteredPosts = posts.filter((p) => {
-    const matchesCat = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchesSearch =
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.content.toLowerCase().includes(search.toLowerCase()) ||
-      p.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    return matchesCat && matchesSearch;
+    const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+    return matchesCategory;
   });
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Action */}
-      <div className="bg-gradient-to-r from-[#1e0538] via-[#2d0b59] to-[#4c1d95] rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-purple-500/20">
-        <div className="absolute -right-8 -bottom-8 w-64 h-64 opacity-15 pointer-events-none">
-          <img src="/pmverse-icon.png" alt="Planet" className="w-full h-full object-contain" />
+    <div className="space-y-3">
+      {/* LinkedIn "Start a Post" Card */}
+      <div className="bg-white rounded-lg border border-slate-200/90 shadow-sm p-3 sm:p-4">
+        <div className="flex items-center space-x-2.5">
+          <UserAvatar
+            src={profile?.avatarUrl}
+            name={profile?.fullName || user?.user_metadata?.full_name}
+            email={profile?.email || user?.email}
+            size="lg"
+            className="border border-purple-200 flex-shrink-0 cursor-pointer"
+            onClick={() => (user ? openProfileModal() : openAuthModal('signin'))}
+          />
+          <button
+            onClick={() => {
+              if (!user) {
+                openAuthModal('signin');
+                return;
+              }
+              setIsModalOpen(true);
+            }}
+            className="flex-1 text-left px-4 py-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-full text-xs sm:text-sm text-slate-500 font-medium transition"
+          >
+            Start a post with an insight, framework, or question...
+          </button>
         </div>
 
-        <div className="max-w-3xl relative z-10">
-          <div className="flex items-center space-x-2 mb-3">
-            <span className="inline-flex items-center space-x-1.5 bg-white/10 border border-white/20 px-3 py-1 rounded-full text-xs font-bold text-purple-200 backdrop-blur-md">
-              <Database className="w-3.5 h-3.5 text-purple-300" />
-              <span>{isDbLoaded ? 'Live Supabase Sync' : isConfigured ? 'Supabase Ready' : 'In-Memory / Demo Feed'}</span>
-              <span className={`w-1.5 h-1.5 rounded-full ${isDbLoaded || isConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight">
-            PMVerse Community & Brain Trust
-          </h1>
-          <p className="mt-2 text-purple-100/90 text-sm sm:text-base leading-relaxed">
-            Collaborate with product leaders worldwide. Debate tradeoffs, tear down roadmaps, share frameworks, and get actionable feedback across the PM universe.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              onClick={handleStartPost}
-              className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg shadow-purple-900/40 transition-all hover:scale-[1.02]"
-            >
-              <PlusCircle className="w-5 h-5" />
-              <span>Start Discussion</span>
-            </button>
+        {/* Action icons bar below prompt */}
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-around text-xs text-slate-600 font-semibold">
+          <button
+            onClick={() => {
+              if (!user) {
+                openAuthModal('signin');
+                return;
+              }
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded hover:bg-slate-50 transition"
+          >
+            <ImageIcon className="w-4 h-4 text-sky-600" />
+            <span className="hidden sm:inline">Media</span>
+          </button>
 
-            {!user && (
-              <button
-                onClick={() => openAuthModal('signin')}
-                className="inline-flex items-center space-x-2 bg-white/10 hover:bg-white/20 text-white font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition text-sm backdrop-blur-md"
-              >
-                <LogIn className="w-4 h-4 text-purple-300" />
-                <span>Sign in to post</span>
-              </button>
-            )}
-          </div>
+          <button
+            onClick={() => {
+              if (!user) {
+                openAuthModal('signin');
+                return;
+              }
+              setNewCategory('Strategy');
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded hover:bg-slate-50 transition"
+          >
+            <BarChart2 className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">Framework / Poll</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (!user) {
+                openAuthModal('signin');
+                return;
+              }
+              setNewCategory('Case Study');
+              setIsModalOpen(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded hover:bg-slate-50 transition"
+          >
+            <FileText className="w-4 h-4 text-amber-600" />
+            <span className="hidden sm:inline">Write PRD / Teardown</span>
+          </button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        {/* Categories */}
-        <div className="flex flex-wrap gap-2">
+      {/* Filter and Feed Sort Controls */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition ${
                 selectedCategory === cat
-                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-md shadow-purple-500/25 ring-1 ring-purple-600'
-                  : 'bg-white text-slate-700 border border-purple-100 hover:bg-purple-50/60 hover:text-purple-900'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200/90 hover:bg-slate-50'
               }`}
             >
               {cat}
@@ -201,175 +288,290 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search discussions & tags..."
-            className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-purple-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm"
-          />
+        <div className="hidden sm:flex items-center space-x-1 text-xs text-slate-500 whitespace-nowrap pl-2">
+          <span>Sort by:</span>
+          <span className="font-bold text-slate-800">Top</span>
         </div>
       </div>
 
-      {/* Posts List */}
-      <div className="space-y-4">
-        {filteredPosts.map((post) => (
-          <article
-            key={post.id}
-            className="bg-white rounded-2xl p-6 border border-purple-100/80 shadow-sm hover:border-purple-200 hover:shadow-md transition-all space-y-4"
-          >
-            {/* Header: Author & Metadata */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <img
-                  src={post.author.avatar}
-                  alt={post.author.name}
-                  className="w-10 h-10 rounded-full object-cover border-2 border-purple-200"
-                />
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-slate-900 text-sm">{post.author.name}</span>
-                    <span className="text-xs text-purple-400">• {post.createdAt}</span>
+      {/* LinkedIn Post Cards */}
+      <div className="space-y-3">
+        {filteredPosts.map((post) => {
+          const isCommentsOpen = activeCommentsPostId === post.id;
+          const hasUserReacted = post.userReaction !== null && post.userReaction !== undefined;
+
+          return (
+            <article
+              key={post.id}
+              className="bg-white rounded-lg border border-slate-200/90 shadow-sm overflow-hidden text-left"
+            >
+              {/* Header: Author + Headline + Time + Menu */}
+              <div className="p-3.5 pb-2 flex items-start justify-between">
+                <div className="flex items-start space-x-2.5">
+                  <UserAvatar
+                    src={post.author.avatar}
+                    name={post.author.name}
+                    size="lg"
+                    className="border border-slate-200 flex-shrink-0 shadow-xs"
+                  />
+                  <div>
+                    <div className="flex items-center space-x-1.5">
+                      <h3 className="text-sm font-bold text-slate-900 hover:text-[#0a66c2] cursor-pointer transition">
+                        {post.author.name}
+                      </h3>
+                      {post.author.isConnection && (
+                        <span className="text-[11px] text-slate-400 font-normal">• 1st</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 line-clamp-1 leading-tight">
+                      {post.author.headline || `${post.author.role} @ ${post.author.company}`}
+                    </p>
+                    <div className="flex items-center space-x-1 text-[11px] text-slate-400 mt-0.5">
+                      <span>{post.createdAt}</span>
+                      <span>•</span>
+                      <Globe className="w-3 h-3 text-slate-400" />
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {post.author.role} @ <span className="text-purple-900 font-semibold">{post.author.company}</span>
-                  </p>
+                </div>
+
+                <div className="flex items-center space-x-1">
+                  <button className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                {post.pinned && (
-                  <span className="flex items-center space-x-1 text-xs text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full font-bold border border-purple-200">
-                    <Pin className="w-3 h-3 text-purple-600" />
-                    <span>Pinned</span>
-                  </span>
-                )}
-                <span className="text-xs bg-purple-50/80 text-purple-700 px-3 py-0.5 rounded-full font-semibold border border-purple-100">
-                  {post.category}
-                </span>
+              {/* Title & Post Body */}
+              <div className="px-3.5 pb-2 text-xs sm:text-sm text-slate-800 space-y-2">
+                <h2 className="font-bold text-slate-900 text-sm sm:text-base leading-snug">
+                  {post.title}
+                </h2>
+                <p className="whitespace-pre-line leading-relaxed text-slate-700">
+                  {post.content}
+                </p>
+
+                {/* Hashtags */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {post.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="text-xs font-semibold text-[#0a66c2] hover:underline cursor-pointer"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Title & Content */}
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 hover:text-purple-700 transition cursor-pointer">
-                {post.title}
-              </h2>
-              <p className="mt-2 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                {post.content}
-              </p>
-            </div>
+              {/* Reactions Count & Comments Summary Bar */}
+              <div className="px-3.5 py-2 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center -space-x-1">
+                    <span className="w-4 h-4 rounded-full bg-[#0a66c2] text-white flex items-center justify-center text-[10px]">
+                      👍
+                    </span>
+                    <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
+                      💡
+                    </span>
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">
+                      👏
+                    </span>
+                  </div>
+                  <span className="hover:text-[#0a66c2] hover:underline cursor-pointer">
+                    {post.upvotes}
+                  </span>
+                </div>
 
-            {/* Tags */}
-            <div className="flex flex-wrap gap-1.5 items-center pt-1">
-              <Tag className="w-3.5 h-3.5 text-purple-400 mr-1" />
-              {post.tags.map((tag, idx) => (
-                <span
-                  key={idx}
-                  className="text-xs bg-purple-50 text-purple-800 px-2.5 py-0.5 rounded-lg font-medium border border-purple-100/60"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
+                <div className="flex items-center space-x-3 text-[11px]">
+                  <button
+                    onClick={() =>
+                      setActiveCommentsPostId(isCommentsOpen ? null : post.id)
+                    }
+                    className="hover:text-[#0a66c2] hover:underline"
+                  >
+                    {post.commentsCount} comments
+                  </button>
+                  <span>•</span>
+                  <span>4 reposts</span>
+                </div>
+              </div>
 
-            {/* Footer Actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-purple-50">
-              <div className="flex items-center space-x-3">
+              {/* Action Bar: Like, Comment, Repost, Send */}
+              <div className="px-2 py-1 flex items-center justify-around text-xs text-slate-600 font-semibold border-b border-slate-100">
                 <button
-                  onClick={() => handleUpvote(post.id)}
-                  className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    post.hasUpvoted
-                      ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-sm shadow-purple-500/20'
-                      : 'bg-purple-50/80 text-purple-800 hover:bg-purple-100'
+                  onClick={() => handleReactionToggle(post.id, 'like')}
+                  className={`flex items-center space-x-1.5 px-3 py-2 rounded hover:bg-slate-50 transition ${
+                    hasUserReacted ? 'text-[#0a66c2]' : ''
                   }`}
                 >
-                  <ThumbsUp className="w-3.5 h-3.5" />
-                  <span>{post.upvotes}</span>
+                  <ThumbsUp
+                    className={`w-4 h-4 ${hasUserReacted ? 'fill-[#0a66c2]' : ''}`}
+                  />
+                  <span>Like</span>
                 </button>
 
-                <button className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-50 text-slate-700 hover:bg-purple-50 hover:text-purple-800 transition">
-                  <MessageSquare className="w-3.5 h-3.5 text-purple-500" />
-                  <span>{post.commentsCount} Comments</span>
+                <button
+                  onClick={() =>
+                    setActiveCommentsPostId(isCommentsOpen ? null : post.id)
+                  }
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded hover:bg-slate-50 transition"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Comment</span>
+                </button>
+
+                <button
+                  onClick={() => alert('Post reposted to your PM profile feed!')}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded hover:bg-slate-50 transition"
+                >
+                  <Repeat2 className="w-4 h-4" />
+                  <span>Repost</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(window.location.href);
+                    alert('Post link copied to clipboard!');
+                  }}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded hover:bg-slate-50 transition"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send</span>
                 </button>
               </div>
 
-              <button className="text-slate-400 hover:text-purple-600 p-1.5 rounded-xl hover:bg-purple-50 transition">
-                <Share2 className="w-4 h-4" />
-              </button>
-            </div>
-          </article>
-        ))}
+              {/* Comments Section (Expandable) */}
+              {isCommentsOpen && (
+                <div className="p-3.5 bg-slate-50/60 space-y-3">
+                  {/* Add comment input */}
+                  <div className="flex items-start space-x-2">
+                    <UserAvatar
+                      src={profile?.avatarUrl}
+                      name={profile?.fullName || user?.user_metadata?.full_name}
+                      email={profile?.email || user?.email}
+                      size="sm"
+                      className="border border-purple-200 flex-shrink-0 mt-1"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Add a comment or perspective..."
+                        value={commentInput[post.id] || ''}
+                        onChange={(e) =>
+                          setCommentInput({
+                            ...commentInput,
+                            [post.id]: e.target.value,
+                          })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddComment(post.id);
+                          }
+                        }}
+                        className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-1 focus:ring-[#0a66c2]"
+                      />
+                      {commentInput[post.id]?.trim() && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleAddComment(post.id)}
+                            className="px-3 py-1 bg-[#0a66c2] text-white text-xs font-semibold rounded-full hover:bg-[#004182] transition"
+                          >
+                            Comment
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-        {filteredPosts.length === 0 && (
-          <div className="text-center py-16 px-6 bg-white rounded-3xl border border-purple-100/80 shadow-sm space-y-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-purple-100 to-violet-50 rounded-2xl flex items-center justify-center p-2 border border-purple-200/60 shadow-sm">
-              <img src="/pmverse-icon.png" alt="PMVerse Icon" className="w-full h-full object-contain" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h3 className="text-lg font-bold text-slate-900">
-                {search || selectedCategory !== 'All' ? 'No matching discussions found' : 'Welcome to the PMVerse Brain Trust'}
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                {search || selectedCategory !== 'All'
-                  ? 'Try adjusting your search terms or category filter to discover other product insights.'
-                  : 'No posts published yet. Start by signing up, creating your PM profile, and sharing the very first framework teardown or roadmap dilemma!'}
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={handleStartPost}
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-purple-500/20 transition-all hover:scale-[1.02] text-xs"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>{user ? 'Publish First Discussion' : 'Sign Up to Share First Insight'}</span>
-              </button>
-            </div>
-          </div>
-        )}
+                  {/* Comments list */}
+                  {post.comments && post.comments.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      {post.comments.map((comm) => (
+                        <div key={comm.id} className="flex items-start space-x-2">
+                          <UserAvatar
+                            src={comm.author.avatar}
+                            name={comm.author.name}
+                            size="sm"
+                            className="border border-slate-200 flex-shrink-0 mt-0.5"
+                          />
+                          <div className="flex-1 bg-white p-2.5 rounded-xl border border-slate-200 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">
+                                {comm.author.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {comm.createdAt}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500">
+                              {comm.author.role}
+                            </p>
+                            <p className="text-slate-800 mt-1 leading-relaxed">
+                              {comm.content}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
       </div>
 
       {/* Modal for Creating New Post */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-purple-100">
-            <div className="flex items-center justify-between border-b border-purple-50 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Start a PM Discussion</h3>
-                <p className="text-xs text-purple-700">
-                  Posting as <span className="font-bold">{profile?.fullName}</span> ({profile?.role})
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl max-w-xl w-full p-5 space-y-4 shadow-xl border border-slate-200 text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2.5">
+                <UserAvatar
+                  src={profile?.avatarUrl}
+                  name={profile?.fullName || user?.user_metadata?.full_name}
+                  email={profile?.email || user?.email}
+                  size="lg"
+                  className="border border-purple-200 flex-shrink-0"
+                />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    {profile?.fullName || 'Product Manager'}
+                  </h3>
+                  <p className="text-xs text-slate-500">Post to PM Network • 🌐 Anyone</p>
+                </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1"
+                className="text-slate-400 hover:text-slate-600 p-1"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreatePost} className="space-y-4">
+            <form onSubmit={handleCreatePost} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Title</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Topic Headline / Title
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. How do you handle conflicting OKRs between Growth and Core squads?"
+                  placeholder="e.g. How we decreased churn by 20% by restructuring discovery interviews..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2.5 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs sm:text-sm px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Category
+                </label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as any)}
-                  className="w-full text-sm px-3.5 py-2.5 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] focus:outline-none"
                 >
                   <option value="Strategy">Strategy</option>
                   <option value="Execution">Execution</option>
@@ -380,46 +582,46 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Content / Question</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  What do you want to talk about?
+                </label>
                 <textarea
                   required
-                  rows={4}
-                  placeholder="Share context, metrics, your thoughts, and specific areas where you'd like community advice..."
+                  rows={5}
+                  placeholder="Share context, metrics, your key takeaway for fellow PMs..."
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2.5 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs sm:text-sm px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Tags (comma separated)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tags (comma separated)
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g. OKRs, SquadAlignment, Roadmaps"
+                  placeholder="e.g. ProductStrategy, PLG, Metrics"
                   value={newTags}
                   onChange={(e) => setNewTags(e.target.value)}
-                  className="w-full text-sm px-3.5 py-2.5 bg-purple-50/30 border border-purple-100 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#0a66c2] focus:outline-none"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-full transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isPublishing}
-                  className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl shadow-md shadow-purple-500/20 transition flex items-center space-x-1.5"
+                  disabled={isPublishing || !newTitle.trim() || !newContent.trim()}
+                  className="px-5 py-1.5 text-xs font-semibold bg-[#0a66c2] hover:bg-[#004182] text-white rounded-full transition shadow-sm disabled:opacity-50"
                 >
-                  {isPublishing ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <span>Publish to PMVerse</span>
-                  )}
+                  {isPublishing ? 'Publishing...' : 'Post'}
                 </button>
               </div>
             </form>
