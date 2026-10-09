@@ -68,18 +68,23 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
   const domains = ['All', 'Fintech', 'AI & ML', 'B2B SaaS', 'Healthtech', 'Developer Tools'];
   const types = ['All', 'Remote', 'Hybrid', 'On-site'];
 
-  // Load real jobs and saved jobs from Supabase
+  // Load real jobs and saved jobs from Supabase or localStorage
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       if (isConfigured) {
         const dbJobs = await getJobListingsFromDb();
-        if (mounted && dbJobs && dbJobs.length > 0) {
-          setJobs((prev) => {
-            const existingIds = new Set(dbJobs.map((j) => j.id));
-            const uniqueInitial = prev.filter((j) => !existingIds.has(j.id));
-            return [...dbJobs, ...uniqueInitial];
-          });
+        if (mounted && dbJobs) {
+          setJobs(dbJobs);
+        }
+      } else if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('pmverse_jobs');
+        if (local && mounted) {
+          try {
+            setJobs(JSON.parse(local));
+          } catch {
+            // ignore
+          }
         }
       }
 
@@ -157,7 +162,11 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
       applicantsCount: 1,
     };
 
-    setJobs((prev) => [created, ...prev]);
+    const updatedJobs = [created, ...jobs];
+    setJobs(updatedJobs);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pmverse_jobs', JSON.stringify(updatedJobs));
+    }
 
     if (isConfigured) {
       await insertJobListingToDb(created);
@@ -368,7 +377,35 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
 
         {/* Job Cards Stream (LinkedIn Jobs style) */}
         <div className="space-y-2.5">
-          {filteredJobs.map((job) => {
+          {filteredJobs.length === 0 ? (
+            <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-sky-50 text-[#0a66c2] mx-auto flex items-center justify-center">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                {showSavedOnly ? 'No saved PM roles yet' : 'No product management roles posted yet'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                {showSavedOnly
+                  ? 'Click the bookmark icon on any job listing to save opportunities for quick access.'
+                  : 'Are you hiring for your product squad? Post an opening across APM, Senior PM, and Leadership squads to reach verified PMs.'}
+              </p>
+              {!showSavedOnly && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      if (!user) openAuthModal('signin');
+                      else setIsPostModalOpen(true);
+                    }}
+                    className="px-5 py-2 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
+                  >
+                    Post the First PM Role
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            filteredJobs.map((job) => {
             const isSaved = savedJobIds.has(job.id);
             const hasApplied = appliedJobIds.has(job.id);
 
@@ -491,7 +528,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ initialJobs }) => {
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
 

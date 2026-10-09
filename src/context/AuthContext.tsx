@@ -28,16 +28,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_PROFILE: UserProfile = {
-  id: 'demo-pm-user',
-  email: 'alex.pm@prodcraft.dev',
-  fullName: 'Alex Vance',
-  role: 'Senior Product Manager',
-  company: 'Linear / Stealth AI',
-  avatarUrl: '', // Clean initials avatar by default
-  bio: 'Building outcome-driven product squads and AI-native workflows.',
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -91,16 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Purge any legacy demo user from older sessions
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('prodcraft_demo_user');
+    }
+
     if (!configured) {
-      // Check for saved demo session in local storage
-      const savedDemo = typeof window !== 'undefined' ? localStorage.getItem('prodcraft_demo_user') : null;
-      if (savedDemo) {
-        try {
-          const parsed = JSON.parse(savedDemo);
-          setProfile(parsed);
-          setUser({ id: parsed.id, email: parsed.email } as any);
-        } catch {
-          // ignore
+      if (typeof window !== 'undefined') {
+        const savedUser = localStorage.getItem('pmverse_user');
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            setProfile(parsed);
+            setUser({ id: parsed.id, email: parsed.email } as any);
+          } catch {
+            // ignore
+          }
         }
       }
       setLoading(false);
@@ -199,9 +195,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     meta: { fullName: string; role: string; company: string }
   ) => {
     if (!configured) {
-      loginAsDemo();
+      const cleanProfile: UserProfile = {
+        id: `user-${Date.now()}`,
+        email,
+        fullName: meta.fullName.trim() || 'Product Manager',
+        role: meta.role.trim() || 'Associate PM',
+        company: meta.company.trim() || 'Independent PM',
+        avatarUrl: '',
+        connectionsCount: 0,
+        profileViews: 0,
+        postImpressions: 0,
+      };
+      setUser({ id: cleanProfile.id, email } as any);
+      setProfile(cleanProfile);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pmverse_user', JSON.stringify(cleanProfile));
+      }
       closeAuthModal();
-      return { message: 'Demo account created successfully!' };
+      return { message: 'Account created and signed in successfully!' };
     }
 
     const supabase = getSupabaseClient();
@@ -243,18 +254,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (!configured) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('prodcraft_demo_user');
-      }
-      setUser(null);
-      setProfile(null);
-      return;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('pmverse_user');
+      localStorage.removeItem('prodcraft_demo_user');
     }
 
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      await supabase.auth.signOut();
+    if (configured) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
     }
     setUser(null);
     setSession(null);
@@ -280,17 +289,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!ok) return { error: 'Failed to update database profile' };
     } else {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('prodcraft_demo_user', JSON.stringify(updated));
+        localStorage.setItem('pmverse_user', JSON.stringify(updated));
       }
     }
     return {};
   };
 
   const loginAsDemo = () => {
-    setUser({ id: DEMO_PROFILE.id, email: DEMO_PROFILE.email } as any);
-    setProfile(DEMO_PROFILE);
+    const defaultProfile: UserProfile = {
+      id: `pm-${Date.now()}`,
+      email: 'member@pmverse.dev',
+      fullName: 'New Product Manager',
+      role: 'Product Manager',
+      company: 'Tech Squad',
+      avatarUrl: '',
+      bio: 'Excited to build outcome-driven product roadmaps and connect with fellow PMs.',
+      connectionsCount: 0,
+      profileViews: 0,
+      postImpressions: 0,
+    };
+    setUser({ id: defaultProfile.id, email: defaultProfile.email } as any);
+    setProfile(defaultProfile);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('prodcraft_demo_user', JSON.stringify(DEMO_PROFILE));
+      localStorage.setItem('pmverse_user', JSON.stringify(defaultProfile));
     }
     closeAuthModal();
   };

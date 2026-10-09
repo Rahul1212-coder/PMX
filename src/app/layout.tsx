@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'ProdIn | The Product Management Network & Platform',
+  title: 'PMVerse | The Product Management Network & Platform',
   description: 'The professional network for Product Managers. Community feed, PM network connections, verified PM job board, AI framework tutor, and career fit diagnostics.',
   icons: {
     icon: '/pmverse-icon.png',

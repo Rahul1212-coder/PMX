@@ -241,6 +241,34 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
   }
 }
 
+export async function getOtherProfilesFromDb(currentUserId?: string): Promise<UserProfile[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+
+  try {
+    let query = supabase.from('profiles').select('*').limit(30);
+    if (currentUserId) {
+      query = query.neq('id', currentUserId);
+    }
+    const { data, error } = await query;
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      email: row.email || '',
+      fullName: row.full_name || 'Product Manager',
+      role: row.role || 'Associate PM',
+      company: row.company || 'Tech Company',
+      avatarUrl: row.avatar_url || '',
+      bio: row.bio || '',
+      createdAt: row.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Saved Jobs
 export async function getSavedJobIdsFromDb(userId: string): Promise<string[]> {
   if (!isSupabaseConfigured()) return [];

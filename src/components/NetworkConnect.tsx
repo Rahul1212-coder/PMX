@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PmConnection } from '../types';
 import { INITIAL_CONNECTIONS } from '../data/mockData';
 import {
@@ -24,30 +24,42 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
+import { getOtherProfilesFromDb } from '@/lib/supabase/database';
 
 export const NetworkConnect: React.FC = () => {
   const { user, openAuthModal } = useAuth();
   const [connections, setConnections] = useState<PmConnection[]>(INITIAL_CONNECTIONS);
   const [search, setSearch] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('All');
-  const [invitations, setInvitations] = useState([
-    {
-      id: 'inv-1',
-      name: 'Elena Rostova',
-      role: 'Staff PM @ Stripe | Ex-Google APM',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
-      mutual: 14,
-      note: 'Loved your thoughts on problem bets vs feature factories!',
-    },
-    {
-      id: 'inv-2',
-      name: 'Jordan Hayes',
-      role: 'Lead Technical PM @ Datadog',
-      avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&h=100&fit=crop&crop=face',
-      mutual: 8,
-      note: 'Connecting with fellow B2B platform PMs.',
-    },
-  ]);
+  const [invitations, setInvitations] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadMembers() {
+      const dbProfiles = await getOtherProfilesFromDb(user?.id);
+      if (mounted && dbProfiles && dbProfiles.length > 0) {
+        const mapped: PmConnection[] = dbProfiles.map((p) => ({
+          id: p.id,
+          name: p.fullName,
+          headline: `${p.role || 'Product Manager'}${p.company ? ` @ ${p.company}` : ''}`,
+          role: (p.role as any) || 'Product Manager',
+          company: p.company || 'Tech Squad',
+          avatar: p.avatarUrl || '',
+          coverPhoto: '',
+          mutualConnections: 0,
+          location: p.bio || 'Global',
+          skills: ['Product Strategy', 'Roadmapping'],
+          status: 'not_connected',
+          bio: p.bio || '',
+        }));
+        setConnections(mapped);
+      }
+    }
+    loadMembers();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const [messageRecipient, setMessageRecipient] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -119,7 +131,9 @@ export const NetworkConnect: React.FC = () => {
                 <Users className="w-4 h-4 text-slate-500" />
                 <span>Connections</span>
               </span>
-              <span className="font-bold text-slate-800">480</span>
+              <span className="font-bold text-slate-800">
+                {connections.filter((c) => c.status === 'connected').length}
+              </span>
             </div>
 
             <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
@@ -127,7 +141,7 @@ export const NetworkConnect: React.FC = () => {
                 <Layers className="w-4 h-4 text-slate-500" />
                 <span>PM Groups</span>
               </span>
-              <span className="font-semibold text-slate-500">8</span>
+              <span className="font-semibold text-slate-500">4</span>
             </div>
 
             <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
@@ -143,7 +157,7 @@ export const NetworkConnect: React.FC = () => {
                 <Building2 className="w-4 h-4 text-slate-500" />
                 <span>Company Pages</span>
               </span>
-              <span className="font-semibold text-slate-500">42</span>
+              <span className="font-semibold text-slate-500">0</span>
             </div>
 
             <div className="py-2 flex items-center justify-between text-slate-700 hover:text-[#0a66c2] cursor-pointer">
@@ -151,7 +165,7 @@ export const NetworkConnect: React.FC = () => {
                 <FileText className="w-4 h-4 text-slate-500" />
                 <span>PM Newsletters</span>
               </span>
-              <span className="font-semibold text-slate-500">5</span>
+              <span className="font-semibold text-slate-500">0</span>
             </div>
           </div>
         </div>
@@ -263,7 +277,33 @@ export const NetworkConnect: React.FC = () => {
 
         {/* Grid of PM Profiles (LinkedIn 'People you may know' cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filteredConnections.map((pm) => {
+          {filteredConnections.length === 0 ? (
+            <div className="col-span-full bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-sky-50 text-[#0a66c2] mx-auto flex items-center justify-center">
+                <Users className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                Expand Your PM Network
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                Connect with Product Managers, APMs, and Leaders across tech squads. As fellow PMs register on PMVerse, they will appear in your network directory.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.origin);
+                      alert('PMVerse invite link copied to clipboard! Share it with your product colleagues.');
+                    }
+                  }}
+                  className="px-5 py-2 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
+                >
+                  Copy Invite Link
+                </button>
+              </div>
+            </div>
+          ) : (
+            filteredConnections.map((pm) => {
             const isConnected = pm.status === 'connected';
             const isPending = pm.status === 'pending';
 
@@ -353,7 +393,7 @@ export const NetworkConnect: React.FC = () => {
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
     </div>

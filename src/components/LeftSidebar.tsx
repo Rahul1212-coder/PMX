@@ -36,108 +36,151 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
           <div className="absolute inset-0 bg-slate-900/10" />
         </div>
 
-        {/* Avatar with Initials Fallback & Edit Overlay */}
-        <div className="-mt-9 flex justify-center">
-          <div
-            onClick={() => {
-              if (user) openProfileModal();
-              else openAuthModal('signin');
-            }}
-            className="relative group cursor-pointer"
-            title={user ? 'Click to change profile picture or edit profile' : 'Sign in to customize'}
-          >
-            <UserAvatar
-              src={profile?.avatarUrl}
-              name={displayName}
-              email={profile?.email || user?.email}
-              size="2xl"
-              className="border-2 border-white shadow-sm ring-1 ring-slate-200 bg-white"
-            />
-            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-5 h-5 text-white drop-shadow" />
+        {/* User Info / Guest Card */}
+        {user ? (
+          <>
+            {/* Avatar with Initials Fallback & Edit Overlay */}
+            <div className="-mt-9 flex justify-center">
+              <div
+                onClick={openProfileModal}
+                className="relative group cursor-pointer"
+                title="Click to edit profile or change photo"
+              >
+                <UserAvatar
+                  src={profile?.avatarUrl}
+                  name={displayName}
+                  email={profile?.email || user?.email}
+                  size="2xl"
+                  className="border-2 border-white shadow-sm ring-1 ring-slate-200 bg-white"
+                />
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera className="w-5 h-5 text-white drop-shadow" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* User Info */}
-        <div className="p-3 pb-4 border-b border-[#e0dfdc]">
-          <h2
-            onClick={() => {
-              if (user) openProfileModal();
-              else openAuthModal('signin');
-            }}
-            className="text-base font-bold text-slate-900 hover:underline cursor-pointer transition line-clamp-1"
-          >
-            {displayName}
-          </h2>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 px-2 leading-relaxed">
-            {displayRole}
-          </p>
+            <div className="p-3 pb-3 border-b border-[#e0dfdc]">
+              <h2
+                onClick={openProfileModal}
+                className="text-base font-bold text-slate-900 hover:underline cursor-pointer transition line-clamp-1"
+              >
+                {displayName}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-2 px-2 leading-relaxed">
+                {displayRole}
+              </p>
 
-          {user ? (
-            <button
-              onClick={openProfileModal}
-              className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold text-[#0a66c2] hover:bg-[#ebf4fd] border border-[#0a66c2] transition"
+              <button
+                onClick={openProfileModal}
+                className="mt-2.5 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold text-[#0a66c2] hover:bg-[#ebf4fd] border border-[#0a66c2] transition"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Edit Profile</span>
+              </button>
+            </div>
+
+            {/* Real Stats */}
+            <div className="py-2 text-left text-xs divide-y divide-slate-100">
+              <div
+                onClick={() => setActiveTab('connect')}
+                className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition"
+              >
+                <div>
+                  <p className="text-slate-500 font-medium">PM Network</p>
+                  <p className="text-slate-400 text-[11px]">Connections</p>
+                </div>
+                <span className="font-bold text-[#0a66c2]">{profile?.connectionsCount || 0}</span>
+              </div>
+
+              <div className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition">
+                <span className="text-slate-500 font-medium">Profile viewers</span>
+                <span className="font-bold text-slate-700">{profile?.profileViews || 0}</span>
+              </div>
+
+              <div className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition">
+                <span className="text-slate-500 font-medium">Post impressions</span>
+                <span className="font-bold text-slate-700">{profile?.postImpressions || 0}</span>
+              </div>
+            </div>
+
+            {/* Assessment Status / Badge */}
+            <div
+              onClick={() => setActiveTab('assessment')}
+              className={`p-3 border-t text-left cursor-pointer transition ${
+                profile?.pmFitScore
+                  ? 'bg-amber-50/70 border-amber-200/80 hover:bg-amber-100/70'
+                  : 'bg-slate-50 border-slate-100 hover:bg-slate-100/80'
+              }`}
             >
-              <Camera className="w-3.5 h-3.5" />
-              <span>Edit profile photo</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => openAuthModal('signin')}
-              className="mt-3 w-full py-1 text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] rounded-full hover:bg-[#ebf4fd] transition"
-            >
-              Sign In to customize
-            </button>
-          )}
-        </div>
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-900">
+                <Award className={`w-3.5 h-3.5 ${profile?.pmFitScore ? 'text-amber-600' : 'text-[#0a66c2]'}`} />
+                <span>{profile?.pmFitScore ? 'Verified PM Assessment' : 'PM Skill Assessment'}</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                {profile?.pmFitScore
+                  ? `Badge: Score ${profile.pmFitScore}% Verified`
+                  : 'Take the 5-question test to earn a certified profile badge.'}
+              </p>
+            </div>
 
-        {/* Analytics stats (LinkedIn exact layout) */}
-        <div className="py-2 text-left text-xs divide-y divide-slate-100">
-          <div
-            onClick={() => setActiveTab('connect')}
-            className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition"
-          >
+            {/* Saved Items */}
+            <div
+              onClick={() => setActiveTab('jobs')}
+              className="px-3 py-2 text-left border-t border-[#e0dfdc] hover:bg-slate-50 cursor-pointer transition flex items-center space-x-2 text-xs text-slate-600 font-medium"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-slate-500" />
+              <span>Saved PM Jobs & Items</span>
+            </div>
+          </>
+        ) : (
+          /* Guest Welcome Card */
+          <div className="p-4 space-y-3">
+            <div className="-mt-8 flex justify-center">
+              <div className="w-14 h-14 rounded-full bg-white border-2 border-white shadow-md flex items-center justify-center text-[#0a66c2] text-xl font-black">
+                pm
+              </div>
+            </div>
+
             <div>
-              <p className="text-slate-500 font-medium">PM Network</p>
-              <p className="font-bold text-slate-800 text-[11px]">Grow your connections</p>
+              <h2 className="text-base font-bold text-slate-900">
+                Welcome to PMVerse
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                The professional community platform for Product Managers, Leaders & APMs.
+              </p>
             </div>
-            <span className="font-bold text-[#0a66c2]">480+</span>
-          </div>
 
-          <div className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition">
-            <span className="text-slate-500 font-medium">Profile viewers</span>
-            <span className="font-bold text-[#0a66c2]">142</span>
-          </div>
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => openAuthModal('signup')}
+                className="w-full py-1.5 px-3 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
+              >
+                Join PMVerse
+              </button>
+              <button
+                onClick={() => openAuthModal('signin')}
+                className="w-full py-1.5 px-3 rounded-full text-xs font-semibold text-[#0a66c2] border border-[#0a66c2] hover:bg-[#ebf4fd] transition"
+              >
+                Sign In
+              </button>
+            </div>
 
-          <div className="px-3 py-2 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition">
-            <span className="text-slate-500 font-medium">Post impressions</span>
-            <span className="font-bold text-[#0a66c2]">1,820</span>
+            <div className="pt-2 border-t border-slate-100 text-left text-[11px] text-slate-600 space-y-1.5">
+              <p className="flex items-center space-x-1.5">
+                <span className="text-[#0a66c2] font-bold">✓</span>
+                <span>Share frameworks & roadmaps</span>
+              </p>
+              <p className="flex items-center space-x-1.5">
+                <span className="text-[#0a66c2] font-bold">✓</span>
+                <span>Connect with fellow PMs</span>
+              </p>
+              <p className="flex items-center space-x-1.5">
+                <span className="text-[#0a66c2] font-bold">✓</span>
+                <span>Discover open PM opportunities</span>
+              </p>
+            </div>
           </div>
-        </div>
-
-        {/* LinkedIn Skill Assessment Badge Card */}
-        <div
-          onClick={() => setActiveTab('assessment')}
-          className="p-3 bg-amber-50/70 border-t border-amber-200/80 text-left cursor-pointer hover:bg-amber-100/70 transition"
-        >
-          <div className="flex items-center space-x-1.5 text-amber-900 text-xs font-bold">
-            <Award className="w-3.5 h-3.5 text-amber-600" />
-            <span>Verified PM Assessment</span>
-          </div>
-          <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
-            Badge: <strong className="font-bold text-amber-950">Certified PM (Top 12%)</strong>
-          </p>
-        </div>
-
-        {/* Saved Items */}
-        <div
-          onClick={() => setActiveTab('jobs')}
-          className="px-3 py-2 text-left border-t border-[#e0dfdc] hover:bg-slate-50 cursor-pointer transition flex items-center space-x-2 text-xs text-slate-600 font-medium"
-        >
-          <Bookmark className="w-3.5 h-3.5 text-slate-500" />
-          <span>My Items • Saved PM Jobs</span>
-        </div>
+        )}
       </div>
 
       {/* Community Groups & Followed Hashtags (LinkedIn Shortcuts) */}

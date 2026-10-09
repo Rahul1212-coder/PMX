@@ -41,33 +41,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const notifications = [
-    {
-      id: 'n-1',
-      text: 'Elena Rostova (Staff PM @ Stripe) published a new breakdown on 6-week problem bets.',
-      time: '15m ago',
-      unread: true,
-    },
-    {
-      id: 'n-2',
-      text: 'Maya Lin (Director of Product @ Figma) accepted your connection invitation.',
-      time: '1h ago',
-      unread: true,
-    },
-    {
-      id: 'n-3',
-      text: 'Linear just posted a new Senior Product Manager role matching your profile.',
-      time: '3h ago',
-      unread: false,
-    },
-  ];
+  const notifications = user
+    ? [
+        {
+          id: 'n-welcome',
+          text: `Welcome to PMVerse, ${profile?.fullName || 'Product Manager'}! Your profile is active. Share teardowns, connect with PMs, and explore open roles.`,
+          time: 'Just now',
+          unread: true,
+        },
+      ]
+    : [];
 
-  const navItems = [
-    { id: 'community' as const, label: 'Home', icon: Home },
-    { id: 'connect' as const, label: 'My Network', icon: Users, badge: '2' },
-    { id: 'jobs' as const, label: 'Jobs', icon: Briefcase },
-    { id: 'ai-tutor' as const, label: 'Learning', icon: Sparkles },
-    { id: 'assessment' as const, label: 'Skill Test', icon: Award },
+  const navItems: Array<{
+    id: 'community' | 'connect' | 'jobs' | 'ai-tutor' | 'assessment';
+    label: string;
+    icon: any;
+    badge?: string;
+  }> = [
+    { id: 'community', label: 'Home', icon: Home },
+    { id: 'connect', label: 'My Network', icon: Users },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase },
+    { id: 'ai-tutor', label: 'Learning', icon: Sparkles },
+    { id: 'assessment', label: 'Skill Test', icon: Award },
   ];
 
   // Close dropdowns on outside click
@@ -339,15 +334,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
 
-            {/* LinkedIn Premium Promo Link */}
-            <div className="hidden lg:flex items-center pl-3 border-l border-slate-200">
-              <button
-                onClick={() => setActiveTab('assessment')}
-                className="text-[11px] text-[#915907] hover:underline leading-tight text-center max-w-[80px]"
-              >
-                Try PM Pro Verified
-              </button>
-            </div>
+            {/* Guest Actions or PM Certified Link */}
+            {!user ? (
+              <div className="hidden sm:flex items-center space-x-1.5 pl-2 border-l border-slate-200">
+                <button
+                  onClick={() => openAuthModal('signin')}
+                  className="px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#ebf4fd] rounded-full transition whitespace-nowrap"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => openAuthModal('signup')}
+                  className="px-3.5 py-1 text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] rounded-full transition shadow-xs whitespace-nowrap"
+                >
+                  Join PMVerse
+                </button>
+              </div>
+            ) : (
+              <div className="hidden lg:flex items-center pl-3 border-l border-slate-200">
+                <button
+                  onClick={() => setActiveTab('assessment')}
+                  className="text-[11px] text-[#915907] hover:underline leading-tight text-center max-w-[80px]"
+                >
+                  PM Certified Badge
+                </button>
+              </div>
+            )}
           </nav>
         </div>
       </div>

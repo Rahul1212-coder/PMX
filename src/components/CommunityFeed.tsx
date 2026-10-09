@@ -52,18 +52,25 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
 
   const categories = ['All', 'Strategy', 'Execution', 'AI & Tech', 'Career & Transition', 'Case Study'];
 
-  // Load posts from Supabase on mount
+  // Load posts from Supabase or localStorage on mount
   useEffect(() => {
     let mounted = true;
     async function loadDbPosts() {
       if (isConfigured) {
         const dbPosts = await getCommunityPostsFromDb();
-        if (mounted && dbPosts && dbPosts.length > 0) {
-          setPosts((prev) => {
-            const existingIds = new Set(dbPosts.map((p) => p.id));
-            const uniqueInitial = prev.filter((p) => !existingIds.has(p.id));
-            return [...dbPosts, ...uniqueInitial];
-          });
+        if (mounted && dbPosts) {
+          setPosts(dbPosts);
+          return;
+        }
+      }
+      if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('pmverse_posts');
+        if (local && mounted) {
+          try {
+            setPosts(JSON.parse(local));
+          } catch {
+            // ignore
+          }
         }
       }
     }
@@ -175,7 +182,11 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
     };
 
     // Optimistically update feed
-    setPosts((prev) => [postToCreate, ...prev]);
+    const updatedPosts = [postToCreate, ...posts];
+    setPosts(updatedPosts);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pmverse_posts', JSON.stringify(updatedPosts));
+    }
 
     // Save to Supabase
     if (isConfigured) {
@@ -311,7 +322,31 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
 
       {/* LinkedIn Post Stream */}
       <div className="space-y-3">
-        {filteredPosts.map((post) => {
+        {filteredPosts.length === 0 ? (
+          <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-8 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-sky-50 text-[#0a66c2] mx-auto flex items-center justify-center">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              {selectedCategory === 'All' ? 'No posts in the PM feed yet' : `No posts in ${selectedCategory} yet`}
+            </h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Start the conversation! Share a framework breakdown, product teardown, or ask a strategic question to fellow Product Managers.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (!user) openAuthModal('signin');
+                  else setIsModalOpen(true);
+                }}
+                className="px-5 py-2 rounded-full text-xs font-bold text-white bg-[#0a66c2] hover:bg-[#004182] transition shadow-xs"
+              >
+                Start the First Post
+              </button>
+            </div>
+          </div>
+        ) : (
+          filteredPosts.map((post) => {
           const isCommentsOpen = activeCommentsPostId === post.id;
           const hasUserReacted = post.userReaction !== null && post.userReaction !== undefined;
           const isAuthorFollowed = followedAuthorNames.has(post.author.name);
@@ -537,7 +572,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ initialPosts }) =>
               )}
             </article>
           );
-        })}
+        }))}
       </div>
 
       {/* LinkedIn-style Create Post Modal */}
