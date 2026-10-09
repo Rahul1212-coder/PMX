@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   company TEXT DEFAULT 'Independent PM',
   pm_stage TEXT DEFAULT 'existing_pm',
   previous_role TEXT,
+  years_of_experience INTEGER DEFAULT 2,
+  pm_fit_score INTEGER DEFAULT NULL,
   avatar_url TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -59,6 +61,9 @@ CREATE TABLE IF NOT EXISTS public.job_listings (
   description TEXT NOT NULL,
   skills TEXT[] DEFAULT '{}',
   apply_url TEXT NOT NULL DEFAULT '#',
+  source TEXT DEFAULT 'LinkedIn',
+  min_experience INTEGER,
+  max_experience INTEGER,
   featured BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

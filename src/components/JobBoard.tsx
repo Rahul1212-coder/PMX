@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { JobListing } from '../types';
 import {
   Briefcase,
@@ -19,6 +19,8 @@ import {
   Sliders,
   RefreshCw,
   Loader2,
+  Award,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -31,17 +33,20 @@ import {
   deleteJobApplicationInDb,
 } from '@/lib/supabase/database';
 import { JobApplication, ApplicationStage } from '../types';
+import { calculateJobMatch, resolveUserExperienceYears } from '@/lib/jobMatcher';
 
 interface JobBoardProps {
   initialJobs: JobListing[];
   initialActiveSubTab?: 'browse' | 'tracker';
   onNavigateToMentor?: (prompt: string) => void;
+  onNavigateToAssessment?: () => void;
 }
 
 export const JobBoard: React.FC<JobBoardProps> = ({
   initialJobs,
   initialActiveSubTab = 'browse',
   onNavigateToMentor,
+  onNavigateToAssessment,
 }) => {
   const { user, profile, openAuthModal, isConfigured } = useAuth();
   const [jobs, setJobs] = useState<JobListing[]>(initialJobs);
@@ -70,17 +75,22 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [newCompany, setNewCompany] = useState('');
   const [newLevel, setNewLevel] = useState<JobListing['level']>('Product Manager');
   const [newDomain, setNewDomain] = useState<JobListing['domain']>('B2B SaaS');
-  const [newLocation, setNewLocation] = useState('Remote / US');
-  const [newType, setNewType] = useState<JobListing['type']>('Remote');
-  const [newSalary, setNewSalary] = useState('$140k–$180k');
+  const [newLocation, setNewLocation] = useState('Remote / India');
+  const [newType, setNewType] = useState<JobListing['type']>('Hybrid');
+  const [newSalary, setNewSalary] = useState('₹28L–₹45L PA');
   const [newDescription, setNewDescription] = useState('');
   const [newSkills, setNewSkills] = useState('Product Strategy, Roadmapping, Analytics');
   const [newApplyUrl, setNewApplyUrl] = useState('');
 
+  // User calibration metrics for match calculation
+  const userYears = resolveUserExperienceYears(profile);
+  const userTestScore = profile?.pmFitScore ?? null;
+  const hasTakenAssessment = Boolean(userTestScore && userTestScore > 0);
+
   // Handle live job aggregation
   const handleSyncLiveJobs = async () => {
     setIsSyncing(true);
-    setSyncMessage('Aggregating live PM jobs from Arbeitnow, RemoteOK & Jobicy...');
+    setSyncMessage('Aggregating live PM jobs from LinkedIn, Naukri, IIMJobs & YC (India Tech focus)...');
     try {
       const res = await fetch('/api/jobs/sync', { method: 'POST' });
       const data = await res.json();
@@ -89,7 +99,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_synced_jobs', JSON.stringify(data.jobs));
         }
-        setSyncMessage(`✓ Synced ${data.jobs.length} live product manager roles!`);
+        setSyncMessage(`✓ Synced ${data.jobs.length} live Indian & YC product manager roles!`);
         setTimeout(() => setSyncMessage(null), 4000);
       }
     } catch (err) {
@@ -287,35 +297,86 @@ export const JobBoard: React.FC<JobBoardProps> = ({
     setIsPostModalOpen(false);
   };
 
-  const chips = ['All', 'Remote', 'Fintech', 'AI', 'Senior', 'Entry level'];
-
-  const filteredJobs = jobs.filter((j) => {
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !q ||
-      j.title.toLowerCase().includes(q) ||
-      j.company.toLowerCase().includes(q) ||
-      j.location.toLowerCase().includes(q) ||
-      j.domain.toLowerCase().includes(q);
-
-    let matchesChip = true;
-    if (filterChip === 'Remote') matchesChip = j.type === 'Remote' || j.location.toLowerCase().includes('remote');
-    else if (filterChip === 'Fintech') matchesChip = j.domain === 'Fintech';
-    else if (filterChip === 'AI') matchesChip = j.domain.includes('AI') || j.title.includes('AI');
-    else if (filterChip === 'Senior') matchesChip = j.level.includes('Senior') || j.level.includes('Lead');
-    else if (filterChip === 'Entry level') matchesChip = j.level.includes('Associate') || j.level.includes('Intern');
-
-    return matchesSearch && matchesChip;
-  });
-
-  const matchFactors = [
-    { name: 'Experience', w: 20, s: 18 },
-    { name: 'Skills & Frameworks', w: 30, s: 25 },
-    { name: 'Industry Background', w: 15, s: 15 },
-    { name: 'Location Preference', w: 10, s: 10 },
-    { name: 'Role Alignment', w: 15, s: 14 },
-    { name: 'Career Goals', w: 10, s: 9 },
+  const chips = [
+    'All',
+    'LinkedIn',
+    'Naukri',
+    'IIMJobs',
+    'YC',
+    'Bengaluru',
+    'Remote',
+    'Senior',
+    'Entry level',
   ];
+
+  const renderSourceBadge = (source?: string) => {
+    const s = source || 'LinkedIn';
+    let style = 'bg-[#eef3f8] text-[#0a66c2] border-[#0a66c2]';
+    if (s === 'Naukri') style = 'bg-[#ecfdf5] text-[#047857] border-[#047857]';
+    if (s === 'IIMJobs') style = 'bg-[#fffbeb] text-[#b45309] border-[#b45309]';
+    if (s === 'YC') style = 'bg-[#fff7ed] text-[#c2410c] border-[#c2410c]';
+
+    return (
+      <span
+        className={`inline-flex items-center text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 border ${style}`}
+      >
+        {s}
+      </span>
+    );
+  };
+
+  const jobsWithMatch = useMemo(() => {
+    return jobs.map((j) => {
+      const matchCalc = calculateJobMatch(j, profile, userTestScore);
+      return {
+        job: { ...j, matchScore: matchCalc.overallScore },
+        matchCalc,
+        matchScore: matchCalc.overallScore,
+      };
+    });
+  }, [jobs, profile, userTestScore]);
+
+  const filteredJobs = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return jobsWithMatch
+      .filter(({ job: j }) => {
+        const matchesSearch =
+          !q ||
+          j.title.toLowerCase().includes(q) ||
+          j.company.toLowerCase().includes(q) ||
+          j.location.toLowerCase().includes(q) ||
+          j.domain.toLowerCase().includes(q) ||
+          (j.source && j.source.toLowerCase().includes(q));
+
+        let matchesChip = true;
+        if (filterChip === 'LinkedIn') matchesChip = j.source === 'LinkedIn';
+        else if (filterChip === 'Naukri') matchesChip = j.source === 'Naukri';
+        else if (filterChip === 'IIMJobs') matchesChip = j.source === 'IIMJobs';
+        else if (filterChip === 'YC') matchesChip = j.source === 'YC';
+        else if (filterChip === 'Bengaluru')
+          matchesChip =
+            j.location.toLowerCase().includes('bengaluru') ||
+            j.location.toLowerCase().includes('bangalore');
+        else if (filterChip === 'Remote')
+          matchesChip = j.type === 'Remote' || j.location.toLowerCase().includes('remote');
+        else if (filterChip === 'Senior')
+          matchesChip =
+            j.level.includes('Senior') ||
+            j.level.includes('Lead') ||
+            j.level.includes('Director');
+        else if (filterChip === 'Entry level')
+          matchesChip = j.level.includes('Associate') || j.level.includes('Intern');
+
+        return matchesSearch && matchesChip;
+      })
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .map((item) => item.job);
+  }, [jobsWithMatch, search, filterChip]);
+
+  const selectedMatch = useMemo(() => {
+    if (!selectedJob) return null;
+    return calculateJobMatch(selectedJob, profile, userTestScore);
+  }, [selectedJob, profile, userTestScore]);
 
   return (
     <div className="space-y-6 text-left">
@@ -333,8 +394,11 @@ export const JobBoard: React.FC<JobBoardProps> = ({
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-8 items-start">
             <div className="min-w-0">
-              <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
-                {selectedJob.company}
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+                  {selectedJob.company}
+                </span>
+                {renderSourceBadge(selectedJob.source)}
               </div>
               <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight my-2 text-[#201e1d]">
                 {selectedJob.title}
@@ -415,51 +479,89 @@ export const JobBoard: React.FC<JobBoardProps> = ({
               </div>
             </div>
 
-            {/* Right Sidebar: Match Analysis Breakdown */}
+            {/* Right Sidebar: Dynamic Match Analysis Breakdown */}
             <aside className="border-2 border-[#201e1d] p-6 bg-[#f3f2f2] space-y-4">
               <div className="flex items-baseline gap-2">
                 <span className="text-6xl font-black text-[#ec3013] leading-none tracking-tighter">
-                  {selectedJob.matchScore || 88}%
+                  {selectedMatch?.overallScore || selectedJob.matchScore || 85}%
                 </span>
                 <span className="font-extrabold text-xs uppercase tracking-wider text-[#201e1d]">
                   Match
                 </span>
               </div>
               <div className="text-xs text-[#605d5d]">
-                Calculated from your verified profile competency and assessment diagnostic.
+                Calibrated for your {selectedMatch?.userYears ?? userYears} yrs experience &{' '}
+                {selectedMatch?.hasTakenAssessment ? (
+                  <strong className="text-emerald-800 font-semibold">
+                    {selectedMatch.testScoreUser}% verified diagnostic score
+                  </strong>
+                ) : (
+                  <span>diagnostic baseline score (~65%)</span>
+                )}
+                .
               </div>
 
               <div className="divide-y divide-[rgba(32,30,29,0.15)] pt-2">
-                {matchFactors.map((f, i) => (
-                  <div key={i} className="py-2">
-                    <div className="flex justify-between text-xs font-semibold mb-1">
+                {selectedMatch?.factors.map((f, i) => (
+                  <div key={i} className="py-2.5 space-y-1">
+                    <div className="flex justify-between text-xs font-semibold">
                       <span>
-                        {f.name} <span className="text-slate-400">· {f.w}%</span>
+                        {f.name} <span className="text-slate-400">· {f.weight}% weight</span>
                       </span>
                       <span className="font-bold">
-                        {f.s} / {f.w}
+                        {f.score} / {f.weight}
                       </span>
                     </div>
-                    <div className="h-1 bg-[#d7d3d3]">
+                    <div className="h-1.5 bg-[#d7d3d3]">
                       <div
                         className="h-full bg-[#201e1d]"
-                        style={{ width: `${(f.s / f.w) * 100}%` }}
+                        style={{ width: `${(f.score / f.weight) * 100}%` }}
                       />
+                    </div>
+                    <div className="text-[11px] text-[#605d5d] leading-tight">
+                      {f.detail}
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="pt-2">
-                <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
-                  Why It Fits
+              {selectedMatch?.highlights && selectedMatch.highlights.length > 0 && (
+                <div className="pt-2">
+                  <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
+                    Why It Fits
+                  </div>
+                  <div className="text-xs space-y-1 font-semibold text-[#201e1d]">
+                    {selectedMatch.highlights.map((h, i) => (
+                      <div key={i}>{h}</div>
+                    ))}
+                    <div>✓ Target domain fit: {selectedJob.domain}</div>
+                  </div>
                 </div>
-                <div className="text-xs space-y-1 font-semibold text-[#201e1d]">
-                  <div>✓ Verified background in product delivery</div>
-                  <div>✓ Matches your target domain: {selectedJob.domain}</div>
-                  <div>✓ Strong fit for role seniority level</div>
+              )}
+
+              {selectedMatch?.improvementAdvice && (
+                <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] text-xs text-[#201e1d] space-y-1">
+                  <div className="font-extrabold uppercase text-[10px] text-[#ae1800]">
+                    Match Guidance
+                  </div>
+                  <div className="text-[11px] leading-relaxed">
+                    {selectedMatch.improvementAdvice}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {!selectedMatch?.hasTakenAssessment && onNavigateToAssessment && (
+                <button
+                  onClick={onNavigateToAssessment}
+                  className="btn btn-primary w-full justify-between text-xs font-bold"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Take PM Diagnostic Test</span>
+                  </span>
+                  <span>+15% Precision →</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {
@@ -469,7 +571,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                     );
                   }
                 }}
-                className="btn btn-secondary w-full justify-between text-xs font-bold mt-4"
+                className="btn btn-secondary w-full justify-between text-xs font-bold mt-2"
               >
                 <span>Close gaps with AI Mentor</span>
                 <span>→</span>
@@ -580,10 +682,10 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                 onClick={handleSyncLiveJobs}
                 disabled={isSyncing}
                 className="btn btn-secondary text-xs font-bold flex items-center gap-1.5"
-                title="Aggregate live PM jobs from open tech boards (Arbeitnow, RemoteOK, Jobicy)"
+                title="Aggregate live Indian PM jobs from LinkedIn, Naukri, IIMJobs & YC"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#ec3013]' : ''}`} />
-                <span>{isSyncing ? 'Syncing...' : 'Sync Live PM Jobs'}</span>
+                <span>{isSyncing ? 'Syncing...' : 'Sync Live PM Jobs (India & YC)'}</span>
               </button>
               <button
                 onClick={() => setIsPostModalOpen(true)}
@@ -648,53 +750,99 @@ export const JobBoard: React.FC<JobBoardProps> = ({
             </span>
           </div>
 
+          {/* Dynamic Match Calibration Bar */}
+          <div className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-extrabold text-[11px] uppercase tracking-wider text-[#ae1800] flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Match Calibration:</span>
+              </span>
+              <span className="font-semibold text-[#201e1d]">
+                Experience: <strong>{userYears} Years</strong> (
+                {profile?.pmStage === 'fresher'
+                  ? 'Fresher'
+                  : profile?.pmStage === 'switching_roles'
+                  ? 'Career Switcher'
+                  : 'Practicing PM'}
+                )
+              </span>
+              <span className="text-[#605d5d]">·</span>
+              <span className="font-semibold text-[#201e1d]">
+                PM Diagnostic: {hasTakenAssessment ? (
+                  <strong className="text-emerald-700 inline-flex items-center gap-1">
+                    <Award className="w-3 h-3 text-amber-600 inline" /> {userTestScore}% Verified
+                  </strong>
+                ) : (
+                  <span className="text-amber-800 font-medium">Baseline (~65% unverified)</span>
+                )}
+              </span>
+            </div>
+            {!hasTakenAssessment && onNavigateToAssessment && (
+              <button
+                onClick={onNavigateToAssessment}
+                className="btn btn-secondary text-[11px] font-bold py-1 px-2.5"
+              >
+                Verify PM Diagnostic Score →
+              </button>
+            )}
+          </div>
+
           {/* Job Rows */}
           <div className="border-t-2 border-[rgba(32,30,29,0.15)] divide-y divide-[rgba(32,30,29,0.15)]">
-            {filteredJobs.map((j) => (
-              <div
-                key={j.id}
-                onClick={() => setSelectedJob(j)}
-                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[rgba(32,30,29,0.03)] px-1 transition-colors"
-              >
-                <div className="min-w-0">
-                  <div className="font-extrabold text-lg sm:text-xl text-[#201e1d] leading-snug hover:text-[#ae1800] transition-colors">
-                    {j.title}
+            {filteredJobs.map((j) => {
+              const jMatch = calculateJobMatch(j, profile, userTestScore);
+              return (
+                <div
+                  key={j.id}
+                  onClick={() => setSelectedJob(j)}
+                  className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[rgba(32,30,29,0.03)] px-1 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-extrabold text-lg sm:text-xl text-[#201e1d] leading-snug hover:text-[#ae1800] transition-colors">
+                        {j.title}
+                      </span>
+                      {renderSourceBadge(j.source)}
+                    </div>
+                    <div className="text-xs text-slate-600 my-1">
+                      {j.company} · {j.location}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-[11px] mt-2">
+                      <span className="tag tag-neutral font-semibold">{j.salaryRange}</span>
+                      <span className="tag tag-neutral">{j.level}</span>
+                      <span className="tag tag-neutral">{j.domain}</span>
+                      <span className="text-[#605d5d] self-center ml-1">
+                        Posted {j.postedDate || 'recently'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-600 my-1">
-                    {j.company} · {j.location}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 text-[11px] mt-2">
-                    <span className="tag tag-neutral">{j.salaryRange}</span>
-                    <span className="tag tag-neutral">{j.level}</span>
-                    <span className="tag tag-neutral">{j.domain}</span>
-                    <span className="text-[#605d5d] self-center ml-1">
-                      Posted {j.postedDate || 'recently'}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
-                  <div className="text-right">
-                    <div className="text-2xl font-black text-[#ec3013] leading-none">
-                      {j.matchScore || 88}%
+                  <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
+                    <div className="text-right">
+                      <div className="text-2xl font-black text-[#ec3013] leading-none">
+                        {jMatch.overallScore}%
+                      </div>
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-[#605d5d]">
+                        Match
+                      </div>
+                      <div className="text-[10px] text-[#605d5d] font-medium hidden sm:block">
+                        Exp: {jMatch.experienceScore}%
+                      </div>
                     </div>
-                    <div className="text-[10px] uppercase font-bold tracking-wider text-[#605d5d]">
-                      Match
-                    </div>
+                    <button
+                      onClick={(e) => toggleSave(j.id, e)}
+                      className="btn btn-icon btn-secondary"
+                      aria-label="Save Job"
+                    >
+                      <Bookmark
+                        className="w-4 h-4"
+                        fill={savedJobIds.has(j.id) ? 'currentColor' : 'none'}
+                      />
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => toggleSave(j.id, e)}
-                    className="btn btn-icon btn-secondary"
-                    aria-label="Save Job"
-                  >
-                    <Bookmark
-                      className="w-4 h-4"
-                      fill={savedJobIds.has(j.id) ? 'currentColor' : 'none'}
-                    />
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {filteredJobs.length === 0 && (
               <div className="py-12 text-center space-y-2">

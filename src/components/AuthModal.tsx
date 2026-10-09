@@ -33,6 +33,7 @@ export const AuthModal: React.FC = () => {
   const [role, setRole] = useState('Product Manager');
   const [previousRole, setPreviousRole] = useState('Software Engineer');
   const [company, setCompany] = useState('');
+  const [yearsOfExperience, setYearsOfExperience] = useState<number>(3);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +80,7 @@ export const AuthModal: React.FC = () => {
           company: classifiedCompany,
           pmStage,
           previousRole: pmStage === 'switching_roles' ? previousRole : undefined,
+          yearsOfExperience: pmStage === 'fresher' ? 0 : yearsOfExperience,
         });
 
         if (res.error) {
@@ -218,6 +220,7 @@ export const AuthModal: React.FC = () => {
                       onClick={() => {
                         setPmStage('existing_pm');
                         setRole('Product Manager');
+                        setYearsOfExperience(3);
                       }}
                       className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
                         pmStage === 'existing_pm'
@@ -244,6 +247,7 @@ export const AuthModal: React.FC = () => {
                       onClick={() => {
                         setPmStage('switching_roles');
                         setRole('Aspiring PM');
+                        setYearsOfExperience(2);
                       }}
                       className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
                         pmStage === 'switching_roles'
@@ -270,6 +274,7 @@ export const AuthModal: React.FC = () => {
                       onClick={() => {
                         setPmStage('fresher');
                         setRole('Associate PM');
+                        setYearsOfExperience(0);
                       }}
                       className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
                         pmStage === 'fresher'
@@ -310,31 +315,51 @@ export const AuthModal: React.FC = () => {
 
                 {/* 3. Stage-Specific Contextual Inputs */}
                 {pmStage === 'existing_pm' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                        Current PM Level
-                      </label>
-                      <select
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
-                        className="input bg-white text-xs"
-                      >
-                        {pmRoles.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                          Current PM Level
+                        </label>
+                        <select
+                          value={role}
+                          onChange={(e) => setRole(e.target.value)}
+                          className="input bg-white text-xs"
+                        >
+                          {pmRoles.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                          Experience (Years)
+                        </label>
+                        <select
+                          value={yearsOfExperience}
+                          onChange={(e) => setYearsOfExperience(Number(e.target.value))}
+                          className="input bg-white text-xs"
+                        >
+                          <option value={1}>1 Year</option>
+                          <option value={2}>2 Years</option>
+                          <option value={3}>3 Years</option>
+                          <option value={5}>5 Years (Senior)</option>
+                          <option value={8}>8 Years (Lead)</option>
+                          <option value={12}>12+ Years (VP/Director)</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                        Company / Org
+                        Current Company / Org
                       </label>
                       <input
                         type="text"
-                        placeholder="Current Company"
+                        placeholder="Current Company (e.g. Swiggy, Razorpay, Tech Co)"
                         value={company}
                         onChange={(e) => setCompany(e.target.value)}
                         className="input text-xs"

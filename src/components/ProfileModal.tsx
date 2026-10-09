@@ -16,6 +16,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   const [fullName, setFullName] = useState('');
   const [pmStage, setPmStage] = useState<PmStage>('existing_pm');
+  const [yearsOfExperience, setYearsOfExperience] = useState<number>(2);
   const [role, setRole] = useState('Product Manager');
   const [company, setCompany] = useState('');
   const [bio, setBio] = useState('');
@@ -32,6 +33,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     if (isOpen && profile) {
       setFullName(profile.fullName || user?.user_metadata?.full_name || '');
       setPmStage(profile.pmStage || 'existing_pm');
+      setYearsOfExperience(
+        typeof profile.yearsOfExperience === 'number'
+          ? profile.yearsOfExperience
+          : profile.pmStage === 'fresher'
+          ? 0
+          : 3
+      );
       setRole(profile.role || 'Product Manager');
       setCompany(profile.company || '');
       setBio(profile.bio || '');
@@ -116,6 +124,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         bio: bio.trim(),
         avatarUrl: avatarUrl.trim(),
         pmStage,
+        yearsOfExperience,
       });
 
       if (res?.error) {
@@ -248,17 +257,44 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-[#201e1d] mb-1">Product Career Stage</label>
-            <select
-              value={pmStage}
-              onChange={(e) => setPmStage(e.target.value as PmStage)}
-              className="input bg-white text-xs"
-            >
-              <option value="existing_pm">Practicing Product Manager</option>
-              <option value="switching_roles">Looking to Switch from Another Role</option>
-              <option value="fresher">Fresher / Recent Graduate / APM Candidate</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-bold text-[#201e1d] mb-1">Career Stage</label>
+              <select
+                value={pmStage}
+                onChange={(e) => {
+                  const nextStage = e.target.value as PmStage;
+                  setPmStage(nextStage);
+                  if (nextStage === 'fresher' && yearsOfExperience > 1) {
+                    setYearsOfExperience(0);
+                  }
+                }}
+                className="input bg-white text-xs"
+              >
+                <option value="existing_pm">Practicing PM</option>
+                <option value="switching_roles">Switching to PM</option>
+                <option value="fresher">Fresher / APM</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-[#201e1d] mb-1">Experience (Years)</label>
+              <select
+                value={yearsOfExperience}
+                onChange={(e) => setYearsOfExperience(Number(e.target.value))}
+                className="input bg-white text-xs"
+              >
+                <option value={0}>0 Yrs (Fresher / Student)</option>
+                <option value={1}>1 Yr (APM / Associate)</option>
+                <option value={2}>2 Yrs</option>
+                <option value={3}>3 Yrs (Mid PM)</option>
+                <option value={4}>4 Yrs</option>
+                <option value={5}>5 Yrs (Senior PM)</option>
+                <option value={6}>6 Yrs</option>
+                <option value={8}>8 Yrs (Lead / Staff)</option>
+                <option value={10}>10+ Yrs (Principal / VP)</option>
+                <option value={14}>14+ Yrs (Director / CPO)</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">

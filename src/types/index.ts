@@ -8,6 +8,7 @@ export interface UserProfile {
   company: string;
   pmStage?: PmStage;
   previousRole?: string;
+  yearsOfExperience?: number;
   avatarUrl?: string;
   bio?: string;
   headline?: string;
@@ -110,8 +111,8 @@ export interface JobListing {
   title: string;
   company: string;
   logo: string;
-  level: 'Associate PM' | 'Product Manager' | 'Senior PM' | 'Lead / Principal PM' | 'VP of Product';
-  domain: 'Fintech' | 'AI & ML' | 'B2B SaaS' | 'E-commerce' | 'Healthtech' | 'Developer Tools';
+  level: 'Associate PM' | 'Product Manager' | 'Senior PM' | 'Lead / Principal PM' | 'VP of Product' | 'Director / VP' | string;
+  domain: 'Fintech' | 'AI & ML' | 'B2B SaaS' | 'E-commerce' | 'Healthtech' | 'Developer Tools' | 'Consumer Tech' | string;
   location: string;
   type: 'Remote' | 'Hybrid' | 'On-site';
   salaryRange: string;
@@ -120,10 +121,12 @@ export interface JobListing {
   description: string;
   skills: string[];
   applyUrl: string;
-  source?: string;
+  source?: 'LinkedIn' | 'Naukri' | 'IIMJobs' | 'YC' | string;
   isSaved?: boolean;
   applicantsCount?: number;
   matchScore?: number;
+  minExperience?: number;
+  maxExperience?: number;
 }
 
 export type AssessmentCategory =
@@ -196,7 +199,7 @@ export interface AssessmentResult {
 
 export interface SavedQuizResult {
   id: string;
-  userId: string;
+  userId?: string;
   scorePercentage: number;
   archetype: string;
   summary: string;
@@ -204,6 +207,11 @@ export interface SavedQuizResult {
     dimension: string;
     score: number;
   }[];
+  categoryScores?: CategoryScore[];
+  strengths?: string[];
+  growthAreas?: string[];
+  recommendedRole?: string;
+  answersReview?: AnswerReviewItem[];
   createdAt: string;
 }
 

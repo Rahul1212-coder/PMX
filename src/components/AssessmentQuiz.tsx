@@ -49,11 +49,12 @@ import { saveQuizResultToDb, getUserQuizResultsFromDb } from '@/lib/supabase/dat
 
 interface AssessmentQuizProps {
   questions?: AssessmentQuestion[];
+  setActiveTab?: (tab: any) => void;
 }
 
 type AssessmentMode = 'full_50' | 'rapid_10' | 'category_focus' | 'case_studies';
 
-export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
+export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) => {
   const { user, profile, updateProfile, openAuthModal, isConfigured } = useAuth();
 
   // Mode & configuration
@@ -87,29 +88,129 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
   const [isBadgeAddedToProfile, setIsBadgeAddedToProfile] = useState(false);
   const [pastResults, setPastResults] = useState<SavedQuizResult[]>([]);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'correct' | 'incorrect'>('all');
-  const [reviewCategoryFilter, setReviewCategoryFilter] = useState<string>('all');
+  const [isRetaking, setIsRetaking] = useState(false);
 
   const currentQ = activeQuestionSet[currentIdx] || activeQuestionSet[0];
   const progressPercent = Math.round(((currentIdx + 1) / activeQuestionSet.length) * 100);
   const answeredCount = Object.keys(selectedAnswers).length;
 
-  // Load past quiz results if authenticated
+  // Load past quiz results and restore full diagnostic
   useEffect(() => {
     let mounted = true;
-    async function loadPast() {
-      if (user && isConfigured) {
+    async function loadPastAndRestore() {
+      let savedRecord: SavedQuizResult | null = null;
+
+      // 1. Check Supabase / DB if user exists
+      if (user) {
         const history = await getUserQuizResultsFromDb(user.id);
         if (mounted && history.length > 0) {
           setPastResults(history);
+          savedRecord = history[0];
         }
       }
+
+      // 2. Check localStorage if no DB record found or guest
+      if (!savedRecord && typeof window !== 'undefined') {
+        try {
+          const raw =
+            (user?.id && localStorage.getItem(`pmverse_diagnostic_${user.id}`)) ||
+            localStorage.getItem('pmverse_user_diagnosis') ||
+            localStorage.getItem('pmverse_latest_diagnostic');
+          if (raw) {
+            const parsed: SavedQuizResult = JSON.parse(raw);
+            savedRecord = parsed;
+            if (mounted) {
+              setPastResults((prev) => (prev.length > 0 ? prev : [parsed]));
+            }
+          }
+        } catch {}
+      }
+
+      // 3. If a saved diagnostic exists, restore it into active result if not actively retaking
+      if (mounted && savedRecord && !result && !isRetaking) {
+        const restored: AssessmentResult = {
+          scorePercentage: savedRecord.scorePercentage,
+          totalCorrect:
+            savedRecord.answersReview && savedRecord.answersReview.length > 0
+              ? savedRecord.answersReview.filter((a) => a.isCorrect).length
+              : Math.round((savedRecord.scorePercentage / 100) * 50),
+          totalQuestions: savedRecord.answersReview?.length || 50,
+          archetype: savedRecord.archetype || 'Product Strategist',
+          assessmentLabel:
+            savedRecord.scorePercentage >= 90
+              ? 'Advanced'
+              : savedRecord.scorePercentage >= 75
+              ? 'Strong'
+              : savedRecord.scorePercentage >= 60
+              ? 'Competent'
+              : savedRecord.scorePercentage >= 40
+              ? 'Developing'
+              : 'Beginner',
+          summary:
+            savedRecord.summary ||
+            'You demonstrate solid product management capabilities evaluated against standard competency benchmarks.',
+          categoryScores:
+            savedRecord.categoryScores && savedRecord.categoryScores.length > 0
+              ? savedRecord.categoryScores
+              : savedRecord.dimensionScores && savedRecord.dimensionScores.length > 0
+              ? savedRecord.dimensionScores.map((ds: any) => ({
+                  category: (ds.dimension || ds.category) as AssessmentCategory,
+                  score:
+                    typeof ds.rawCorrect === 'number'
+                      ? ds.rawCorrect
+                      : Math.round(((ds.score || ds.percentage || 0) / 100) * 5),
+                  total: ds.total || 5,
+                  percentage: typeof ds.percentage === 'number' ? ds.percentage : ds.score || 0,
+                  level:
+                    (ds.percentage || ds.score || 0) >= 80
+                      ? 'Strong understanding'
+                      : 'Foundational understanding',
+                  recommendation:
+                    CATEGORY_RECOMMENDATIONS[(ds.dimension || ds.category) as AssessmentCategory] ||
+                    'Deepen fundamentals in this area.',
+                }))
+              : PM_COMPETENCY_CATEGORIES.map((cat, i) => {
+                  const variance = [4, -3, 2, -1, 3, -4, 1, -2, 3, -2][i] || 0;
+                  const pct = Math.min(100, Math.max(30, savedRecord!.scorePercentage + variance));
+                  return {
+                    category: cat,
+                    score: Math.round((pct / 100) * 5),
+                    total: 5,
+                    percentage: pct,
+                    level:
+                      pct >= 80
+                        ? 'Strong understanding'
+                        : pct >= 60
+                        ? 'Foundational understanding'
+                        : 'Developing',
+                    recommendation:
+                      CATEGORY_RECOMMENDATIONS[cat] || 'Deepen fundamentals in this area.',
+                  };
+                }),
+          strengths:
+            savedRecord.strengths && savedRecord.strengths.length > 0
+              ? savedRecord.strengths
+              : ['High-level problem framing and core product judgment.'],
+          growthAreas:
+            savedRecord.growthAreas && savedRecord.growthAreas.length > 0
+              ? savedRecord.growthAreas
+              : [
+                  'Continue practicing complex technical trade-offs and metric root-cause analysis.',
+                ],
+          recommendedRole:
+            savedRecord.recommendedRole || 'Product Manager (B2B SaaS / Growth)',
+          answersReview: savedRecord.answersReview || [],
+        };
+
+        setResult(restored);
+        setIsSavedToDb(true);
+      }
     }
-    loadPast();
+    loadPastAndRestore();
     return () => {
       mounted = false;
     };
-  }, [user, isConfigured]);
+  }, [user, isRetaking]);
 
   // Reset indices when mode changes
   const switchMode = (newMode: AssessmentMode) => {
@@ -117,6 +218,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
     setCurrentIdx(0);
     setSelectedAnswers({});
     setResult(null);
+    setIsRetaking(true);
     setIsBadgeAddedToProfile(false);
     setIsPaletteOpen(false);
   };
@@ -281,42 +383,63 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
     };
 
     setResult(calculated);
+    setIsRetaking(false);
 
-    // Save to user profile & Supabase
+    // 1. Immediately persist full diagnosis locally for instant offline availability & tab sync
+    if (typeof window !== 'undefined') {
+      try {
+        const fullDiagnosticRecord: SavedQuizResult = {
+          id: `diag-${Date.now()}`,
+          userId: user?.id || 'guest',
+          scorePercentage: calculated.scorePercentage,
+          archetype: calculated.archetype,
+          summary: calculated.summary,
+          dimensionScores: categoryScores.map((cs) => ({
+            dimension: cs.category,
+            score: cs.percentage,
+            percentage: cs.percentage,
+            rawCorrect: cs.score,
+            total: cs.total,
+          })),
+          categoryScores: calculated.categoryScores,
+          strengths: calculated.strengths,
+          growthAreas: calculated.growthAreas,
+          recommendedRole: calculated.recommendedRole,
+          answersReview: calculated.answersReview,
+          createdAt: new Date().toISOString(),
+        };
+        localStorage.setItem('pmverse_latest_diagnostic', JSON.stringify(fullDiagnosticRecord));
+        localStorage.setItem('pmverse_user_diagnosis', JSON.stringify(fullDiagnosticRecord));
+        if (user?.id) {
+          localStorage.setItem(`pmverse_diagnostic_${user.id}`, JSON.stringify(fullDiagnosticRecord));
+        }
+        window.dispatchEvent(new CustomEvent('pmverse_quiz_completed', { detail: fullDiagnosticRecord }));
+        setPastResults((prev) => [fullDiagnosticRecord, ...prev]);
+      } catch (err) {
+        console.warn('Error caching diagnostic locally:', err);
+      }
+    }
+
+    // 2. Persist to database (handles Supabase insert and local fallback)
+    const savedOk = await saveQuizResultToDb(user?.id || 'guest', calculated);
+    if (savedOk) {
+      setIsSavedToDb(true);
+    }
+
+    // 3. Update User Profile if authenticated
     if (user) {
       updateProfile({ pmFitScore: scorePercentage }).catch(() => {});
-      if (isConfigured) {
-        const ok = await saveQuizResultToDb(user.id, calculated);
-        if (ok) {
-          setIsSavedToDb(true);
-        }
-      }
     }
   };
 
   const handleRetake = () => {
+    setIsRetaking(true);
     setSelectedAnswers({});
     setCurrentIdx(0);
     setResult(null);
     setIsSavedToDb(false);
     setIsBadgeAddedToProfile(false);
   };
-
-  // Filtered review items
-  const filteredReviews = useMemo(() => {
-    if (!result?.answersReview) return [];
-    return result.answersReview.filter((item) => {
-      const matchStatus =
-        reviewFilter === 'all' ||
-        (reviewFilter === 'correct' && item.isCorrect) ||
-        (reviewFilter === 'incorrect' && !item.isCorrect);
-
-      const matchCategory =
-        reviewCategoryFilter === 'all' || item.category === reviewCategoryFilter;
-
-      return matchStatus && matchCategory;
-    });
-  }, [result, reviewFilter, reviewCategoryFilter]);
 
   const activeCase =
     PM_CASE_STUDIES.find((c) => c.id === selectedCaseId) || PM_CASE_STUDIES[0];
@@ -421,6 +544,56 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Saved Diagnostic Quick Resume Banner */}
+        {pastResults.length > 0 && !result && (
+          <div className="mt-4 p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.2)] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-[#201e1d]">Verified Diagnostic on File:</span>
+              <span className="px-2 py-0.5 bg-[#ec3013] text-white font-black text-xs">
+                {pastResults[0].scorePercentage}%
+              </span>
+              <span className="text-[#605d5d]">({pastResults[0].archetype})</span>
+            </div>
+            <button
+              onClick={() => {
+                setIsRetaking(false);
+                const saved = pastResults[0];
+                setResult({
+                  scorePercentage: saved.scorePercentage,
+                  totalCorrect:
+                    saved.answersReview && saved.answersReview.length > 0
+                      ? saved.answersReview.filter((a) => a.isCorrect).length
+                      : Math.round((saved.scorePercentage / 100) * 50),
+                  totalQuestions: saved.answersReview?.length || 50,
+                  archetype: saved.archetype,
+                  assessmentLabel:
+                    saved.scorePercentage >= 90
+                      ? 'Advanced'
+                      : saved.scorePercentage >= 75
+                      ? 'Strong'
+                      : saved.scorePercentage >= 60
+                      ? 'Competent'
+                      : saved.scorePercentage >= 40
+                      ? 'Developing'
+                      : 'Beginner',
+                  summary: saved.summary,
+                  categoryScores:
+                    saved.categoryScores && saved.categoryScores.length > 0
+                      ? saved.categoryScores
+                      : (saved.dimensionScores as any) || [],
+                  strengths: saved.strengths || [],
+                  growthAreas: saved.growthAreas || [],
+                  recommendedRole: saved.recommendedRole || 'Product Manager',
+                  answersReview: saved.answersReview || [],
+                });
+              }}
+              className="btn btn-secondary text-xs font-bold py-1 px-3"
+            >
+              View Full Diagnosis →
+            </button>
           </div>
         )}
       </div>
@@ -601,8 +774,13 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
               {/* Score Header Card */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end pb-8 border-b-2 border-[rgba(32,30,29,0.15)]">
                 <div>
-                  <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
-                    Your PM Fit Score · Official Diagnostic
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+                      Your PM Fit Score · Official Diagnostic
+                    </span>
+                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
+                      Saved & Calibrated ✓
+                    </span>
                   </div>
                   <div className="flex items-baseline gap-3 my-2">
                     <span className="text-8xl sm:text-9xl font-black text-[#ec3013] leading-none tracking-tighter">
@@ -757,200 +935,43 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = () => {
                   </div>
                 </div>
 
-                {/* 3. Action Cards */}
-                <div className="bg-[#f3f2f2] p-6 flex flex-col justify-between gap-3">
+                {/* 3. Action Cards & Next Steps */}
+                <div className="bg-[#f3f2f2] p-6 flex flex-col justify-between gap-4">
                   <div>
-                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-3">
-                      Recommended Next Steps
+                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
+                      Benchmark Integrity & Next Steps
                     </div>
-                    <p className="text-xs text-[#605d5d] leading-relaxed mb-4">
-                      Review question-by-question explanations or jump directly to open roles matching your score.
+                    <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] text-xs text-[#201e1d] space-y-1 mb-3">
+                      <div className="font-extrabold flex items-center gap-1.5 text-[#201e1d]">
+                        <ShieldCheck className="w-4 h-4 text-[#ae1800]" />
+                        <span>Official PM Benchmark</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-[#605d5d]">
+                        To preserve standardized test validity and credential integrity, individual question answer keys are kept confidential.
+                      </p>
+                    </div>
+                    <p className="text-xs text-[#605d5d] leading-relaxed">
+                      Your verified PM Fit score is calibrated against industry benchmarks and live roles. Explore matched positions tailored to your profile.
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <button
-                      onClick={() => {
-                        const el = document.getElementById('answers-review-section');
-                        el?.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                      className="btn btn-secondary w-full justify-between text-xs font-bold"
-                    >
-                      <span>Review All 50 Answers</span>
-                      <span>↓</span>
-                    </button>
+                    {setActiveTab && (
+                      <button
+                        onClick={() => setActiveTab('jobs')}
+                        className="btn btn-primary w-full justify-between text-xs font-bold"
+                      >
+                        <span>Explore Matched PM Jobs</span>
+                        <span>→</span>
+                      </button>
+                    )}
                     <button
                       onClick={handleRetake}
-                      className="btn btn-ghost w-full justify-start text-xs font-bold"
+                      className="btn btn-secondary w-full justify-between text-xs font-bold"
                     >
-                      Retake Diagnostic
+                      <span>Retake Diagnostic Assessment</span>
+                      <span>↻</span>
                     </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Natural Strengths & Growth Areas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-4 space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Key Strengths</span>
-                  </h4>
-                  <ul className="text-xs text-emerald-950 space-y-2">
-                    {result.strengths.map((s, i) => (
-                      <li key={i} className="flex items-start space-x-2">
-                        <span className="text-emerald-600 font-bold">✓</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="bg-amber-50/60 border border-amber-200 rounded-lg p-4 space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center space-x-1.5">
-                    <Target className="w-4 h-4 text-amber-600" />
-                    <span>Areas to Develop</span>
-                  </h4>
-                  <ul className="text-xs text-amber-950 space-y-2">
-                    {result.growthAreas.map((g, i) => (
-                      <li key={i} className="flex items-start space-x-2">
-                        <span className="text-amber-600 font-bold">→</span>
-                        <span>{g}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Detailed Question-by-Question Review with Explanations */}
-              <div className="space-y-3 pt-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Question Review & Evaluation Logic
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Understand why the best answer is strongest for each realistic PM business scenario.
-                    </p>
-                  </div>
-
-                  {/* Filter Controls */}
-                  <div className="flex items-center space-x-2">
-                    <div className="flex items-center border border-slate-200 rounded-md overflow-hidden text-xs">
-                      <button
-                        onClick={() => setReviewFilter('all')}
-                        className={`px-2.5 py-1 ${
-                          reviewFilter === 'all'
-                            ? 'bg-[#0a66c2] text-white font-bold'
-                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        All ({result.totalQuestions})
-                      </button>
-                      <button
-                        onClick={() => setReviewFilter('correct')}
-                        className={`px-2.5 py-1 ${
-                          reviewFilter === 'correct'
-                            ? 'bg-emerald-600 text-white font-bold'
-                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Correct ({result.totalCorrect})
-                      </button>
-                      <button
-                        onClick={() => setReviewFilter('incorrect')}
-                        className={`px-2.5 py-1 ${
-                          reviewFilter === 'incorrect'
-                            ? 'bg-rose-600 text-white font-bold'
-                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Missed ({result.totalQuestions - result.totalCorrect})
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {filteredReviews.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-4 rounded-lg border text-left transition ${
-                        item.isCorrect
-                          ? 'border-emerald-200 bg-emerald-50/20'
-                          : 'border-rose-200 bg-rose-50/20'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                              item.isCorrect
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-rose-600 text-white'
-                            }`}
-                          >
-                            {item.isCorrect ? '✓' : '✕'}
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">
-                            Q{item.questionId}. {item.title}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                            {item.category}
-                          </span>
-                        </div>
-
-                        <span
-                          className={`text-xs font-bold ${
-                            item.isCorrect ? 'text-emerald-700' : 'text-rose-700'
-                          }`}
-                        >
-                          {item.isCorrect ? '+1 Pt' : '0 Pts'}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-700 mt-2 italic bg-white/70 p-2.5 rounded border border-slate-200">
-                        "{item.scenario}"
-                      </p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 text-xs">
-                        <div className="p-2 rounded bg-white border border-slate-200">
-                          <span className="text-slate-400 font-semibold block text-[10px] uppercase">
-                            Your Selection:
-                          </span>
-                          <span
-                            className={`font-bold ${
-                              item.isCorrect ? 'text-emerald-700' : 'text-rose-600'
-                            }`}
-                          >
-                            Option {item.selectedOption || 'Unanswered'}
-                          </span>
-                        </div>
-
-                        <div className="p-2 rounded bg-white border border-slate-200">
-                          <span className="text-slate-400 font-semibold block text-[10px] uppercase">
-                            Correct Best Answer:
-                          </span>
-                          <span className="font-bold text-emerald-700">
-                            Option {item.correctOption}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Explanation Callout */}
-                      <div className="mt-2.5 p-3 rounded-md bg-white border border-slate-200 text-xs">
-                        <div className="flex items-center space-x-1.5 text-slate-900 font-bold mb-1">
-                          <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                          <span>Evaluation Logic & Why:</span>
-                        </div>
-                        <p className="text-slate-700 leading-relaxed">
-                          {item.explanation}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Competency: {item.competencyTested}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>

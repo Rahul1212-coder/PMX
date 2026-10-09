@@ -71,7 +71,7 @@ export default function Page() {
 
         {/* TAB 3: PM Fit Competency Assessment */}
         {(activeTab === 'assess' || (activeTab as any) === 'assessment') && (
-          <AssessmentQuiz />
+          <AssessmentQuiz setActiveTab={setActiveTab} />
         )}
 
         {/* TAB 4: Jobs Board & Tracker */}
@@ -80,6 +80,7 @@ export default function Page() {
             initialJobs={INITIAL_JOBS}
             initialActiveSubTab={activeTab === 'tracker' ? 'tracker' : 'browse'}
             onNavigateToMentor={(prompt) => handleAskMentor(prompt, 'coach')}
+            onNavigateToAssessment={() => setActiveTab('assess')}
           />
         )}
 

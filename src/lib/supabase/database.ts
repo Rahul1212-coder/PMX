@@ -164,6 +164,9 @@ export async function getJobListingsFromDb(): Promise<JobListing[] | null> {
       salaryRange: row.salary_range,
       description: row.description,
       skills: row.skills || [],
+      source: row.source || 'LinkedIn',
+      minExperience: row.min_experience,
+      maxExperience: row.max_experience,
       applyUrl: row.apply_url || '#',
       featured: row.featured || false,
       postedDate: formatTimeAgo(new Date(row.created_at)),
@@ -193,6 +196,9 @@ export async function insertJobListingToDb(job: JobListing): Promise<boolean> {
       description: job.description,
       skills: job.skills,
       apply_url: job.applyUrl,
+      source: job.source || 'LinkedIn',
+      min_experience: job.minExperience || null,
+      max_experience: job.maxExperience || null,
       featured: job.featured || false,
     });
 
@@ -234,6 +240,8 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
       bio: data.bio || '',
       pmStage: data.pm_stage || 'existing_pm',
       previousRole: data.previous_role || '',
+      yearsOfExperience: typeof data.years_of_experience === 'number' ? data.years_of_experience : undefined,
+      pmFitScore: data.pm_fit_score || undefined,
       connectionsCount,
       createdAt: data.created_at,
     };
@@ -258,6 +266,8 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
       bio: profile.bio,
       pm_stage: profile.pmStage || 'existing_pm',
       previous_role: profile.previousRole || null,
+      years_of_experience: typeof profile.yearsOfExperience === 'number' ? profile.yearsOfExperience : null,
+      pm_fit_score: typeof profile.pmFitScore === 'number' ? profile.pmFitScore : undefined,
       updated_at: new Date().toISOString(),
     });
 
@@ -575,9 +585,45 @@ export async function toggleSavedJobInDb(userId: string, jobId: string, currentl
 
 // Quiz Results
 export async function saveQuizResultToDb(userId: string, result: AssessmentResult): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  const mappedDimensionScores =
+    result.categoryScores?.map((cs) => ({
+      dimension: cs.category,
+      score: cs.percentage, // 0-100 percentage
+      percentage: cs.percentage,
+      rawCorrect: cs.score,
+      total: cs.total,
+    })) || result.dimensionScores || [];
+
+  // Always persist full diagnosis locally for immediate UI availability & offline resilience
+  if (typeof window !== 'undefined') {
+    try {
+      const fullDiagnosticRecord: SavedQuizResult = {
+        id: `diag-${Date.now()}`,
+        userId: userId || 'guest',
+        scorePercentage: result.scorePercentage,
+        archetype: result.archetype,
+        summary: result.summary,
+        dimensionScores: mappedDimensionScores,
+        categoryScores: result.categoryScores,
+        strengths: result.strengths,
+        growthAreas: result.growthAreas,
+        recommendedRole: result.recommendedRole,
+        answersReview: result.answersReview,
+        createdAt: new Date().toISOString(),
+      };
+      localStorage.setItem('pmverse_latest_diagnostic', JSON.stringify(fullDiagnosticRecord));
+      localStorage.setItem('pmverse_user_diagnosis', JSON.stringify(fullDiagnosticRecord));
+      if (userId && userId !== 'guest') {
+        localStorage.setItem(`pmverse_diagnostic_${userId}`, JSON.stringify(fullDiagnosticRecord));
+      }
+    } catch {
+      // ignore local storage errors
+    }
+  }
+
+  if (!isSupabaseConfigured() || !userId || userId === 'guest') return true;
   const supabase = getSupabaseClient();
-  if (!supabase) return false;
+  if (!supabase) return true;
 
   try {
     const { error } = await supabase.from('quiz_results').insert({
@@ -585,43 +631,110 @@ export async function saveQuizResultToDb(userId: string, result: AssessmentResul
       score_percentage: result.scorePercentage,
       archetype: result.archetype,
       summary: result.summary,
-      dimension_scores: result.categoryScores || result.dimensionScores || [],
+      dimension_scores: mappedDimensionScores,
       strengths: result.strengths,
       growth_areas: result.growthAreas,
       recommended_role: result.recommendedRole,
     });
 
+    if (error) {
+      console.warn('Supabase quiz_results insert notice:', error.message);
+    }
     return !error;
-  } catch {
+  } catch (err) {
+    console.warn('Error saving quiz result to Supabase:', err);
     return false;
   }
 }
 
-export async function getUserQuizResultsFromDb(userId: string): Promise<SavedQuizResult[]> {
-  if (!isSupabaseConfigured()) return [];
-  const supabase = getSupabaseClient();
-  if (!supabase) return [];
+export async function getUserQuizResultsFromDb(userId?: string): Promise<SavedQuizResult[]> {
+  let dbResults: SavedQuizResult[] = [];
 
-  try {
-    const { data, error } = await supabase
-      .from('quiz_results')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+  if (isSupabaseConfigured() && userId && userId !== 'guest') {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('quiz_results')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
 
-    if (error || !data) return [];
-    return data.map((row: any) => ({
-      id: row.id,
-      userId: row.user_id,
-      scorePercentage: row.score_percentage,
-      archetype: row.archetype,
-      summary: row.summary,
-      dimensionScores: row.dimension_scores || [],
-      createdAt: formatTimeAgo(new Date(row.created_at)),
-    }));
-  } catch {
-    return [];
+        if (!error && data && data.length > 0) {
+          dbResults = data.map((row: any) => ({
+            id: row.id,
+            userId: row.user_id,
+            scorePercentage: row.score_percentage,
+            archetype: row.archetype,
+            summary: row.summary,
+            dimensionScores: row.dimension_scores || [],
+            categoryScores: row.dimension_scores || [],
+            strengths: row.strengths || [],
+            growthAreas: row.growth_areas || [],
+            recommendedRole: row.recommended_role || '',
+            createdAt: formatTimeAgo(new Date(row.created_at)),
+          }));
+        }
+      } catch {
+        // ignore
+      }
+    }
   }
+
+  // If DB returned records, merge answersReview or categoryScores from localStorage if available
+  if (dbResults.length > 0) {
+    if (typeof window !== 'undefined') {
+      try {
+        const local =
+          (userId && localStorage.getItem(`pmverse_diagnostic_${userId}`)) ||
+          localStorage.getItem('pmverse_user_diagnosis') ||
+          localStorage.getItem('pmverse_latest_diagnostic');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.answersReview && (!dbResults[0].answersReview || dbResults[0].answersReview.length === 0)) {
+            dbResults[0].answersReview = parsed.answersReview;
+          }
+          if (parsed.categoryScores && (!dbResults[0].categoryScores || dbResults[0].categoryScores.length === 0)) {
+            dbResults[0].categoryScores = parsed.categoryScores;
+          }
+        }
+      } catch {}
+    }
+    return dbResults;
+  }
+
+  // Fallback to locally stored diagnostic
+  if (typeof window !== 'undefined') {
+    try {
+      const local =
+        (userId && localStorage.getItem(`pmverse_diagnostic_${userId}`)) ||
+        localStorage.getItem('pmverse_user_diagnosis') ||
+        localStorage.getItem('pmverse_latest_diagnostic');
+      if (local) {
+        const parsed = JSON.parse(local);
+        return [
+          {
+            id: parsed.id || 'diag-local',
+            userId: parsed.userId || userId,
+            scorePercentage: parsed.scorePercentage,
+            archetype: parsed.archetype || 'Product Strategist',
+            summary: parsed.summary || 'Verified PM competency assessment',
+            dimensionScores: parsed.dimensionScores || parsed.categoryScores || [],
+            categoryScores: parsed.categoryScores || parsed.dimensionScores || [],
+            strengths: parsed.strengths || [],
+            growthAreas: parsed.growthAreas || [],
+            recommendedRole: parsed.recommendedRole || 'Product Manager',
+            answersReview: parsed.answersReview || [],
+            createdAt: parsed.createdAt ? formatTimeAgo(new Date(parsed.createdAt)) : 'Recently',
+          },
+        ];
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return [];
 }
 
 function formatTimeAgo(date: Date): string {

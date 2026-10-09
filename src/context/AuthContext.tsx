@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { getUserProfileFromDb, upsertUserProfileInDb } from '@/lib/supabase/database';
+import { getUserProfileFromDb, upsertUserProfileInDb, saveQuizResultToDb } from '@/lib/supabase/database';
 import { UserProfile, PmStage } from '@/types';
 
 interface AuthContextType {
@@ -29,6 +29,7 @@ interface AuthContextType {
       company: string;
       pmStage?: PmStage;
       previousRole?: string;
+      yearsOfExperience?: number;
     }
   ) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
@@ -83,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(dbProfile);
       } else {
         // Fallback profile from user metadata - NO dummy Unsplash avatar!
+        const metaYears = supabaseUser.user_metadata?.years_of_experience;
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
@@ -92,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarUrl: metaAvatar,
           pmStage: metaStage,
           previousRole: metaPrev,
+          yearsOfExperience: typeof metaYears === 'number' ? metaYears : undefined,
         };
         setProfile(fallbackProfile);
         upsertUserProfileInDb(fallbackProfile).catch(() => {});
@@ -219,9 +222,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       company: string;
       pmStage?: PmStage;
       previousRole?: string;
+      yearsOfExperience?: number;
     }
   ) => {
     if (!configured) {
+      let localDiagScore: number | undefined = undefined;
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('pmverse_latest_diagnostic');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.scorePercentage === 'number') {
+              localDiagScore = parsed.scorePercentage;
+            }
+          }
+        } catch {}
+      }
+
       const cleanProfile: UserProfile = {
         id: `user-${Date.now()}`,
         email,
@@ -230,6 +247,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         company: meta.company.trim() || 'Independent PM',
         pmStage: meta.pmStage || 'existing_pm',
         previousRole: meta.previousRole || '',
+        yearsOfExperience: meta.yearsOfExperience,
+        pmFitScore: localDiagScore,
         avatarUrl: '',
         connectionsCount: 0,
         profileViews: 0,
@@ -239,6 +258,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(cleanProfile);
       if (typeof window !== 'undefined') {
         localStorage.setItem('pmverse_user', JSON.stringify(cleanProfile));
+        if (localDiagScore !== undefined) {
+          localStorage.setItem(`pmverse_diagnostic_${cleanProfile.id}`, localStorage.getItem('pmverse_latest_diagnostic') || '');
+        }
       }
       closeAuthModal();
       return { message: 'Account created and signed in successfully!' };
@@ -258,6 +280,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             company: meta.company,
             pm_stage: meta.pmStage || 'existing_pm',
             previous_role: meta.previousRole || '',
+            years_of_experience: meta.yearsOfExperience ?? null,
           },
         },
       });
@@ -273,6 +296,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
+        let cachedScore: number | undefined = undefined;
+        if (typeof window !== 'undefined') {
+          try {
+            const rawDiag = localStorage.getItem('pmverse_latest_diagnostic');
+            if (rawDiag) {
+              const parsed = JSON.parse(rawDiag);
+              if (typeof parsed.scorePercentage === 'number') {
+                cachedScore = parsed.scorePercentage;
+                localStorage.setItem(`pmverse_diagnostic_${data.user.id}`, rawDiag);
+                saveQuizResultToDb(data.user.id, parsed).catch(() => {});
+              }
+            }
+          } catch {}
+        }
+
         const initialProfile: UserProfile = {
           id: data.user.id,
           email: data.user.email || email,
@@ -281,6 +319,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           company: meta.company.trim() || 'Independent PM',
           pmStage: meta.pmStage || 'existing_pm',
           previousRole: meta.previousRole || '',
+          yearsOfExperience: meta.yearsOfExperience,
+          pmFitScore: cachedScore,
           avatarUrl: '',
           connectionsCount: 0,
           profileViews: 0,
