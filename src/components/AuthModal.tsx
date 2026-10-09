@@ -199,14 +199,39 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
-          {successMessage && (
-            <div className="flex items-start space-x-2 bg-emerald-50 text-emerald-900 border border-emerald-300 p-3 text-xs font-semibold">
-              <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
-              <span>{successMessage}</span>
+          {successMessage ? (
+            <div className="py-6 px-4 text-center space-y-4 bg-white border-2 border-[#201e1d]">
+              <div className="w-12 h-12 bg-[#fdf3f2] border-2 border-[#ec3013] text-[#ec3013] flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-[#201e1d]">Check Your Inbox!</h3>
+                <p className="text-xs text-[#605d5d] mt-1.5 leading-relaxed max-w-sm mx-auto">
+                  {successMessage}
+                </p>
+              </div>
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    openAuthModal('signin');
+                    setSuccessMessage(null);
+                  }}
+                  className="btn btn-primary text-xs font-bold w-full"
+                >
+                  Proceed to Sign In →
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAuthModal}
+                  className="btn btn-secondary text-xs font-bold w-full"
+                >
+                  Close
+                </button>
+              </div>
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3">
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
             {authModalTab === 'signup' && (
               <>
                 {/* 1. Journey Stage Question */}
@@ -483,6 +508,7 @@ export const AuthModal: React.FC = () => {
               )}
             </button>
           </form>
+          )}
 
           {!isConfigured && (
             <div className="pt-2 border-t border-[rgba(32,30,29,0.15)] text-center">

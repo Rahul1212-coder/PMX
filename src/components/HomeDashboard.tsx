@@ -241,7 +241,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             )}
           </div>
           <button
-            onClick={() => setActiveTab('assess')}
+            onClick={() => {
+              if (typeof window !== 'undefined' && hasTakenTest) {
+                window.dispatchEvent(new CustomEvent('pmverse_navigate_diagnostic'));
+              }
+              setActiveTab('assess');
+            }}
             className="btn btn-secondary w-full justify-between mt-4 text-xs font-bold"
           >
             <span>{hasTakenTest ? 'View full diagnostic' : 'Start Competency Diagnostic'}</span>

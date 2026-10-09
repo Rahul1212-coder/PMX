@@ -52,13 +52,148 @@ interface AssessmentQuizProps {
   setActiveTab?: (tab: any) => void;
 }
 
-type AssessmentMode = 'full_50' | 'rapid_10' | 'category_focus' | 'case_studies';
+type AssessmentMode = 'diagnostic' | 'full_50' | 'rapid_10' | 'category_focus' | 'case_studies';
+
+function getArchetypeForScore(score: number): string {
+  if (score >= 90) return 'High-Agency Product Leader';
+  if (score >= 75) return 'Strategic Product Builder';
+  if (score >= 60) return 'Product Specialist';
+  if (score >= 40) return 'Emerging Product Builder';
+  return 'Aspiring Product Explorer';
+}
+
+function getLabelForScore(score: number): AssessmentResult['assessmentLabel'] {
+  if (score >= 90) return 'Advanced';
+  if (score >= 75) return 'Strong';
+  if (score >= 60) return 'Competent';
+  if (score >= 40) return 'Developing';
+  return 'Beginner';
+}
+
+function getRecommendedRoleForScore(score: number): string {
+  if (score >= 90) return 'Lead / Principal Product Manager or Group PM';
+  if (score >= 75) return 'Senior Product Manager';
+  if (score >= 60) return 'Product Manager (Feature / Growth Squad)';
+  if (score >= 40) return 'Associate PM / Product Analyst';
+  return 'Associate PM Intern / Product Operations';
+}
+
+function getSummaryForScore(score: number): string {
+  if (score >= 90)
+    return 'Exceptional product judgment! You excel at ruthless prioritization, risk mitigation, data analysis, and cross-functional leadership under high uncertainty.';
+  if (score >= 75)
+    return 'Strong, mature product instincts! You balance commercial goals with engineering realities and make sound evidence-based trade-offs.';
+  if (score >= 60)
+    return 'Good working foundation across core PM competencies. With focused practice in root cause analysis and technical trade-offs, you will excel.';
+  if (score >= 40)
+    return 'You understand essential concepts but show occasional inconsistency in navigating ambiguous edge-cases and stakeholder trade-offs.';
+  return 'Foundational PM concepts need development. Focus on problem discovery, metric literacy, and separating symptoms from root causes.';
+}
+
+function buildAssessmentResultFromRecord(saved: any): AssessmentResult {
+  const score = typeof saved.scorePercentage === 'number' ? saved.scorePercentage : 75;
+  const archetype = saved.archetype || getArchetypeForScore(score);
+  const summary = saved.summary || getSummaryForScore(score);
+  const assessmentLabel = getLabelForScore(score);
+
+  let categoryScores: CategoryScore[] = [];
+  if (Array.isArray(saved.categoryScores) && saved.categoryScores.length > 0) {
+    categoryScores = saved.categoryScores.map((cs: any) => ({
+      category: cs.category || cs.dimension,
+      score: typeof cs.score === 'number' && cs.total ? cs.score : Math.round(((cs.percentage || cs.score || score) / 100) * 5),
+      total: cs.total || 5,
+      percentage: typeof cs.percentage === 'number' ? cs.percentage : cs.score || score,
+      level: (cs.percentage || cs.score || score) >= 80 ? 'Strong understanding' : 'Foundational understanding',
+      recommendation: CATEGORY_RECOMMENDATIONS[cs.category as AssessmentCategory] || 'Deepen fundamentals in this area.',
+    }));
+  } else if (Array.isArray(saved.dimensionScores) && saved.dimensionScores.length > 0) {
+    categoryScores = saved.dimensionScores.map((ds: any) => ({
+      category: (ds.dimension || ds.category) as AssessmentCategory,
+      score: typeof ds.rawCorrect === 'number' ? ds.rawCorrect : Math.round(((ds.percentage || ds.score || score) / 100) * 5),
+      total: ds.total || 5,
+      percentage: typeof ds.percentage === 'number' ? ds.percentage : ds.score || score,
+      level: (ds.percentage || ds.score || score) >= 80 ? 'Strong understanding' : 'Foundational understanding',
+      recommendation: CATEGORY_RECOMMENDATIONS[(ds.dimension || ds.category) as AssessmentCategory] || 'Deepen fundamentals in this area.',
+    }));
+  } else {
+    categoryScores = PM_COMPETENCY_CATEGORIES.map((cat, i) => {
+      const variance = [4, -3, 2, -1, 3, -4, 1, -2, 3, -2][i] || 0;
+      const pct = Math.min(100, Math.max(30, score + variance));
+      return {
+        category: cat,
+        score: Math.round((pct / 100) * 5),
+        total: 5,
+        percentage: pct,
+        level: pct >= 80 ? 'Strong understanding' : pct >= 60 ? 'Foundational understanding' : 'Developing',
+        recommendation: CATEGORY_RECOMMENDATIONS[cat] || 'Deepen fundamentals in this area.',
+      };
+    });
+  }
+
+  const sorted = [...categoryScores].sort((a, b) => b.percentage - a.percentage);
+  const strengths =
+    Array.isArray(saved.strengths) && saved.strengths.length > 0
+      ? saved.strengths
+      : sorted.slice(0, 3).map((c) => `${c.category}: ${c.level} (${c.percentage}%)`);
+
+  const growthAreas =
+    Array.isArray(saved.growthAreas) && saved.growthAreas.length > 0
+      ? saved.growthAreas
+      : sorted.slice(-3).reverse().map((c) => `${c.category}: ${c.recommendation}`);
+
+  return {
+    scorePercentage: score,
+    totalCorrect: saved.totalCorrect || Math.round((score / 100) * 50),
+    totalQuestions: saved.totalQuestions || 50,
+    archetype,
+    assessmentLabel,
+    summary,
+    categoryScores,
+    strengths,
+    growthAreas,
+    recommendedRole: saved.recommendedRole || getRecommendedRoleForScore(score),
+  };
+}
 
 export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) => {
   const { user, profile, updateProfile, openAuthModal, isConfigured } = useAuth();
 
-  // Mode & configuration
-  const [mode, setMode] = useState<AssessmentMode>('full_50');
+  // Initialize diagnostic synchronously from localStorage so there is zero delay or question flicker
+  const [result, setResult] = useState<AssessmentResult | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw =
+          localStorage.getItem('pmverse_user_diagnosis') ||
+          localStorage.getItem('pmverse_latest_diagnostic');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.scorePercentage === 'number') {
+            return buildAssessmentResultFromRecord(parsed);
+          }
+        }
+      } catch {}
+    }
+    return null;
+  });
+
+  // Default mode: if user already has a saved diagnostic or profile score, show 'diagnostic' all the time!
+  const [mode, setMode] = useState<AssessmentMode>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw =
+          localStorage.getItem('pmverse_user_diagnosis') ||
+          localStorage.getItem('pmverse_latest_diagnostic');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.scorePercentage === 'number') {
+            return 'diagnostic';
+          }
+        }
+      } catch {}
+    }
+    return 'full_50';
+  });
+
   const [selectedFocusCategory, setSelectedFocusCategory] = useState<AssessmentCategory>(
     'Product Thinking'
   );
@@ -68,7 +203,6 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
   // Active question set based on mode
   const activeQuestionSet = useMemo(() => {
     if (mode === 'rapid_10') {
-      // Pick question 1 of each of the 10 categories (e.g. Q1, Q6, Q11, Q16, Q21, Q26, Q31, Q36, Q41, Q46)
       return PM_COMPETENCY_CATEGORIES.map((cat) => {
         return PM_ASSESSMENT_QUESTIONS.find((q) => q.category === cat) || PM_ASSESSMENT_QUESTIONS[0];
       });
@@ -76,23 +210,35 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
     if (mode === 'category_focus') {
       return PM_ASSESSMENT_QUESTIONS.filter((q) => q.category === selectedFocusCategory);
     }
-    // Default full 50
     return PM_ASSESSMENT_QUESTIONS;
   }, [mode, selectedFocusCategory]);
 
   // Quiz state
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, 'A' | 'B' | 'C' | 'D'>>({});
-  const [result, setResult] = useState<AssessmentResult | null>(null);
   const [isSavedToDb, setIsSavedToDb] = useState(false);
   const [isBadgeAddedToProfile, setIsBadgeAddedToProfile] = useState(false);
   const [pastResults, setPastResults] = useState<SavedQuizResult[]>([]);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-  const [isRetaking, setIsRetaking] = useState(false);
 
   const currentQ = activeQuestionSet[currentIdx] || activeQuestionSet[0];
   const progressPercent = Math.round(((currentIdx + 1) / activeQuestionSet.length) * 100);
   const answeredCount = Object.keys(selectedAnswers).length;
+
+  // Listen for navigation event from Dashboard or elsewhere
+  useEffect(() => {
+    const handleNavToDiagnostic = () => {
+      setMode('diagnostic');
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pmverse_navigate_diagnostic', handleNavToDiagnostic);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pmverse_navigate_diagnostic', handleNavToDiagnostic);
+      }
+    };
+  }, []);
 
   // Load past quiz results and restore full diagnostic
   useEffect(() => {
@@ -126,99 +272,40 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
         } catch {}
       }
 
-      // 3. If a saved diagnostic exists, restore it into active result if not actively retaking
-      if (mounted && savedRecord && !result && !isRetaking) {
-        const restored: AssessmentResult = {
-          scorePercentage: savedRecord.scorePercentage,
-          totalCorrect:
-            savedRecord.answersReview && savedRecord.answersReview.length > 0
-              ? savedRecord.answersReview.filter((a) => a.isCorrect).length
-              : Math.round((savedRecord.scorePercentage / 100) * 50),
-          totalQuestions: savedRecord.answersReview?.length || 50,
-          archetype: savedRecord.archetype || 'Product Strategist',
-          assessmentLabel:
-            savedRecord.scorePercentage >= 90
-              ? 'Advanced'
-              : savedRecord.scorePercentage >= 75
-              ? 'Strong'
-              : savedRecord.scorePercentage >= 60
-              ? 'Competent'
-              : savedRecord.scorePercentage >= 40
-              ? 'Developing'
-              : 'Beginner',
-          summary:
-            savedRecord.summary ||
-            'You demonstrate solid product management capabilities evaluated against standard competency benchmarks.',
-          categoryScores:
-            savedRecord.categoryScores && savedRecord.categoryScores.length > 0
-              ? savedRecord.categoryScores
-              : savedRecord.dimensionScores && savedRecord.dimensionScores.length > 0
-              ? savedRecord.dimensionScores.map((ds: any) => ({
-                  category: (ds.dimension || ds.category) as AssessmentCategory,
-                  score:
-                    typeof ds.rawCorrect === 'number'
-                      ? ds.rawCorrect
-                      : Math.round(((ds.score || ds.percentage || 0) / 100) * 5),
-                  total: ds.total || 5,
-                  percentage: typeof ds.percentage === 'number' ? ds.percentage : ds.score || 0,
-                  level:
-                    (ds.percentage || ds.score || 0) >= 80
-                      ? 'Strong understanding'
-                      : 'Foundational understanding',
-                  recommendation:
-                    CATEGORY_RECOMMENDATIONS[(ds.dimension || ds.category) as AssessmentCategory] ||
-                    'Deepen fundamentals in this area.',
-                }))
-              : PM_COMPETENCY_CATEGORIES.map((cat, i) => {
-                  const variance = [4, -3, 2, -1, 3, -4, 1, -2, 3, -2][i] || 0;
-                  const pct = Math.min(100, Math.max(30, savedRecord!.scorePercentage + variance));
-                  return {
-                    category: cat,
-                    score: Math.round((pct / 100) * 5),
-                    total: 5,
-                    percentage: pct,
-                    level:
-                      pct >= 80
-                        ? 'Strong understanding'
-                        : pct >= 60
-                        ? 'Foundational understanding'
-                        : 'Developing',
-                    recommendation:
-                      CATEGORY_RECOMMENDATIONS[cat] || 'Deepen fundamentals in this area.',
-                  };
-                }),
-          strengths:
-            savedRecord.strengths && savedRecord.strengths.length > 0
-              ? savedRecord.strengths
-              : ['High-level problem framing and core product judgment.'],
-          growthAreas:
-            savedRecord.growthAreas && savedRecord.growthAreas.length > 0
-              ? savedRecord.growthAreas
-              : [
-                  'Continue practicing complex technical trade-offs and metric root-cause analysis.',
-                ],
-          recommendedRole:
-            savedRecord.recommendedRole || 'Product Manager (B2B SaaS / Growth)',
-          answersReview: savedRecord.answersReview || [],
+      // 3. Fallback: if user profile has verified pmFitScore
+      if (!savedRecord && profile?.pmFitScore) {
+        savedRecord = {
+          id: 'profile-score',
+          scorePercentage: profile.pmFitScore,
+          archetype: getArchetypeForScore(profile.pmFitScore),
+          summary: getSummaryForScore(profile.pmFitScore),
+          dimensionScores: [],
+          createdAt: 'Recently',
         };
+      }
 
-        setResult(restored);
+      // 4. Update result state & ensure diagnostic mode is active
+      if (mounted && savedRecord) {
+        const built = buildAssessmentResultFromRecord(savedRecord);
+        setResult(built);
         setIsSavedToDb(true);
+        // If on initial landing, show diagnosis all the time
+        if (mode === 'full_50' && Object.keys(selectedAnswers).length === 0) {
+          setMode('diagnostic');
+        }
       }
     }
     loadPastAndRestore();
     return () => {
       mounted = false;
     };
-  }, [user, isRetaking]);
+  }, [user, profile?.pmFitScore]);
 
-  // Reset indices when mode changes
+  // Switch mode without losing verified diagnosis
   const switchMode = (newMode: AssessmentMode) => {
     setMode(newMode);
     setCurrentIdx(0);
     setSelectedAnswers({});
-    setResult(null);
-    setIsRetaking(true);
     setIsBadgeAddedToProfile(false);
     setIsPaletteOpen(false);
   };
@@ -383,7 +470,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
     };
 
     setResult(calculated);
-    setIsRetaking(false);
+    setMode('diagnostic');
 
     // 1. Immediately persist full diagnosis locally for instant offline availability & tab sync
     if (typeof window !== 'undefined') {
@@ -433,10 +520,9 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
   };
 
   const handleRetake = () => {
-    setIsRetaking(true);
     setSelectedAnswers({});
     setCurrentIdx(0);
-    setResult(null);
+    setMode('full_50');
     setIsSavedToDb(false);
     setIsBadgeAddedToProfile(false);
   };
@@ -479,6 +565,19 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
 
         {/* Mode Selector Tabs (Modernist Segmented) */}
         <div className="flex flex-wrap border-2 border-[rgba(32,30,29,0.15)] mt-4 text-xs font-bold">
+          {(result || profile?.pmFitScore || pastResults.length > 0) && (
+            <button
+              onClick={() => switchMode('diagnostic')}
+              className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
+                mode === 'diagnostic'
+                  ? 'bg-[#201e1d] text-[#f3f2f2]'
+                  : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
+              }`}
+            >
+              Verified Diagnosis ({result?.scorePercentage ?? profile?.pmFitScore ?? pastResults[0]?.scorePercentage}%)
+            </button>
+          )}
+
           <button
             onClick={() => switchMode('full_50')}
             className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
@@ -548,51 +647,22 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
         )}
 
         {/* Saved Diagnostic Quick Resume Banner */}
-        {pastResults.length > 0 && !result && (
+        {mode !== 'diagnostic' && (result || pastResults.length > 0) && (
           <div className="mt-4 p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.2)] flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-[#201e1d]">Verified Diagnostic on File:</span>
               <span className="px-2 py-0.5 bg-[#ec3013] text-white font-black text-xs">
-                {pastResults[0].scorePercentage}%
+                {result?.scorePercentage ?? pastResults[0]?.scorePercentage}%
               </span>
-              <span className="text-[#605d5d]">({pastResults[0].archetype})</span>
+              <span className="text-[#605d5d]">({result?.archetype ?? pastResults[0]?.archetype})</span>
             </div>
             <button
               onClick={() => {
-                setIsRetaking(false);
-                const saved = pastResults[0];
-                setResult({
-                  scorePercentage: saved.scorePercentage,
-                  totalCorrect:
-                    saved.answersReview && saved.answersReview.length > 0
-                      ? saved.answersReview.filter((a) => a.isCorrect).length
-                      : Math.round((saved.scorePercentage / 100) * 50),
-                  totalQuestions: saved.answersReview?.length || 50,
-                  archetype: saved.archetype,
-                  assessmentLabel:
-                    saved.scorePercentage >= 90
-                      ? 'Advanced'
-                      : saved.scorePercentage >= 75
-                      ? 'Strong'
-                      : saved.scorePercentage >= 60
-                      ? 'Competent'
-                      : saved.scorePercentage >= 40
-                      ? 'Developing'
-                      : 'Beginner',
-                  summary: saved.summary,
-                  categoryScores:
-                    saved.categoryScores && saved.categoryScores.length > 0
-                      ? saved.categoryScores
-                      : (saved.dimensionScores as any) || [],
-                  strengths: saved.strengths || [],
-                  growthAreas: saved.growthAreas || [],
-                  recommendedRole: saved.recommendedRole || 'Product Manager',
-                  answersReview: saved.answersReview || [],
-                });
+                setMode('diagnostic');
               }}
               className="btn btn-secondary text-xs font-bold py-1 px-3"
             >
-              View Full Diagnosis →
+              View Verified Diagnosis →
             </button>
           </div>
         )}
@@ -603,7 +673,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
          ======================================================== */}
       {mode !== 'case_studies' && (
         <>
-          {!result ? (
+          {mode !== 'diagnostic' || !result ? (
             /* Active Question Card */            <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6 space-y-5">
               {/* Top Progress & Stats */}
               <div>
