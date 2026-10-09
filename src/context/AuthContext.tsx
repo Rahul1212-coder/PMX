@@ -274,6 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
         options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
           data: {
             full_name: meta.fullName,
             role: meta.role,
