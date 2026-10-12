@@ -190,6 +190,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ activeTab, setActive
           <span>•</span>
           <span className="hover:text-[#0a66c2] hover:underline cursor-pointer">Help Center</span>
           <span>•</span>
+          <a
+            href="https://discord.gg/S29SKDcWe"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#5865F2] hover:underline font-semibold"
+          >
+            Discord
+          </a>
+          <span>•</span>
           <span className="hover:text-[#0a66c2] hover:underline cursor-pointer">Privacy & Terms</span>
         </div>
         <div className="flex flex-wrap justify-center gap-x-2.5 gap-y-1">
