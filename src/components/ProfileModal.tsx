@@ -70,7 +70,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 400;
+          const MAX_SIZE = 256;
           let width = img.width;
           let height = img.height;
 
@@ -91,7 +91,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
             setAvatarUrl(compressedBase64);
             setStatusMessage({ type: 'success', text: 'Profile photo selected.' });
           }

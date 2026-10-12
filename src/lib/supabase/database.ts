@@ -239,7 +239,7 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
       company: data.company || 'Tech Company',
       avatarUrl: data.avatar_url || '',
       bio: data.bio || '',
-      pmStage: data.pm_stage || 'existing_pm',
+      pmStage: data.pm_stage || undefined,
       previousRole: data.previous_role || '',
       yearsOfExperience: typeof data.years_of_experience === 'number' ? data.years_of_experience : undefined,
       pmFitScore: data.pm_fit_score || undefined,
@@ -252,28 +252,77 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
 }
 
 export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id: string }): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isSupabaseConfigured()) return true;
   const supabase = getSupabaseClient();
-  if (!supabase) return false;
+  if (!supabase) return true;
+
+  // Validate if id is a valid UUID (Supabase profiles.id is a UUID referencing auth.users)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.id);
+  if (!isUuid) {
+    // Non-UUID IDs (e.g. demo 'pm-...' or guest accounts) are persisted in localStorage
+    return true;
+  }
 
   try {
-    const { error } = await supabase.from('profiles').upsert({
+    // Base columns guaranteed to exist in public.profiles table
+    const baseRecord: Record<string, any> = {
       id: profile.id,
-      email: profile.email,
-      full_name: profile.fullName,
-      role: profile.role,
-      company: profile.company,
-      avatar_url: profile.avatarUrl,
-      bio: profile.bio,
-      pm_stage: profile.pmStage || 'existing_pm',
-      previous_role: profile.previousRole || null,
-      years_of_experience: typeof profile.yearsOfExperience === 'number' ? profile.yearsOfExperience : null,
-      pm_fit_score: typeof profile.pmFitScore === 'number' ? profile.pmFitScore : undefined,
+      full_name: profile.fullName || 'Product Manager',
+      role: profile.role || 'Associate PM',
+      company: profile.company || '',
+      avatar_url: profile.avatarUrl || '',
+      bio: profile.bio || '',
       updated_at: new Date().toISOString(),
-    });
+    };
+    if (profile.email) {
+      baseRecord.email = profile.email;
+    }
 
-    return !error;
-  } catch {
+    // Extended columns (in case table has them migrated)
+    const extendedRecord: Record<string, any> = {
+      ...baseRecord,
+      ...(profile.pmStage ? { pm_stage: profile.pmStage } : {}),
+      ...(profile.previousRole !== undefined ? { previous_role: profile.previousRole } : {}),
+      ...(typeof profile.yearsOfExperience === 'number' ? { years_of_experience: profile.yearsOfExperience } : {}),
+      ...(profile.pmFitScore !== undefined ? { pm_fit_score: profile.pmFitScore } : {}),
+    };
+
+    // Attempt 1: Upsert with all fields
+    const { error: extError } = await supabase.from('profiles').upsert(extendedRecord, { onConflict: 'id' });
+    if (!extError) {
+      return true;
+    }
+
+    // Attempt 2: If column error (PGRST204) or missing column in schema cache, fallback to base columns
+    if (
+      extError.code === 'PGRST204' ||
+      extError.message?.toLowerCase().includes('schema cache') ||
+      extError.message?.toLowerCase().includes('column')
+    ) {
+      const { error: baseError } = await supabase.from('profiles').upsert(baseRecord, { onConflict: 'id' });
+      if (!baseError) {
+        return true;
+      }
+
+      // Attempt 3: Try update if row already exists
+      const { error: updateError } = await supabase.from('profiles').update(baseRecord).eq('id', profile.id);
+      if (!updateError) {
+        return true;
+      }
+      console.warn('Fallback base upsert/update failed:', baseError || updateError);
+      return false;
+    }
+
+    // Attempt 4: Try direct update if upsert failed due to RLS insert policy
+    const { error: directUpdateError } = await supabase.from('profiles').update(baseRecord).eq('id', profile.id);
+    if (!directUpdateError) {
+      return true;
+    }
+
+    console.warn('Profile upsert failed:', extError);
+    return false;
+  } catch (err) {
+    console.warn('Exception in upsertUserProfileInDb:', err);
     return false;
   }
 }

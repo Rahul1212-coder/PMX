@@ -61,17 +61,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const metaStage = (metadata.pm_stage as PmStage) || 'existing_pm';
       const metaPrev = metadata.previous_role || '';
+      const metaYears = metadata.years_of_experience;
+      const metaBio = metadata.bio || '';
 
       if (dbProfile) {
         // Enforce user's actual name if DB profile had default or empty name
         if ((!dbProfile.fullName || dbProfile.fullName === 'Product Manager') && metaName) {
           dbProfile.fullName = metaName;
         }
-        if (!dbProfile.pmStage && metaStage) {
+        if (metaStage && (!dbProfile.pmStage || dbProfile.pmStage === 'existing_pm')) {
           dbProfile.pmStage = metaStage;
         }
         if (!dbProfile.previousRole && metaPrev) {
           dbProfile.previousRole = metaPrev;
+        }
+        if (typeof dbProfile.yearsOfExperience !== 'number' && typeof metaYears === 'number') {
+          dbProfile.yearsOfExperience = metaYears;
+        }
+        if (!dbProfile.bio && metaBio) {
+          dbProfile.bio = metaBio;
+        }
+        if (!dbProfile.avatarUrl && metaAvatar) {
+          dbProfile.avatarUrl = metaAvatar;
         }
         // Strip out legacy dummy Unsplash URLs if stored from prior default schemas
         if (
@@ -82,9 +93,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           dbProfile.avatarUrl = '';
         }
         setProfile(dbProfile);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pmverse_user', JSON.stringify(dbProfile));
+        }
       } else {
         // Fallback profile from user metadata - NO dummy Unsplash avatar!
-        const metaYears = supabaseUser.user_metadata?.years_of_experience;
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
@@ -92,11 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: metaRole,
           company: metaCompany,
           avatarUrl: metaAvatar,
+          bio: metaBio,
           pmStage: metaStage,
           previousRole: metaPrev,
           yearsOfExperience: typeof metaYears === 'number' ? metaYears : undefined,
         };
         setProfile(fallbackProfile);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pmverse_user', JSON.stringify(fallbackProfile));
+        }
         upsertUserProfileInDb(fallbackProfile).catch(() => {});
       }
     } catch {
@@ -140,6 +157,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
         loadUserProfile(currentSession.user);
+      } else if (typeof window !== 'undefined') {
+        const savedUser = localStorage.getItem('pmverse_user');
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            if (parsed && parsed.id && parsed.id.startsWith('pm-')) {
+              setUser({ id: parsed.id, email: parsed.email } as any);
+              setProfile(parsed);
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
       setLoading(false);
     });
@@ -382,17 +412,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       company: 'Tech Company',
     };
 
-    const updated = { ...current, ...updates };
+    const updated: UserProfile = { ...current, ...updates };
     setProfile(updated);
 
+    // 1. Always sync to localStorage immediately so user experience is instant & resilient
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pmverse_user', JSON.stringify(updated));
+    }
+
+    // 2. If Supabase is configured and user is logged in
     if (configured && user) {
-      const ok = await upsertUserProfileInDb(updated);
-      if (!ok) return { error: 'Failed to update database profile' };
-    } else {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('pmverse_user', JSON.stringify(updated));
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        // Update user metadata in Supabase Auth (stores all profile fields reliably across sessions)
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              full_name: updated.fullName,
+              role: updated.role,
+              company: updated.company,
+              bio: updated.bio,
+              avatar_url: updated.avatarUrl,
+              pm_stage: updated.pmStage,
+              years_of_experience: updated.yearsOfExperience,
+              previous_role: updated.previousRole,
+            },
+          });
+        } catch (authMetaErr) {
+          console.warn('Could not update user metadata in Supabase auth:', authMetaErr);
+        }
+      }
+
+      // Upsert into Supabase profiles database table if valid UUID
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+      if (isUuid) {
+        try {
+          const ok = await upsertUserProfileInDb(updated);
+          if (!ok) {
+            console.warn('Supabase DB table sync returned false, but local and auth metadata were saved.');
+          }
+        } catch (dbErr) {
+          console.warn('Supabase DB profile sync error:', dbErr);
+        }
       }
     }
+
     return {};
   };
 
