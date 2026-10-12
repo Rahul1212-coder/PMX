@@ -112,7 +112,7 @@ export default function Page() {
       {showBottomAskBar && (
         <div className="sticky bottom-0 z-40 border-t-2 border-[rgba(32,30,29,0.15)] bg-[#f3f2f2] px-4 py-2.5">
           <div className="max-w-[1240px] mx-auto flex items-center gap-3">
-            <span className="w-2.5 h-2.5 bg-[#ec3013] shrink-0" />
+            <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain shrink-0" />
             <form onSubmit={handleBottomAskSubmit} className="flex-1 flex items-center gap-2 min-w-0">
               <input
                 type="text"

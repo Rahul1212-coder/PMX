@@ -92,12 +92,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Left: Modernist PMVerse Brand Logo */}
         <div
           onClick={() => setActiveTab('home')}
-          className="flex items-baseline gap-2 cursor-pointer flex-shrink-0 select-none group"
+          className="flex items-center gap-2 cursor-pointer flex-shrink-0 select-none group"
         >
+          <img
+            src="/pmverse-mark.png"
+            alt="PMVerse"
+            className="w-6 h-6 object-contain transition-transform group-hover:scale-105"
+          />
           <span className="font-black text-2xl tracking-tight text-[#201e1d] group-hover:text-[#ec3013] transition-colors">
             PMVerse
           </span>
-          <span className="w-2.5 h-2.5 bg-[#ec3013] inline-block mb-0.5"></span>
         </div>
 
         {/* Center: Desktop Navigation Bar */}

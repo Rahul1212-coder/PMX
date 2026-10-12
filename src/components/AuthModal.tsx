@@ -129,9 +129,9 @@ export const AuthModal: React.FC = () => {
 
         {/* Modernist Header */}
         <div className="p-6 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="font-black text-2xl tracking-tighter text-[#201e1d]">PMVerse</span>
-            <span className="w-2 h-2 bg-[#ec3013]"></span>
+          <div className="flex items-center gap-2 mb-2">
+            <img src="/pmverse-mark.png" alt="PMVerse" className="w-6 h-6 object-contain" />
+            <span className="font-black text-2xl tracking-tight text-[#201e1d]">PMVerse</span>
           </div>
 
           <h2 className="text-xl font-black text-[#201e1d] m-0">
@@ -201,8 +201,8 @@ export const AuthModal: React.FC = () => {
 
           {successMessage ? (
             <div className="py-6 px-4 text-center space-y-4 bg-white border-2 border-[#201e1d]">
-              <div className="w-12 h-12 bg-[#fdf3f2] border-2 border-[#ec3013] text-[#ec3013] flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-6 h-6" />
+              <div className="w-14 h-14 bg-[#fdf3f2] border-2 border-[#ec3013] flex items-center justify-center mx-auto p-2">
+                <img src="/pmverse-mark.png" alt="PMVerse" className="w-9 h-9 object-contain" />
               </div>
               <div>
                 <h3 className="text-base font-black text-[#201e1d]">Check Your Inbox!</h3>

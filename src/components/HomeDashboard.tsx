@@ -176,6 +176,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
+            <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain" />
             <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
               Your PM Journey
             </span>

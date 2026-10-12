@@ -536,8 +536,11 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
       <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
           <div>
-            <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold mb-1">
-              PM Fit Assessment · Official Diagnostic
+            <div className="flex items-center gap-2 mb-1">
+              <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain" />
+              <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
+                PM Fit Assessment · Official Diagnostic
+              </div>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#201e1d] tracking-tight m-0">
               PM Competency Assessment
@@ -845,6 +848,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end pb-8 border-b-2 border-[rgba(32,30,29,0.15)]">
                 <div>
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain" />
                     <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
                       Your PM Fit Score · Official Diagnostic
                     </span>

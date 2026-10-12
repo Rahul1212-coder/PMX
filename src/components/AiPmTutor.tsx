@@ -242,9 +242,12 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
 
         {/* Right Main Area: Chat & Modes */}
         <div className="min-w-0">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight m-0 mb-4 text-[#201e1d]">
-            AI Product Mentor
-          </h1>
+          <div className="flex items-center gap-3 mb-4">
+            <img src="/pmverse-mark.png" alt="PMVerse" className="w-8 h-8 object-contain" />
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight m-0 text-[#201e1d]">
+              AI Product Mentor
+            </h1>
+          </div>
 
           {/* Mode Selector Tabs (Modernist Segmented) */}
           <div className="flex flex-wrap border-2 border-[rgba(32,30,29,0.15)] mb-3">
@@ -281,11 +284,14 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
                   className="grid grid-cols-[80px_minmax(0,1fr)] sm:grid-cols-[110px_minmax(0,1fr)] gap-4 py-4 border-t-2 border-[rgba(32,30,29,0.15)]"
                 >
                   <div
-                    className={`text-xs uppercase tracking-wider font-bold ${
+                    className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${
                       isUser ? 'text-[#605d5d]' : 'text-[#ae1800]'
                     }`}
                   >
-                    {isUser ? 'You' : 'PMVerse Mentor'}
+                    {!isUser && (
+                      <img src="/pmverse-mark.png" alt="PMVerse" className="w-3.5 h-3.5 object-contain shrink-0" />
+                    )}
+                    <span>{isUser ? 'You' : 'PMVerse Mentor'}</span>
                   </div>
                   <div className="flex flex-col gap-3 max-w-2xl">
                     {blocks.map((b, bi) => (
@@ -307,8 +313,9 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
 
             {thinking && (
               <div className="grid grid-cols-[80px_minmax(0,1fr)] sm:grid-cols-[110px_1fr] gap-4 py-4 border-t-2 border-[rgba(32,30,29,0.15)]">
-                <div className="text-xs uppercase tracking-wider font-bold text-[#ae1800]">
-                  PMVerse Mentor
+                <div className="text-xs uppercase tracking-wider font-bold text-[#ae1800] flex items-center gap-1.5">
+                  <img src="/pmverse-mark.png" alt="PMVerse" className="w-3.5 h-3.5 object-contain shrink-0" />
+                  <span>PMVerse Mentor</span>
                 </div>
                 <div className="text-sm text-[#605d5d] font-bold">Thinking{dots}</div>
               </div>

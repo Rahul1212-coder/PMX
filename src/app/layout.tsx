@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://pmverse.in'),
   title: 'PMVerse | Modern Product Management Network & Intelligence',
   description: 'The premier career and competency platform for Product Managers. AI Mentor, 50-Question PM Competency Diagnostic, verified Job Board, Community, and Knowledge Hub.',
   icons: {
