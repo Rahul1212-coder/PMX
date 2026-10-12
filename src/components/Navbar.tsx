@@ -21,6 +21,7 @@ export type NavTabType =
   | 'jobs'
   | 'tracker'
   | 'community'
+  | 'circles'
   | 'connect'
   | 'learn';
 
@@ -60,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'assess', label: 'Assessment' },
     { id: 'jobs', label: 'Jobs' },
     { id: 'community', label: 'Community' },
+    { id: 'circles', label: 'Circles' },
     { id: 'connect', label: 'Network' },
     { id: 'learn', label: 'Learn' },
   ];
@@ -213,6 +215,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                     >
                       <span>Edit Profile</span>
                       <span>→</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        setActiveTab('circles');
+                      }}
+                      className="w-full text-left py-2 px-2 hover:bg-[#f3f2f2] font-semibold text-[#201e1d] flex items-center justify-between"
+                    >
+                      <span>Your Circles</span>
+                      <span className="text-xs">⭕</span>
                     </button>
 
                     <button

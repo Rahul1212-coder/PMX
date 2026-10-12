@@ -9,6 +9,7 @@ import { JobBoard } from '@/components/JobBoard';
 import { CommunityFeed } from '@/components/CommunityFeed';
 import { NetworkConnect } from '@/components/NetworkConnect';
 import { LearnHub } from '@/components/LearnHub';
+import { CirclesLanding } from '@/components/circles/CirclesLanding';
 import { WeeklyChallengeModal } from '@/components/WeeklyChallengeModal';
 import { INITIAL_POSTS, INITIAL_JOBS } from '@/data/mockData';
 import { Home, Sparkles, Award, Briefcase, Users } from 'lucide-react';
@@ -92,6 +93,11 @@ export default function Page() {
           />
         )}
 
+        {/* TAB: PMVerse Circles (Private Collaboration Groups) */}
+        {activeTab === 'circles' && (
+          <CirclesLanding />
+        )}
+
         {/* TAB 6: Network & Invitations */}
         {activeTab === 'connect' && (
           <NetworkConnect />
@@ -134,56 +140,66 @@ export default function Page() {
       )}
 
       {/* 4. Mobile Bottom Tab Bar */}
-      <nav className="md:hidden sticky bottom-0 z-50 grid grid-cols-5 border-t-2 border-[#201e1d] bg-[#f3f2f2] text-xs">
+      <nav className="md:hidden sticky bottom-0 z-50 grid grid-cols-6 border-t-2 border-[#201e1d] bg-[#f3f2f2] text-[11px]">
         <button
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center justify-center gap-1 py-2 font-bold ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
             activeTab === 'home' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
           }`}
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-3.5 h-3.5" />
           <span>Home</span>
         </button>
 
         <button
           onClick={() => setActiveTab('mentor')}
-          className={`flex flex-col items-center justify-center gap-1 py-2 font-bold ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
             activeTab === 'mentor' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
           }`}
         >
-          <Sparkles className="w-4 h-4" />
+          <Sparkles className="w-3.5 h-3.5" />
           <span>Mentor</span>
         </button>
 
         <button
           onClick={() => setActiveTab('assess')}
-          className={`flex flex-col items-center justify-center gap-1 py-2 font-bold ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
             activeTab === 'assess' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
           }`}
         >
-          <Award className="w-4 h-4" />
+          <Award className="w-3.5 h-3.5" />
           <span>Assess</span>
         </button>
 
         <button
           onClick={() => setActiveTab('jobs')}
-          className={`flex flex-col items-center justify-center gap-1 py-2 font-bold ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
             activeTab === 'jobs' || activeTab === 'tracker'
               ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]'
               : 'text-[#201e1d]'
           }`}
         >
-          <Briefcase className="w-4 h-4" />
+          <Briefcase className="w-3.5 h-3.5" />
           <span>Jobs</span>
         </button>
 
         <button
+          onClick={() => setActiveTab('circles')}
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
+            activeTab === 'circles' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
+          }`}
+        >
+          <span className="text-xs">⭕</span>
+          <span>Circles</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('community')}
-          className={`flex flex-col items-center justify-center gap-1 py-2 font-bold ${
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
             activeTab === 'community' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
           }`}
         >
-          <Users className="w-4 h-4" />
+          <Users className="w-3.5 h-3.5" />
           <span>Feed</span>
         </button>
       </nav>

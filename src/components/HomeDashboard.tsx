@@ -462,6 +462,21 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
           )}
 
+          {/* Circles Collaboration Quick Link */}
+          <div className="mt-4 pt-3 border-t border-[rgba(32,30,29,0.15)] flex items-center justify-between text-xs">
+            <span className="font-bold text-[#201e1d] flex items-center gap-1.5">
+              <span>⭕</span>
+              <span>PMVerse Circles</span>
+            </span>
+            <button
+              onClick={() => setActiveTab('circles')}
+              className="text-[#ec3013] hover:underline font-bold text-xs inline-flex items-center gap-1"
+            >
+              <span>Explore Groups</span>
+              <span>→</span>
+            </button>
+          </div>
+
           {/* Discord Community Quick Link */}
           <div className="mt-4 pt-3 border-t border-[rgba(32,30,29,0.15)] flex items-center justify-between text-xs">
             <span className="font-bold text-[#201e1d] flex items-center gap-1.5">

@@ -297,3 +297,159 @@ export interface WeeklyChallenge {
   createdAt?: string;
 }
 
+// ==============================================================================
+// PMVERSE CIRCLES - PRIVATE COLLABORATION GROUPS
+// ==============================================================================
+
+export type CircleRole = 'owner' | 'admin' | 'member';
+
+export type CircleCategory =
+  | 'Product Teardown'
+  | 'Mock Interviews'
+  | 'Case Study Practice'
+  | 'Vibe Coding & Build'
+  | 'Product Strategy'
+  | 'Peer Learning & Accountability'
+  | 'Custom';
+
+export type CirclePrivacy = 'invite_only' | 'private';
+
+export interface CirclePermissions {
+  allowMemberInvites: boolean;
+  allowMemberPosts: boolean;
+  allowFileUploads: boolean;
+  enableNotifications: boolean;
+}
+
+export interface CircleMember {
+  id: string;
+  userId: string;
+  circleId: string;
+  name: string;
+  role: string;
+  company?: string;
+  avatar?: string;
+  membershipRole: CircleRole;
+  joinedAt: string;
+  pmFitScore?: number;
+}
+
+export interface Circle {
+  id: string;
+  name: string;
+  description: string;
+  category: CircleCategory;
+  coverIcon?: string;
+  coverImage?: string;
+  purpose?: string;
+  creatorId: string;
+  creatorName: string;
+  maxMembers: number;
+  membersCount: number;
+  members: CircleMember[];
+  permissions: CirclePermissions;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt?: string;
+  unreadCount?: number;
+  nextActivity?: {
+    title: string;
+    date: string;
+    type: string;
+  };
+  isArchived?: boolean;
+}
+
+export interface CircleInvitation {
+  id: string;
+  circleId: string;
+  circleName: string;
+  circleCategory: CircleCategory;
+  circleIcon?: string;
+  inviterId: string;
+  inviterName: string;
+  inviterRole?: string;
+  inviterAvatar?: string;
+  inviteeId: string;
+  inviteeName?: string;
+  status: 'pending' | 'accepted' | 'declined' | 'revoked';
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface CirclePost {
+  id: string;
+  circleId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  authorCompany?: string;
+  authorAvatar?: string;
+  title?: string;
+  content: string;
+  templateType?: 'teardown' | 'interview' | 'vibecoding' | 'general';
+  templateData?: Record<string, any>;
+  isPinned?: boolean;
+  reactions: Record<string, { count: number; users: string[] }>;
+  repliesCount: number;
+  replies?: CircleReply[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CircleReply {
+  id: string;
+  postId: string;
+  circleId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  authorAvatar?: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface CircleResource {
+  id: string;
+  circleId: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  description?: string;
+  url?: string;
+  content?: string;
+  category: 'Links' | 'Notes' | 'Case Studies' | 'Interview Prep' | 'Documents' | 'Tools';
+  createdAt: string;
+}
+
+export interface CircleActivity {
+  id: string;
+  circleId: string;
+  title: string;
+  description?: string;
+  activityType:
+    | 'Teardown Session'
+    | 'Mock Interview'
+    | 'Case Study'
+    | 'Build Milestone'
+    | 'Strategy Review'
+    | 'Accountability Check-in';
+  scheduledDate?: string;
+  dueDate?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeAvatar?: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  checklist: Array<{ id: string; text: string; completed: boolean }>;
+  sessionMetadata?: {
+    interviewType?: string;
+    interviewer?: string;
+    candidate?: string;
+    casePrompt?: string;
+    feedbackNotes?: string;
+    productName?: string;
+    rubricScore?: number;
+  };
+  createdAt: string;
+}
+
