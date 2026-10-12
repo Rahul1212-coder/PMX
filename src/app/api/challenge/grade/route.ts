@@ -58,6 +58,40 @@ function getVerdictLabel(score: number): string {
   return 'Needs Fundamental Rework';
 }
 
+function isPlaceholderOrGibberish(
+  problem: string,
+  solution: string,
+  metrics: string,
+  submissionText?: string
+): boolean {
+  const combined = [problem, solution, metrics, submissionText || '']
+    .join(' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim();
+
+  const words = combined.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < 10) return true; // Fewer than 10 words total is automatically placeholder / incomplete
+
+  const uniqueWords = new Set(words);
+  if (uniqueWords.size < 5) return true; // Repetitive words (e.g. "test test test...")
+
+  const placeholderTokens = new Set([
+    'test', 'testing', 'tester', 'tested', 'tests',
+    'asdf', 'asdfgh', 'qwerty', 'xyz', 'abc', '123',
+    'foo', 'bar', 'baz', 'dummy', 'sample', 'lorem', 'ipsum',
+    'none', 'na', 'null', 'nil', 'idk', 'dunno', 'check', 'temp',
+    'hello', 'hi', 'hey', 'aaa', 'bbb', 'ccc', 'demo'
+  ]);
+  const placeholderCount = words.filter((w) => placeholderTokens.has(w)).length;
+  if (placeholderCount / words.length >= 0.35) return true;
+
+  const compact = combined.replace(/\s+/g, '');
+  if (compact.length < 30) return true;
+
+  return false;
+}
+
 export async function POST(request: Request) {
   try {
     const body: GradeRequestBody = await request.json();
@@ -79,6 +113,35 @@ export async function POST(request: Request) {
         { error: 'Please provide either the 3 challenge fields or a proposal text to evaluate.' },
         { status: 400 }
       );
+    }
+
+    // 0. Immediate Substance & Placeholder Check (Fails "test test test", "asdf", etc.)
+    if (isPlaceholderOrGibberish(rawProblem, rawSolution, rawMetrics, rawSubmission)) {
+      const placeholderFeedback: RubricFeedback = {
+        overallScore: 12,
+        productSenseScore: 1.2,
+        feasibilityScore: 1.5,
+        metricsScore: 1.0,
+        userValueScore: 1.0,
+        verdictLabel: 'Needs Fundamental Rework',
+        summary:
+          'The submission contains only placeholder, repetitive, or test text with no genuine PM problem diagnosis, solution flow, or metrics. Meaningful PM evaluation requires an authentic breakdown.',
+        strengths: [],
+        improvements: [
+          'Diagnose the exact root cause of user friction rather than submitting placeholder text.',
+          'Outline a concrete, feasible solution architecture with specific UX steps.',
+          'Define both primary success metrics and protective guardrail counter-metrics.',
+        ],
+        principalAdvice:
+          'In an executive product review, placeholder or incomplete responses cannot be evaluated. Draft a structured PM proposal to receive a calibrated scorecard.',
+        evaluatorModel: 'AI PM Rubric Validator',
+      };
+
+      return NextResponse.json({
+        success: true,
+        data: placeholderFeedback,
+        source: 'rubric-validator',
+      });
     }
 
     // Resolve challenge details
@@ -108,6 +171,14 @@ export async function POST(request: Request) {
       ? customRubric.map((r, i) => `${i + 1}. ${r.dimension} (${r.weight}): ${r.description || ''}`).join('\n')
       : '';
 
+    // Calculate actual candidate word count for strict server-side ceilings
+    const candidateRawWords = (rawSubmission || `${rawProblem} ${rawSolution} ${rawMetrics}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w: string) => w.length > 0);
+    const wordCount = candidateRawWords.length;
+
     // 1. Live AI Rubric Grading with OpenAI GPT-4o-mini
     try {
       const openai = getOpenAIClient();
@@ -130,18 +201,20 @@ ${rubricPromptContext ? `\nOFFICIAL EVALUATION RUBRIC:\n${rubricPromptContext}` 
 CANDIDATE SUBMISSION (Candidate Role: ${userRole}):
 ${candidateTextSection}
 
-GRADING PRINCIPLES - STRICT & NON-STATIC:
-- DO NOT return generic or default static numbers. Your scores MUST reflect the actual quality, depth, and nuances of what the candidate wrote.
-- Differentiate sharply based on actual substance:
-  * 25 - 55: Fluff, brief 1-2 sentences, vague buzzwords without substance, missing root cause or metrics.
-  * 56 - 69: Superficial outline, lacks execution depth, missing counter-metrics or trade-offs.
-  * 70 - 79: Solid mid-level PM answer with plausible solution, but missing crisp edge cases or guardrails.
-  * 80 - 89: Senior PM bar: acute root-cause diagnosis, structured UX, pragmatic feasibility, explicit counter-metrics.
-  * 90 - 98: Principal / VP level: exceptional insight, edge-case mitigation, business & technical trade-offs.
-- Do NOT anchor to 80 or 84. Calibrate each score dynamically to the candidate's exact words.
+CRITICAL GROUNDING RULES:
+1. ONLY evaluate ideas that are EXPLICITLY written by the candidate in CANDIDATE SUBMISSION.
+2. DO NOT attribute the CHALLENGE CONTEXT, Scenario, or Target Objectives to the candidate. If the candidate did not mention a metric, they score 1.0 on metrics. If they did not explain root cause, they score 1.0 on product sense.
+3. DO NOT invent or fabricate strengths. If the candidate does not provide substantive ideas, set "strengths": [].
+4. STRICT CALIBRATION BANDS:
+   * 15 - 35: Superficial, 1-2 generic sentences, buzzwords with zero diagnosis or metrics.
+   * 36 - 55: Basic feature ideas without root-cause friction analysis; naive or missing metrics; ignores constraints.
+   * 56 - 69: Junior/Mid PM execution: plausible direction, but missing trade-offs, edge cases, or guardrails.
+   * 70 - 79: Solid Senior PM execution: clear root cause, pragmatic phased scoping, relevant primary metrics, but lacks deeper counter-metrics.
+   * 80 - 89: Bar-Raiser Senior PM: acute root cause, wireframe-level UX transitions, explicit guardrail counter-metrics, tight feasibility within sprint limits.
+   * 90 - 98: Principal / VP level: world-class strategic clarity, systems design, edge-case mitigation, cohort retention modeling.
 
 Score each dimension on a 0.0 to 10.0 scale (with 1 decimal place):
-1. productSenseScore (30% weight): Depth of root-cause understanding vs superficial feature bloat. User empathy.
+1. productSenseScore (30% weight): Depth of root-cause understanding vs superficial feature bloat.
 2. feasibilityScore (25% weight): Realism within sprint limits and constraints. Practical scoping.
 3. metricsScore (25% weight): North Star alignment and explicit counter-metrics/guardrails (churn, drop-off, opt-in).
 4. userValueScore (20% weight): Immediate customer delight ("aha moment") and sustainable engagement.
@@ -151,23 +224,23 @@ overallScore = Math.round((productSenseScore * 3.0) + (feasibilityScore * 2.5) +
 
 OUTPUT JSON FORMAT (Return strictly valid JSON only):
 {
-  "overallScore": number (integer 25-98),
+  "overallScore": number (integer 15-98),
   "productSenseScore": number (0.0 - 10.0),
   "feasibilityScore": number (0.0 - 10.0),
   "metricsScore": number (0.0 - 10.0),
   "userValueScore": number (0.0 - 10.0),
   "verdictLabel": string ("Principal / Bar-Raiser Level" | "Strong Senior PM Candidate" | "Solid Mid-Level PM Execution" | "Promising with Key Strategic Gaps" | "Needs Fundamental Rework"),
-  "summary": string (2-3 sentences evaluating the candidate's exact proposal, core thesis, and primary vulnerability),
-  "strengths": string[] (array of 2 to 3 specific points quoting and praising specific ideas in their text),
+  "summary": string (2-3 sentences evaluating the candidate's exact proposal and primary vulnerability),
+  "strengths": string[] (array of 0 to 3 points quoting real phrases from candidate's text; EMPTY ARRAY [] if text is weak or superficial),
   "improvements": string[] (array of 2 to 3 actionable, specific PM critique points citing concrete solutions, edge cases, or guardrails they missed),
-  "principalAdvice": string (1-2 sentences of senior product leadership wisdom on how to elevate or pitch this proposal)
+  "principalAdvice": string (1-2 sentences of senior product leadership wisdom)
 }`;
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
-        temperature: 0.5,
+        temperature: 0.3,
       });
 
       const raw = completion.choices[0]?.message?.content || '{}';
@@ -178,14 +251,35 @@ OUTPUT JSON FORMAT (Return strictly valid JSON only):
       let ms = Number(parsed.metricsScore);
       let uv = Number(parsed.userValueScore);
 
-      if (isNaN(ps) || ps <= 0) ps = 5.0;
-      if (isNaN(fs_) || fs_ <= 0) fs_ = 5.0;
-      if (isNaN(ms) || ms <= 0) ms = 5.0;
-      if (isNaN(uv) || uv <= 0) uv = 5.0;
+      if (isNaN(ps) || ps <= 0) ps = 2.0;
+      if (isNaN(fs_) || fs_ <= 0) fs_ = 2.0;
+      if (isNaN(ms) || ms <= 0) ms = 1.5;
+      if (isNaN(uv) || uv <= 0) uv = 2.0;
 
       let overall = Number(parsed.overallScore);
       if (isNaN(overall) || overall <= 0) {
         overall = Math.round(ps * 3.0 + fs_ * 2.5 + ms * 2.5 + uv * 2.0);
+      }
+
+      // Enforce strict ceilings based on candidate word volume and substance
+      if (wordCount < 30) {
+        overall = Math.min(overall, 35);
+        ps = Math.min(ps, 3.5);
+        fs_ = Math.min(fs_, 3.8);
+        ms = Math.min(ms, 3.0);
+        uv = Math.min(uv, 3.5);
+      } else if (wordCount < 60) {
+        overall = Math.min(overall, 55);
+        ps = Math.min(ps, 5.5);
+        fs_ = Math.min(fs_, 5.8);
+        ms = Math.min(ms, 5.2);
+        uv = Math.min(uv, 5.5);
+      } else if (wordCount < 90) {
+        overall = Math.min(overall, 68);
+        ps = Math.min(ps, 6.8);
+        fs_ = Math.min(fs_, 7.0);
+        ms = Math.min(ms, 6.8);
+        uv = Math.min(uv, 7.0);
       }
 
       const rawStrengths = Array.isArray(parsed.strengths)
@@ -203,14 +297,14 @@ OUTPUT JSON FORMAT (Return strictly valid JSON only):
       const improvements = rawImprovements.filter(Boolean).map(String);
 
       const feedback: RubricFeedback = {
-        overallScore: Math.min(98, Math.max(20, Math.round(overall))),
+        overallScore: Math.min(98, Math.max(15, Math.round(overall))),
         productSenseScore: Number(Math.min(10, Math.max(1, ps)).toFixed(1)),
         feasibilityScore: Number(Math.min(10, Math.max(1, fs_)).toFixed(1)),
         metricsScore: Number(Math.min(10, Math.max(1, ms)).toFixed(1)),
         userValueScore: Number(Math.min(10, Math.max(1, uv)).toFixed(1)),
-        verdictLabel: parsed.verdictLabel || getVerdictLabel(overall),
+        verdictLabel: getVerdictLabel(overall),
         summary: parsed.summary || 'Senior PM rubric evaluation completed.',
-        strengths: strengths.length > 0 ? strengths : ['Structured framing of the target product issue.'],
+        strengths: wordCount < 30 ? [] : strengths,
         improvements: improvements.length > 0 ? improvements : ['Consider establishing explicit counter-metrics to protect retention.'],
         principalAdvice: parsed.principalAdvice || 'Always validate your assumptions with progressive cohort rollouts.',
         evaluatorModel: 'OpenAI GPT-4o-mini',
@@ -269,48 +363,50 @@ function evaluateHeuristically(
   const sLower = sTrim.toLowerCase();
   const mLower = mTrim.toLowerCase();
 
-  // 1. Product Sense (0-10) - base 3.5
-  let pScore = 3.5;
-  if (pTrim.length > 50) pScore += 1.2;
+  const totalWords = `${pTrim} ${sTrim} ${mTrim}`.split(/\s+/).filter(Boolean).length;
+
+  // 1. Product Sense (0-10) - base 1.5 - 2.5
+  let pScore = pTrim.length < 30 ? 1.5 : 2.5;
+  if (pTrim.length > 50) pScore += 1.0;
   if (pTrim.length > 120) pScore += 1.4;
-  if (pTrim.length > 220) pScore += 1.0;
+  if (pTrim.length > 220) pScore += 1.2;
   if (pLower.includes('friction') || pLower.includes('fatigue') || pLower.includes('intent') || pLower.includes('cognitive') || pLower.includes('overload')) {
-    pScore += 1.2;
+    pScore += 1.4;
   }
   if (pLower.includes('drop') || pLower.includes('root') || pLower.includes('because') || pLower.includes('why') || pLower.includes('frustrat')) {
-    pScore += 0.9;
+    pScore += 1.0;
   }
-  pScore = Math.min(9.4, Math.max(3.2, Number(pScore.toFixed(1))));
+  pScore = Math.min(9.4, Math.max(1.0, Number(pScore.toFixed(1))));
 
-  // 2. Feasibility (0-10) - base 3.8
-  let fScore = 3.8;
+  // 2. Feasibility (0-10) - base 1.5 - 2.8
+  let fScore = sTrim.length < 30 ? 1.5 : 2.8;
   if (sTrim.length > 60) fScore += 1.2;
   if (sTrim.length > 150) fScore += 1.5;
-  if (sTrim.length > 250) fScore += 0.9;
+  if (sTrim.length > 250) fScore += 1.0;
   if (sLower.includes('sprint') || sLower.includes('mvp') || sLower.includes('phase') || sLower.includes('scope') || sLower.includes('limit')) {
-    fScore += 1.0;
+    fScore += 1.2;
   }
   if (sLower.includes('step') || sLower.includes('flow') || sLower.includes('progressive') || sLower.includes('default') || sLower.includes('1-tap') || sLower.includes('widget') || sLower.includes('card')) {
     fScore += 1.0;
   }
-  fScore = Math.min(9.3, Math.max(3.5, Number(fScore.toFixed(1))));
+  fScore = Math.min(9.3, Math.max(1.0, Number(fScore.toFixed(1))));
 
-  // 3. Metrics & Guardrails (0-10) - base 3.2
-  let mScore = 3.2;
+  // 3. Metrics & Guardrails (0-10) - base 1.0 - 2.0
+  let mScore = mTrim.length < 20 ? 1.0 : 2.0;
   if (mTrim.length > 40) mScore += 1.3;
   if (mTrim.length > 90) mScore += 1.5;
   if (mLower.includes('guardrail') || mLower.includes('counter') || mLower.includes('churn') || mLower.includes('retention') || mLower.includes('skip') || mLower.includes('mute') || mLower.includes('opt-in')) {
-    mScore += 1.8;
+    mScore += 2.2;
   } else {
     mScore -= 0.5; // Penalty for missing guardrails
   }
   if (mLower.includes('%') || mLower.includes('target') || mLower.includes('rate') || mLower.includes('ratio') || mLower.includes('dau') || mLower.includes('d1') || mLower.includes('d7')) {
-    mScore += 1.0;
+    mScore += 1.2;
   }
-  mScore = Math.min(9.5, Math.max(2.8, Number(mScore.toFixed(1))));
+  mScore = Math.min(9.5, Math.max(1.0, Number(mScore.toFixed(1))));
 
-  // 4. User Value (0-10) - base 3.6
-  let uScore = 3.6;
+  // 4. User Value (0-10) - base 1.5 - 2.5
+  let uScore = sTrim.length < 30 ? 1.5 : 2.5;
   if (sLower.includes('user') || sLower.includes('delight') || sLower.includes('value') || sLower.includes('time') || sLower.includes('experience')) {
     uScore += 1.5;
   }
@@ -318,27 +414,35 @@ function evaluateHeuristically(
     uScore += 1.2;
   }
   if (sTrim.length > 100) uScore += 1.2;
-  uScore = Math.min(9.4, Math.max(3.5, Number(uScore.toFixed(1))));
+  uScore = Math.min(9.4, Math.max(1.0, Number(uScore.toFixed(1))));
 
   // Weighted score (30% PS, 25% Feas, 25% Metrics, 20% UV)
-  const weighted = pScore * 3.0 + fScore * 2.5 + mScore * 2.5 + uScore * 2.0;
-  const overallScore = Math.round(Math.min(95, Math.max(36, weighted)));
+  let weighted = pScore * 3.0 + fScore * 2.5 + mScore * 2.5 + uScore * 2.0;
 
+  if (totalWords < 30) {
+    weighted = Math.min(35, weighted);
+  } else if (totalWords < 60) {
+    weighted = Math.min(55, weighted);
+  } else if (totalWords < 90) {
+    weighted = Math.min(68, weighted);
+  }
+
+  const overallScore = Math.round(Math.min(95, Math.max(12, weighted)));
   const verdictLabel = getVerdictLabel(overallScore);
 
   const strengths: string[] = [];
   const improvements: string[] = [];
 
-  if (pTrim.length > 100) {
-    strengths.push(`Thoughtful problem diagnosis that identifies specific friction drivers in "${title}".`);
-  } else {
-    strengths.push('Identified the core user drop-off area outlined in the challenge.');
-  }
+  if (totalWords >= 40) {
+    if (pTrim.length > 100) {
+      strengths.push(`Thoughtful problem diagnosis that identifies specific friction drivers in "${title}".`);
+    } else {
+      strengths.push('Identified the core user drop-off area outlined in the challenge.');
+    }
 
-  if (sLower.includes('step') || sLower.includes('progressive') || sLower.includes('default') || sLower.includes('widget') || sLower.includes('card') || sLower.includes('1-tap')) {
-    strengths.push('Proposed structured UX mechanics designed to accelerate user time-to-value.');
-  } else {
-    strengths.push('Outlined a focused proposal addressing the primary friction scenario.');
+    if (sLower.includes('step') || sLower.includes('progressive') || sLower.includes('default') || sLower.includes('widget') || sLower.includes('card') || sLower.includes('1-tap')) {
+      strengths.push('Proposed structured UX mechanics designed to accelerate user time-to-value.');
+    }
   }
 
   if (mLower.includes('guardrail') || mLower.includes('counter') || mLower.includes('churn') || mLower.includes('retention') || mLower.includes('skip')) {
@@ -356,7 +460,6 @@ function evaluateHeuristically(
   }
 
   const summary = `Candidate submitted a ${verdictLabel.toLowerCase()} teardown for "${title}". The proposal scores ${overallScore}/100 across Product Sense, Feasibility, Metrics Rigor, and User Value.`;
-
   const principalAdvice = 'In executive reviews, always pair your solution with a phased 10% canary rollout to measure Day-1 activation against Day-30 retention.';
 
   return {
