@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { getOpenAIClient } from '@/lib/openai';
 
 export async function POST(request: Request) {
   try {
@@ -9,10 +9,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Term or concept is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (apiKey) {
-      const openai = new OpenAI({ apiKey });
+    try {
+      const openai = getOpenAIClient();
       const prompt = `You are a Principal Product Manager and PM Coach.
 Explain the product management term or concept: "${term}".
 Target audience: ${userRole || 'Aspiring or Current Product Manager'}.
@@ -37,6 +35,8 @@ Ensure your response is valid JSON only.`;
       const raw = completion.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(raw);
       return NextResponse.json({ success: true, data: parsed, source: 'openai' });
+    } catch (err: any) {
+      console.warn('OpenAI tutor generation failed, falling back:', err?.message);
     }
 
     // High quality intelligent fallback if OPENAI_API_KEY is not set yet

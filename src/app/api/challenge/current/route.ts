@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { getOpenAIClient } from '@/lib/openai';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
@@ -164,12 +164,9 @@ async function generateAiChallenge(
   endsAt: string,
   requestedDomain?: string
 ): Promise<WeeklyChallenge> {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (apiKey) {
-    try {
-      const openai = new OpenAI({ apiKey });
-      const prompt = `You are the Head of Product Management Evaluation and Principal PM Coach at Google / Stripe.
+  try {
+    const openai = getOpenAIClient();
+    const prompt = `You are the Head of Product Management Evaluation and Principal PM Coach at Google / Stripe.
 Generate a brand-new, realistic, high-standard weekly product management challenge for PMs for week ${weekIdentifier} (Challenge #${challengeNumber}).
 Domain focus: ${requestedDomain || 'Pick one: Consumer Tech, Fintech, B2B SaaS, Quick Commerce, Healthtech, or Generative AI'}.
 
@@ -222,7 +219,6 @@ Return a JSON object only with:
     } catch (err: any) {
       console.warn('OpenAI challenge generation failed, using curated rotation:', err?.message);
     }
-  }
 
   // Fallback from curated pool based on challenge number
   const selected = CURATED_CHALLENGES[(challengeNumber - 1) % CURATED_CHALLENGES.length];

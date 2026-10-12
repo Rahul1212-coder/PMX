@@ -43,6 +43,7 @@ import {
   TrendingUp,
   Sliders,
   BookOpen,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { saveQuizResultToDb, getUserQuizResultsFromDb } from '@/lib/supabase/database';
@@ -199,6 +200,44 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
   );
   const [selectedCaseId, setSelectedCaseId] = useState<string>('case-1');
   const [caseStudyNotes, setCaseStudyNotes] = useState<Record<string, string>>({});
+  const [isGradingCase, setIsGradingCase] = useState(false);
+  const [caseFeedback, setCaseFeedback] = useState<Record<string, any>>({});
+
+  const handleGradeCaseProposal = async (caseId: string) => {
+    const proposal = (caseStudyNotes[caseId] || '').trim();
+    if (!proposal) {
+      alert('Please write your proposal or action plan in the notepad before requesting AI rubric evaluation.');
+      return;
+    }
+
+    const currentCase = PM_CASE_STUDIES.find((c) => c.id === caseId) || PM_CASE_STUDIES[0];
+    setIsGradingCase(true);
+    try {
+      const res = await fetch('/api/challenge/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challengeId: currentCase.id,
+          challengeTitle: currentCase.title,
+          challengeScenario: currentCase.scenario,
+          targetObjectives: currentCase.tasks,
+          constraints: currentCase.contextPoints,
+          submissionText: proposal,
+          rubric: currentCase.rubric,
+          userRole: user?.role || 'Product Manager',
+        }),
+      });
+
+      const json = await res.json();
+      if (json?.data) {
+        setCaseFeedback((prev) => ({ ...prev, [caseId]: json.data }));
+      }
+    } catch (err) {
+      console.error('Case study grading error:', err);
+    } finally {
+      setIsGradingCase(false);
+    }
+  };
 
   // Active question set based on mode
   const activeQuestionSet = useMemo(() => {
@@ -1149,18 +1188,106 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
                   placeholder="Outline your problem definition, root cause hypotheses, metrics, and trade-off rationale here..."
                   className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:border-[#0a66c2] outline-none text-[#191919] leading-relaxed"
                 />
-                <div className="flex justify-between items-center text-[11px] text-slate-400">
-                  <span>Self-evaluate your answer using the rubric below</span>
-                  <button
-                    onClick={() => {
-                      alert('Proposal draft saved locally in your active PMVerse workspace!');
-                    }}
-                    className="px-3 py-1 bg-[#0a66c2] text-white rounded text-xs font-semibold hover:bg-[#004182]"
-                  >
-                    Save Draft
-                  </button>
+                <div className="flex flex-wrap justify-between items-center gap-2 text-[11px] text-slate-500 pt-1">
+                  <span>Evaluated against the calibrated rubric below</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        alert('Proposal draft saved locally in your active PMVerse workspace!');
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-bold border border-slate-300"
+                    >
+                      Save Draft
+                    </button>
+                    <button
+                      onClick={() => handleGradeCaseProposal(activeCase.id)}
+                      disabled={isGradingCase}
+                      className="px-3.5 py-1.5 bg-[#ec3013] hover:bg-[#ae1800] text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${isGradingCase ? 'animate-spin' : ''}`} />
+                      <span>{isGradingCase ? 'Evaluating with AI...' : 'Grade with AI Rubric'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* AI Rubric Scorecard for Case Study */}
+              {caseFeedback[activeCase.id] && (
+                <div className="p-4 bg-[#fff5f2] border-2 border-[#ec3013]/30 rounded-lg space-y-3 animate-in fade-in duration-200 text-left">
+                  <div className="flex items-start justify-between gap-3 border-b border-rose-200/80 pb-3">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#ae1800]">
+                        <Sparkles className="w-3.5 h-3.5 text-[#ec3013]" />
+                        Official AI Rubric Evaluation
+                      </div>
+                      <div className="text-xs text-[#605d5d] font-bold mt-0.5">
+                        {caseFeedback[activeCase.id].verdictLabel || 'Evaluated against Senior PM Rubric'}
+                      </div>
+                    </div>
+                    <div className="flex items-baseline gap-1 bg-white px-3 py-1 border border-rose-200 rounded shadow-sm">
+                      <span className="text-2xl font-black text-[#ec3013]">
+                        {caseFeedback[activeCase.id].overallScore ?? 0}
+                      </span>
+                      <span className="text-xs font-bold text-[#605d5d]">/100</span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs sm:text-sm text-slate-900 leading-relaxed font-semibold">
+                    {caseFeedback[activeCase.id].summary}
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-rose-200/80 text-xs">
+                    <div className="bg-white p-2 rounded border border-rose-100">
+                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Product Sense</span>
+                      <strong className="text-slate-900">{caseFeedback[activeCase.id].productSenseScore ?? 0}/10</strong>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-rose-100">
+                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Feasibility</span>
+                      <strong className="text-slate-900">{caseFeedback[activeCase.id].feasibilityScore ?? 0}/10</strong>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-rose-100">
+                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Metrics</span>
+                      <strong className="text-slate-900">{caseFeedback[activeCase.id].metricsScore ?? 0}/10</strong>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-rose-100">
+                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">User Value</span>
+                      <strong className="text-slate-900">{caseFeedback[activeCase.id].userValueScore ?? 0}/10</strong>
+                    </div>
+                  </div>
+
+                  {Array.isArray(caseFeedback[activeCase.id].strengths) && caseFeedback[activeCase.id].strengths.length > 0 && (
+                    <div className="pt-2 border-t border-rose-200/80">
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">
+                        Core Strengths:
+                      </span>
+                      <ul className="list-disc pl-4 space-y-1 text-xs text-slate-800">
+                        {caseFeedback[activeCase.id].strengths.map((str: string, idx: number) => (
+                          <li key={idx}>{str}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {Array.isArray(caseFeedback[activeCase.id].improvements) && caseFeedback[activeCase.id].improvements.length > 0 && (
+                    <div className="pt-2 border-t border-rose-200/80">
+                      <span className="text-[10px] font-bold text-amber-800 uppercase block mb-1">
+                        High-Leverage Growth Areas:
+                      </span>
+                      <ul className="list-disc pl-4 space-y-1 text-xs text-slate-800">
+                        {caseFeedback[activeCase.id].improvements.map((imp: string, idx: number) => (
+                          <li key={idx}>{imp}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {caseFeedback[activeCase.id].principalAdvice && (
+                    <div className="bg-white p-3 rounded border border-rose-200 text-xs italic text-slate-800">
+                      <strong>Principal PM Pro-Tip:</strong> "{caseFeedback[activeCase.id].principalAdvice}"
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Evaluation Rubric Table */}
               <div className="pt-2 border-t border-slate-100 space-y-2">

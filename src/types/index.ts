@@ -270,6 +270,7 @@ export interface ChallengeSubmission {
     improvements: string[];
     summary: string;
     principalAdvice?: string;
+    evaluatorModel?: string;
   };
   createdAt: string;
 }

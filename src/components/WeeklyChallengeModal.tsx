@@ -443,13 +443,18 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                         <span className="text-[11px] uppercase tracking-wider font-black text-[#ae1800] block">
                           Official AI Principal PM Evaluation
                         </span>
-                        <div className="inline-block mt-1 px-2.5 py-0.5 text-xs font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
-                          {userSubmission.aiFeedback?.verdictLabel || 'Evaluated Solution'}
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-block px-2.5 py-0.5 text-xs font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
+                            {userSubmission.aiFeedback?.verdictLabel || 'Evaluated Solution'}
+                          </span>
+                          <span className="text-[10px] text-[#605d5d] font-bold">
+                            {userSubmission.aiFeedback?.evaluatorModel || 'Live OpenAI GPT-4o-mini'}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-black text-[#ec3013]">
-                          {userSubmission.aiFeedback?.overallScore || 80}
+                          {userSubmission.aiFeedback?.overallScore ?? 0}
                         </span>
                         <span className="text-sm font-bold text-[#605d5d]">/100</span>
                       </div>
@@ -471,14 +476,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                         <div className="flex justify-between text-xs font-bold mb-1">
                           <span className="text-[#605d5d]">1. Product Sense & Friction</span>
                           <span className="text-[#201e1d]">
-                            {userSubmission.aiFeedback?.productSenseScore || 8.0}/10
+                            {userSubmission.aiFeedback?.productSenseScore ?? 0}/10
                           </span>
                         </div>
                         <div className="w-full bg-rose-200/50 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-[#ec3013] h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min(100, ((userSubmission.aiFeedback?.productSenseScore || 8.0) / 10) * 100)}%`,
+                              width: `${Math.min(100, ((userSubmission.aiFeedback?.productSenseScore ?? 0) / 10) * 100)}%`,
                             }}
                           />
                         </div>
@@ -488,14 +493,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                         <div className="flex justify-between text-xs font-bold mb-1">
                           <span className="text-[#605d5d]">2. Feasibility & Scoping</span>
                           <span className="text-[#201e1d]">
-                            {userSubmission.aiFeedback?.feasibilityScore || 8.0}/10
+                            {userSubmission.aiFeedback?.feasibilityScore ?? 0}/10
                           </span>
                         </div>
                         <div className="w-full bg-rose-200/50 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-[#201e1d] h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min(100, ((userSubmission.aiFeedback?.feasibilityScore || 8.0) / 10) * 100)}%`,
+                              width: `${Math.min(100, ((userSubmission.aiFeedback?.feasibilityScore ?? 0) / 10) * 100)}%`,
                             }}
                           />
                         </div>
@@ -505,14 +510,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                         <div className="flex justify-between text-xs font-bold mb-1">
                           <span className="text-[#605d5d]">3. Metrics & Guardrails</span>
                           <span className="text-[#201e1d]">
-                            {userSubmission.aiFeedback?.metricsScore || 8.0}/10
+                            {userSubmission.aiFeedback?.metricsScore ?? 0}/10
                           </span>
                         </div>
                         <div className="w-full bg-rose-200/50 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-[#ec3013] h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min(100, ((userSubmission.aiFeedback?.metricsScore || 8.0) / 10) * 100)}%`,
+                              width: `${Math.min(100, ((userSubmission.aiFeedback?.metricsScore ?? 0) / 10) * 100)}%`,
                             }}
                           />
                         </div>
@@ -522,14 +527,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                         <div className="flex justify-between text-xs font-bold mb-1">
                           <span className="text-[#605d5d]">4. User Value & Aha Moment</span>
                           <span className="text-[#201e1d]">
-                            {userSubmission.aiFeedback?.userValueScore || 8.0}/10
+                            {userSubmission.aiFeedback?.userValueScore ?? 0}/10
                           </span>
                         </div>
                         <div className="w-full bg-rose-200/50 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-[#201e1d] h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min(100, ((userSubmission.aiFeedback?.userValueScore || 8.0) / 10) * 100)}%`,
+                              width: `${Math.min(100, ((userSubmission.aiFeedback?.userValueScore ?? 0) / 10) * 100)}%`,
                             }}
                           />
                         </div>
@@ -899,7 +904,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                                     Product Sense
                                   </span>
                                   <strong className="text-[#201e1d]">
-                                    {sub.aiFeedback.productSenseScore || 8.0}/10
+                                    {sub.aiFeedback.productSenseScore ?? 0}/10
                                   </strong>
                                 </div>
                                 <div>
@@ -907,7 +912,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                                     Feasibility
                                   </span>
                                   <strong className="text-[#201e1d]">
-                                    {sub.aiFeedback.feasibilityScore || 8.0}/10
+                                    {sub.aiFeedback.feasibilityScore ?? 0}/10
                                   </strong>
                                 </div>
                                 <div>
@@ -915,7 +920,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                                     Metrics
                                   </span>
                                   <strong className="text-[#201e1d]">
-                                    {sub.aiFeedback.metricsScore || 8.0}/10
+                                    {sub.aiFeedback.metricsScore ?? 0}/10
                                   </strong>
                                 </div>
                                 <div>
@@ -923,7 +928,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                                     User Value
                                   </span>
                                   <strong className="text-[#201e1d]">
-                                    {sub.aiFeedback.userValueScore || 8.0}/10
+                                    {sub.aiFeedback.userValueScore ?? 0}/10
                                   </strong>
                                 </div>
                               </div>
