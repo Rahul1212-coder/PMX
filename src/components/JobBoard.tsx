@@ -60,6 +60,22 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   const [isAddAppModalOpen, setIsAddAppModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [trackerToast, setTrackerToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+
+  // Sync incoming initialActiveSubTab prop
+  useEffect(() => {
+    if (initialActiveSubTab) {
+      setActiveSubTab(initialActiveSubTab);
+    }
+  }, [initialActiveSubTab]);
+
+  // Auto-dismiss tracker toast
+  useEffect(() => {
+    if (trackerToast) {
+      const timer = setTimeout(() => setTrackerToast(null), 3800);
+      return () => clearTimeout(timer);
+    }
+  }, [trackerToast]);
 
   // New application form state
   const [manualTitle, setManualTitle] = useState('');
@@ -111,7 +127,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
     }
   };
 
-  // Load real jobs & applications from database
+  // Load real jobs & applications from database & local cache
   useEffect(() => {
     let mounted = true;
     async function loadData() {
@@ -150,17 +166,48 @@ export const JobBoard: React.FC<JobBoardProps> = ({
         setJobs(loadedJobs);
       }
 
-      if (user) {
-        if (isConfigured) {
-          const ids = await getSavedJobIdsFromDb(user.id);
-          if (mounted) {
-            setSavedJobIds(new Set(ids));
+      // Load saved jobs & applications for current user or guest fallback
+      const effectiveUid = user?.id || 'guest';
+      const [ids, loadedApps] = await Promise.all([
+        getSavedJobIdsFromDb(effectiveUid),
+        getJobApplicationsFromDb(effectiveUid),
+      ]);
+
+      // Ensure savedJobIds includes all roles currently in 'Saved' stage in tracker
+      const savedIdsFromApps = loadedApps
+        .filter((a) => a.stage === 'Saved' && a.jobId)
+        .map((a) => a.jobId!);
+
+      const mergedSavedIds = new Set([...ids, ...savedIdsFromApps]);
+
+      // Backfill any saved job ids that don't have a tracker application yet
+      const appJobIds = new Set(loadedApps.map((a) => a.jobId).filter(Boolean));
+      for (const sId of mergedSavedIds) {
+        if (!appJobIds.has(sId)) {
+          const matchingJob = loadedJobs.find((j) => j.id === sId);
+          if (matchingJob) {
+            const backfilledApp: JobApplication = {
+              id: `app-saved-${sId}-${Date.now()}`,
+              userId: effectiveUid,
+              jobId: sId,
+              jobTitle: matchingJob.title,
+              company: matchingJob.company,
+              stage: 'Saved',
+              location: matchingJob.location,
+              salaryRange: matchingJob.salaryRange,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            loadedApps.unshift(backfilledApp);
+            appJobIds.add(sId);
+            upsertJobApplicationInDb(backfilledApp).catch(() => {});
           }
         }
-        const apps = await getJobApplicationsFromDb(user.id);
-        if (mounted) {
-          setApplications(apps);
-        }
+      }
+
+      if (mounted) {
+        setSavedJobIds(mergedSavedIds);
+        setApplications(loadedApps);
       }
     }
     loadData();
@@ -171,22 +218,66 @@ export const JobBoard: React.FC<JobBoardProps> = ({
 
   const toggleSave = async (jobId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!user) {
-      openAuthModal('signin');
-      return;
-    }
 
     const isCurrentlySaved = savedJobIds.has(jobId);
     const nextSaved = new Set(savedJobIds);
-    if (isCurrentlySaved) {
-      nextSaved.delete(jobId);
-    } else {
-      nextSaved.add(jobId);
-    }
-    setSavedJobIds(nextSaved);
+    const uid = user?.id || 'guest';
+    const job = jobs.find((j) => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
 
-    if (isConfigured) {
-      await toggleSavedJobInDb(user.id, jobId, isCurrentlySaved);
+    if (isCurrentlySaved) {
+      // 1. Remove from saved jobs
+      nextSaved.delete(jobId);
+      setSavedJobIds(nextSaved);
+
+      // Remove from tracker only if it is in 'Saved' stage
+      const savedApp = applications.find(
+        (a) =>
+          (a.jobId === jobId || (job && a.jobTitle === job.title && a.company === job.company)) &&
+          a.stage === 'Saved'
+      );
+      if (savedApp) {
+        setApplications((prev) => prev.filter((a) => a.id !== savedApp.id));
+        await deleteJobApplicationInDb(savedApp.id, uid);
+      }
+      await toggleSavedJobInDb(uid, jobId, true);
+
+      setTrackerToast({
+        message: `Removed ${job?.title || 'role'} from Saved tracker.`,
+        type: 'info',
+      });
+    } else {
+      // 2. Save role -> immediately add to tracker under 'Saved'
+      nextSaved.add(jobId);
+      setSavedJobIds(nextSaved);
+
+      await toggleSavedJobInDb(uid, jobId, false);
+
+      // Check if this role is already in applications
+      const existingApp = applications.find(
+        (a) => a.jobId === jobId || (job && a.jobTitle === job.title && a.company === job.company)
+      );
+
+      if (!existingApp) {
+        const newApp: JobApplication = {
+          id: `app-saved-${jobId}-${Date.now()}`,
+          userId: uid,
+          jobId: jobId,
+          jobTitle: job?.title || 'Product Role',
+          company: job?.company || 'Company',
+          stage: 'Saved',
+          location: job?.location || 'Remote',
+          salaryRange: job?.salaryRange || undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setApplications((prev) => [newApp, ...prev]);
+        await upsertJobApplicationInDb(newApp);
+      }
+
+      setTrackerToast({
+        message: `"${job?.title || 'Role'}" saved to your Tracker under Saved!`,
+        type: 'success',
+      });
     }
   };
 
@@ -196,28 +287,40 @@ export const JobBoard: React.FC<JobBoardProps> = ({
       window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
     }
 
-    // 2. If logged in, simultaneously record application in user's PMVerse tracker
-    if (user) {
-      const existing = applications.find(
-        (a) => a.jobId === job.id || (a.jobTitle === job.title && a.company === job.company)
-      );
-      if (!existing) {
-        const newApp: JobApplication = {
-          id: `app-${Date.now()}`,
-          userId: user.id,
-          jobId: job.id,
-          jobTitle: job.title,
-          company: job.company,
-          stage: 'Applied',
-          location: job.location,
-          salaryRange: job.salaryRange,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setApplications((prev) => [newApp, ...prev]);
-        await upsertJobApplicationInDb(newApp);
-      }
+    // 2. Simultaneously record or advance application in user's PMVerse tracker
+    const uid = user?.id || 'guest';
+    const existing = applications.find(
+      (a) => a.jobId === job.id || (a.jobTitle === job.title && a.company === job.company)
+    );
+    if (!existing) {
+      const newApp: JobApplication = {
+        id: `app-${Date.now()}`,
+        userId: uid,
+        jobId: job.id,
+        jobTitle: job.title,
+        company: job.company,
+        stage: 'Applied',
+        location: job.location,
+        salaryRange: job.salaryRange,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setApplications((prev) => [newApp, ...prev]);
+      await upsertJobApplicationInDb(newApp);
+    } else if (existing.stage === 'Saved') {
+      const updated: JobApplication = {
+        ...existing,
+        stage: 'Applied',
+        updatedAt: new Date().toISOString(),
+      };
+      setApplications((prev) => prev.map((a) => (a.id === existing.id ? updated : a)));
+      await upsertJobApplicationInDb(updated);
     }
+
+    setTrackerToast({
+      message: `Application for "${job.title}" logged in Tracker!`,
+      type: 'success',
+    });
   };
 
   const moveApplication = async (appId: string) => {
@@ -625,41 +728,86 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                     </div>
 
                     <div className="space-y-2">
-                      {stageItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 text-left space-y-1 relative group"
-                        >
-                          <div className="font-extrabold text-xs text-[#201e1d] line-clamp-2">
-                            {item.jobTitle}
-                          </div>
-                          <div className="text-[11px] text-[#605d5d]">
-                            {item.company} · {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
-                          </div>
-                          <div className="flex items-center justify-between pt-1">
-                            {stgIdx < 5 && (
-                              <button
-                                onClick={() => moveApplication(item.id)}
-                                className="btn btn-ghost text-[10px] font-bold p-0 text-[#ae1800] hover:underline"
-                              >
-                                Move to {STAGES[stgIdx + 1]} →
-                              </button>
+                      {stageItems.map((item) => {
+                        const matchingJob = jobs.find((j) => j.id === item.jobId);
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] p-3 text-left space-y-1.5 relative group hover:border-[#201e1d] transition-colors"
+                          >
+                            <div className="font-extrabold text-xs text-[#201e1d] line-clamp-2">
+                              {item.jobTitle}
+                            </div>
+                            <div className="text-[11px] text-[#605d5d]">
+                              {item.company} {item.location ? `· ${item.location}` : ''}
+                            </div>
+                            {item.salaryRange && (
+                              <div className="text-[10px] font-bold text-[#ae1800]">
+                                {item.salaryRange}
+                              </div>
                             )}
-                            <button
-                              onClick={async () => {
-                                if (user) {
+
+                            <div className="flex items-center justify-between pt-1 border-t border-[rgba(32,30,29,0.08)]">
+                              <div className="flex items-center gap-2">
+                                {stgIdx < 5 && (
+                                  <button
+                                    onClick={() => moveApplication(item.id)}
+                                    className="btn btn-ghost text-[10px] font-bold p-0 text-[#ae1800] hover:underline"
+                                  >
+                                    Move to {STAGES[stgIdx + 1]} →
+                                  </button>
+                                )}
+                                {item.stage === 'Saved' && matchingJob && (
+                                  <button
+                                    onClick={() => handleApply(matchingJob)}
+                                    className="text-[10px] font-extrabold text-[#201e1d] hover:text-[#ec3013] underline"
+                                  >
+                                    Apply ↗
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  const uid = user?.id || 'guest';
                                   setApplications((prev) => prev.filter((a) => a.id !== item.id));
-                                  await deleteJobApplicationInDb(item.id, user.id);
-                                }
-                              }}
-                              className="text-[10px] text-stone-400 hover:text-rose-600 transition-colors ml-auto"
-                              title="Delete application"
-                            >
-                              Remove
-                            </button>
+                                  await deleteJobApplicationInDb(item.id, uid);
+                                  if (item.jobId && item.stage === 'Saved') {
+                                    setSavedJobIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(item.jobId!);
+                                      return next;
+                                    });
+                                    await toggleSavedJobInDb(uid, item.jobId, true);
+                                  }
+                                }}
+                                className="text-[10px] text-stone-400 hover:text-rose-600 transition-colors ml-auto font-medium"
+                                title="Remove from tracker"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
+                        );
+                      })}
+
+                      {stageItems.length === 0 && (
+                        <div className="py-8 text-center text-stone-400 text-[11px]">
+                          {stgName === 'Saved' ? (
+                            <div className="space-y-1.5">
+                              <div>No saved roles yet.</div>
+                              <button
+                                onClick={() => setActiveSubTab('browse')}
+                                className="text-[#ec3013] hover:underline font-bold text-[11px] block mx-auto"
+                              >
+                                Browse & save roles →
+                              </button>
+                            </div>
+                          ) : (
+                            <span>No roles in {stgName}</span>
+                          )}
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </div>
@@ -990,6 +1138,32 @@ export const JobBoard: React.FC<JobBoardProps> = ({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Real-time Tracker Feedback Notification */}
+      {trackerToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-[#201e1d] text-[#f3f2f2] px-4 py-3 border-2 border-[#201e1d] shadow-[4px_4px_0px_#ec3013] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <Sparkles className="w-4 h-4 text-[#ec3013] shrink-0" />
+          <span className="text-xs font-bold">{trackerToast.message}</span>
+          {activeSubTab !== 'tracker' && (
+            <button
+              onClick={() => {
+                setActiveSubTab('tracker');
+                setTrackerToast(null);
+              }}
+              className="text-xs font-extrabold text-[#ec3013] hover:underline ml-2"
+            >
+              Open Tracker →
+            </button>
+          )}
+          <button
+            onClick={() => setTrackerToast(null)}
+            className="text-stone-400 hover:text-white ml-2 text-xs font-bold"
+            aria-label="Close notification"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

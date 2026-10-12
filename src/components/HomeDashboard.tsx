@@ -55,12 +55,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         } catch {}
       }
 
-      if (user?.id) {
-        // 2. Real Job Applications
-        const apps = await getJobApplicationsFromDb(user.id);
-        if (mounted) {
-          setApplications(apps);
-        }
+      // 2. Real Job Applications
+      const apps = await getJobApplicationsFromDb(user?.id);
+      if (mounted) {
+        setApplications(apps);
       }
 
       // 3. Real Community Posts

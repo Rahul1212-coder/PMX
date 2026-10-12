@@ -548,10 +548,22 @@ export async function removeOrIgnoreConnectionDb(user1Id: string, user2Id: strin
 }
 
 // Saved Jobs
-export async function getSavedJobIdsFromDb(userId: string): Promise<string[]> {
-  if (!isSupabaseConfigured()) return [];
+export async function getSavedJobIdsFromDb(userId?: string): Promise<string[]> {
+  const effectiveUserId = userId || 'guest';
+  let localIds: string[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const raw =
+        localStorage.getItem(`pmverse_saved_jobs_${effectiveUserId}`) ||
+        localStorage.getItem('pmverse_saved_jobs_guest') ||
+        localStorage.getItem('pmverse_saved_jobs');
+      if (raw) localIds = JSON.parse(raw);
+    } catch {}
+  }
+
+  if (!isSupabaseConfigured() || !userId || effectiveUserId === 'guest') return localIds;
   const supabase = getSupabaseClient();
-  if (!supabase) return [];
+  if (!supabase) return localIds;
 
   try {
     const { data, error } = await supabase
@@ -559,17 +571,40 @@ export async function getSavedJobIdsFromDb(userId: string): Promise<string[]> {
       .select('job_id')
       .eq('user_id', userId);
 
-    if (error || !data) return [];
-    return data.map((row: any) => row.job_id);
+    if (error || !data) return localIds;
+    const dbIds = data.map((row: any) => row.job_id);
+    const combined = Array.from(new Set([...localIds, ...dbIds]));
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`pmverse_saved_jobs_${effectiveUserId}`, JSON.stringify(combined));
+      } catch {}
+    }
+    return combined;
   } catch {
-    return [];
+    return localIds;
   }
 }
 
-export async function toggleSavedJobInDb(userId: string, jobId: string, currentlySaved: boolean): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+export async function toggleSavedJobInDb(userId: string | undefined, jobId: string, currentlySaved: boolean): Promise<boolean> {
+  const effectiveUserId = userId || 'guest';
+  if (typeof window !== 'undefined') {
+    try {
+      const key = `pmverse_saved_jobs_${effectiveUserId}`;
+      const raw = localStorage.getItem(key);
+      let list: string[] = raw ? JSON.parse(raw) : [];
+      if (currentlySaved) {
+        list = list.filter((id) => id !== jobId);
+      } else if (!list.includes(jobId)) {
+        list.push(jobId);
+      }
+      localStorage.setItem(key, JSON.stringify(list));
+      localStorage.setItem('pmverse_saved_jobs', JSON.stringify(list));
+    } catch {}
+  }
+
+  if (!isSupabaseConfigured() || !userId || effectiveUserId === 'guest') return true;
   const supabase = getSupabaseClient();
-  if (!supabase) return false;
+  if (!supabase) return true;
 
   try {
     if (currentlySaved) {
@@ -751,9 +786,13 @@ function formatTimeAgo(date: Date): string {
 }
 
 // Job Applications Tracker
-export async function getJobApplicationsFromDb(userId: string): Promise<JobApplication[]> {
+export async function getJobApplicationsFromDb(userId?: string): Promise<JobApplication[]> {
+  const effectiveUserId = userId || 'guest';
+  const isUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+  let dbApps: JobApplication[] = [];
   const supabase = getSupabaseClient();
-  if (isSupabaseConfigured() && supabase) {
+  if (isSupabaseConfigured() && supabase && isUuid) {
     try {
       const { data, error } = await supabase
         .from('job_applications')
@@ -762,7 +801,7 @@ export async function getJobApplicationsFromDb(userId: string): Promise<JobAppli
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        return data.map((r: any) => ({
+        dbApps = data.map((r: any) => ({
           id: r.id,
           userId: r.user_id,
           jobId: r.job_id,
@@ -782,18 +821,31 @@ export async function getJobApplicationsFromDb(userId: string): Promise<JobAppli
     }
   }
 
+  // Always merge with local storage applications
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem('pmverse_user_applications');
       if (raw) {
         const parsed: JobApplication[] = JSON.parse(raw);
-        return parsed.filter((a) => a.userId === userId || !a.userId);
+        const filteredLocal = parsed.filter(
+          (a) => a.userId === effectiveUserId || !a.userId || a.userId === 'guest' || effectiveUserId === 'guest'
+        );
+        if (dbApps.length > 0) {
+          const dbIds = new Set(dbApps.map((a) => a.id));
+          const dbJobIds = new Set(dbApps.map((a) => a.jobId).filter(Boolean));
+          const missingFromDb = filteredLocal.filter(
+            (a) => !dbIds.has(a.id) && (!a.jobId || !dbJobIds.has(a.jobId))
+          );
+          return [...dbApps, ...missingFromDb];
+        }
+        return filteredLocal;
       }
     } catch {
       // ignore
     }
   }
-  return [];
+
+  return dbApps;
 }
 
 export async function upsertJobApplicationInDb(app: JobApplication): Promise<boolean> {
@@ -801,9 +853,11 @@ export async function upsertJobApplicationInDb(app: JobApplication): Promise<boo
     try {
       const raw = localStorage.getItem('pmverse_user_applications');
       let list: JobApplication[] = raw ? JSON.parse(raw) : [];
-      const idx = list.findIndex((a) => a.id === app.id);
+      const idx = list.findIndex(
+        (a) => a.id === app.id || (a.jobId && app.jobId && a.jobId === app.jobId)
+      );
       if (idx >= 0) {
-        list[idx] = app;
+        list[idx] = { ...list[idx], ...app };
       } else {
         list = [app, ...list];
       }
@@ -813,8 +867,9 @@ export async function upsertJobApplicationInDb(app: JobApplication): Promise<boo
     }
   }
 
+  const isUuid = app.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(app.userId);
   const supabase = getSupabaseClient();
-  if (isSupabaseConfigured() && supabase) {
+  if (isSupabaseConfigured() && supabase && isUuid) {
     try {
       await supabase.from('job_applications').upsert({
         id: app.id,
@@ -836,7 +891,7 @@ export async function upsertJobApplicationInDb(app: JobApplication): Promise<boo
   return true;
 }
 
-export async function deleteJobApplicationInDb(appId: string, userId: string): Promise<boolean> {
+export async function deleteJobApplicationInDb(appId: string, userId?: string): Promise<boolean> {
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem('pmverse_user_applications');
@@ -850,8 +905,9 @@ export async function deleteJobApplicationInDb(appId: string, userId: string): P
     }
   }
 
+  const isUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
   const supabase = getSupabaseClient();
-  if (isSupabaseConfigured() && supabase) {
+  if (isSupabaseConfigured() && supabase && isUuid) {
     try {
       await supabase.from('job_applications').delete().match({ id: appId, user_id: userId });
       return true;
