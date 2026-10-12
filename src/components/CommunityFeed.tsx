@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CommunityPost, Comment } from '../types';
+import { CommunityPost, Comment, WeeklyChallenge } from '../types';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
 import {
   getCommunityPostsFromDb,
   insertCommunityPostToDb,
   togglePostUpvoteInDb,
+  getCurrentWeeklyChallenge,
 } from '@/lib/supabase/database';
 import { MessageSquare, Bookmark, Share2, Send, Plus } from 'lucide-react';
 
@@ -29,6 +30,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   const [commentInput, setCommentInput] = useState<{ [postId: string]: string }>({});
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
   const [pollVotes, setPollVotes] = useState<{ [postId: string]: number }>({});
+  const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
 
   const postTypes = ['Question', 'Discussion', 'Case Study', 'Resource', 'Career Advice'];
   const categories = [
@@ -84,6 +86,10 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         if (mounted && dbPosts && dbPosts.length > 0) {
           setPosts(dbPosts);
         }
+      }
+      const activeChallenge = await getCurrentWeeklyChallenge();
+      if (mounted && activeChallenge) {
+        setChallenge(activeChallenge);
       }
     }
     loadDbPosts();
@@ -424,22 +430,24 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         {/* Right Sidebar: Challenge Box & Top Contributors */}
         <aside className="space-y-6">
           {/* Vermilion Weekly Challenge Card */}
-          <div className="bg-[#ec3013] text-[#f3f2f2] p-6 space-y-3">
-            <div className="text-xs uppercase tracking-widest font-bold opacity-90">
-              Weekly Challenge · Active
+          <div className="bg-[#ec3013] text-[#f3f2f2] p-6 space-y-3 text-left">
+            <div className="flex items-center justify-between text-xs uppercase tracking-widest font-bold opacity-90">
+              <span>Weekly Challenge #{challenge?.challengeNumber || 23}</span>
+              <span>{challenge?.daysRemaining || 7} Days Left</span>
             </div>
-            <div className="text-2xl font-black leading-snug">
-              Improve onboarding for a music streaming app.
+            <div className="text-xl sm:text-2xl font-black leading-snug">
+              {challenge?.title || 'Enhance User Engagement in Personal Finance App'}
             </div>
-            <p className="text-xs opacity-90 leading-relaxed">
-              Submit your product teardown for AI Rubric evaluation and peer review.
+            <p className="text-xs opacity-90 leading-relaxed line-clamp-3">
+              {challenge?.scenario ||
+                'Submit your product teardown for AI Rubric evaluation and peer review.'}
             </p>
             <button
               onClick={() => {
                 if (onOpenChallenge) {
                   onOpenChallenge();
                 } else {
-                  setComposerText('My solution for Challenge #23 (Music Onboarding): ');
+                  setComposerText(`My solution for Challenge #${challenge?.challengeNumber || 23} (${challenge?.title || ''}): `);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}

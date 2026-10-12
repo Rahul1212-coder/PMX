@@ -7,8 +7,9 @@ import {
   getUserQuizResultsFromDb,
   getJobApplicationsFromDb,
   getCommunityPostsFromDb,
+  getCurrentWeeklyChallenge,
 } from '@/lib/supabase/database';
-import { SavedQuizResult, JobApplication, CommunityPost } from '@/types';
+import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge } from '@/types';
 import { ArrowRight, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -28,8 +29,9 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const [latestQuizResult, setLatestQuizResult] = useState<SavedQuizResult | null>(null);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
+  const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
 
-  // Load real user test results, applications, and community posts
+  // Load real user test results, applications, community posts, and active weekly challenge
   useEffect(() => {
     let mounted = true;
 
@@ -65,6 +67,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       const posts = await getCommunityPostsFromDb();
       if (mounted && posts && posts.length > 0) {
         setCommunityPosts(posts.slice(0, 3));
+      }
+
+      // 4. Real Active Weekly Challenge (AI-generated every Monday)
+      const activeChallenge = await getCurrentWeeklyChallenge();
+      if (mounted && activeChallenge) {
+        setChallenge(activeChallenge);
       }
     }
 
@@ -456,16 +464,24 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
 
         {/* Cell 6: Weekly Challenge Box (Interactive Journey) */}
-        <div className="bg-[#ec3013] text-[#f3f2f2] p-6 flex flex-col justify-between gap-3">
+        <div className="bg-[#ec3013] text-[#f3f2f2] p-6 flex flex-col justify-between gap-3 text-left">
           <div>
-            <div className="text-xs uppercase tracking-widest font-bold opacity-90 mb-1">
-              Weekly Challenge #23 · 3 Days Left
+            <div className="flex items-center justify-between text-xs uppercase tracking-widest font-bold opacity-90 mb-1">
+              <span>
+                Weekly Challenge #{challenge?.challengeNumber || 23} · {challenge?.daysRemaining || 7} Days Left
+              </span>
+              {challenge?.domain && (
+                <span className="bg-[#201e1d] text-white px-2 py-0.5 text-[10px] tracking-wider">
+                  {challenge.domain}
+                </span>
+              )}
             </div>
-            <h3 className="text-2xl font-black leading-tight tracking-tight mt-2 text-[#f3f2f2]">
-              Improve onboarding for a music streaming app.
+            <h3 className="text-xl sm:text-2xl font-black leading-tight tracking-tight mt-2 text-[#f3f2f2]">
+              {challenge?.title || 'Enhance User Engagement in Personal Finance App'}
             </h3>
-            <p className="text-xs opacity-90 mt-2">
-              Submit your teardown and get evaluated by AI rubric scoring and community review.
+            <p className="text-xs opacity-90 mt-2 line-clamp-3 leading-relaxed">
+              {challenge?.scenario ||
+                'Submit your teardown and get evaluated by AI rubric scoring and community review.'}
             </p>
           </div>
           <button

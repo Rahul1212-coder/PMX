@@ -274,7 +274,37 @@ CREATE POLICY "Users can delete their own job applications"
   ON public.job_applications FOR DELETE
   USING (auth.uid() = user_id);
 
--- 9. WEEKLY CHALLENGE SUBMISSIONS TABLE
+-- 9. WEEKLY CHALLENGES TABLE (AI-generated every Monday)
+CREATE TABLE IF NOT EXISTS public.weekly_challenges (
+  id TEXT PRIMARY KEY,
+  challenge_number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  scenario TEXT NOT NULL,
+  target_objectives TEXT[] NOT NULL DEFAULT '{}',
+  constraints TEXT[] NOT NULL DEFAULT '{}',
+  rubric_weights JSONB NOT NULL DEFAULT '{"productSense": 30, "feasibility": 25, "metrics": 25, "userValue": 20}'::jsonb,
+  domain TEXT DEFAULT 'Product Management',
+  week_identifier TEXT UNIQUE NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.weekly_challenges ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Weekly challenges are viewable by everyone" ON public.weekly_challenges;
+CREATE POLICY "Weekly challenges are viewable by everyone"
+  ON public.weekly_challenges FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Allow challenge insertion and updates" ON public.weekly_challenges;
+CREATE POLICY "Allow challenge insertion and updates"
+  ON public.weekly_challenges FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+-- 10. WEEKLY CHALLENGE SUBMISSIONS TABLE
 CREATE TABLE IF NOT EXISTS public.challenge_submissions (
   id TEXT PRIMARY KEY,
   challenge_id TEXT NOT NULL,

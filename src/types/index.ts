@@ -274,3 +274,25 @@ export interface ChallengeSubmission {
   createdAt: string;
 }
 
+export interface WeeklyChallenge {
+  id: string;
+  challengeNumber: number;
+  title: string;
+  scenario: string;
+  targetObjectives: string[];
+  constraints: string[];
+  rubricWeights: {
+    productSense: number;
+    feasibility: number;
+    metrics: number;
+    userValue: number;
+  };
+  domain?: string;
+  weekIdentifier: string;
+  startsAt: string;
+  endsAt: string;
+  daysRemaining: number;
+  isActive: boolean;
+  createdAt?: string;
+}
+

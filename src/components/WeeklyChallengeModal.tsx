@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { ChallengeSubmission } from '@/types';
+import { ChallengeSubmission, WeeklyChallenge } from '@/types';
 import {
+  getCurrentWeeklyChallenge,
   getChallengeSubmissionsFromDb,
   submitChallengeSolutionToDb,
   upvoteChallengeSubmissionInDb,
@@ -24,6 +25,8 @@ import {
   ShieldCheck,
   BarChart3,
   Lightbulb,
+  Clock,
+  Wand2,
 } from 'lucide-react';
 import { UserAvatar } from './UserAvatar';
 
@@ -39,6 +42,11 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
   const { user, profile, openAuthModal } = useAuth();
   const [activeTab, setActiveTab] = useState<'brief' | 'submit' | 'solutions'>('brief');
 
+  // Challenge State (AI-generated every Monday)
+  const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
+  const [isLoadingChallenge, setIsLoadingChallenge] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
   // Form State
   const [problemStatement, setProblemStatement] = useState('');
   const [solutionProposal, setSolutionProposal] = useState('');
@@ -53,13 +61,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
   const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'upvotes' | 'score'>('upvotes');
 
-  const challengeId = 'challenge-23';
-  const challengeTitle = 'Improve onboarding for a music streaming app.';
-
   useEffect(() => {
     if (isOpen) {
       async function load() {
-        const subs = await getChallengeSubmissionsFromDb(challengeId);
+        setIsLoadingChallenge(true);
+        const activeChallenge = await getCurrentWeeklyChallenge();
+        setChallenge(activeChallenge);
+
+        const subs = await getChallengeSubmissionsFromDb(activeChallenge.id);
         setSubmissions(subs);
         if (user) {
           const mine = subs.find((s) => s.userId === user.id);
@@ -68,14 +77,40 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
             setProblemStatement(mine.problemStatement);
             setSolutionProposal(mine.solutionProposal);
             setKeyMetrics(mine.keyMetrics);
+          } else {
+            setUserSubmission(null);
+            setProblemStatement('');
+            setSolutionProposal('');
+            setKeyMetrics('');
           }
         }
+        setIsLoadingChallenge(false);
       }
       load();
     }
   }, [isOpen, user]);
 
   if (!isOpen) return null;
+
+  const handleRegenerateChallenge = async () => {
+    if (isRegenerating || isSubmitting) return;
+    setIsRegenerating(true);
+    try {
+      const freshChallenge = await getCurrentWeeklyChallenge(true); // force regeneration
+      setChallenge(freshChallenge);
+      const subs = await getChallengeSubmissionsFromDb(freshChallenge.id);
+      setSubmissions(subs);
+      setUserSubmission(null);
+      setProblemStatement('');
+      setSolutionProposal('');
+      setKeyMetrics('');
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Failed to regenerate challenge:', err);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,11 +120,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
     }
     if (!problemStatement.trim() || !solutionProposal.trim() || !keyMetrics.trim()) return;
 
+    const activeId = challenge?.id || 'challenge-current';
+    const activeTitle = challenge?.title || 'Weekly PM Challenge';
+
     setIsSubmitting(true);
     setSubmittingStep('Diagnosing root-cause product friction...');
 
     const stepTimer1 = setTimeout(() => {
-      setSubmittingStep('Validating feasibility & 3-sprint constraints...');
+      setSubmittingStep('Validating feasibility & sprint constraints...');
     }, 1200);
 
     const stepTimer2 = setTimeout(() => {
@@ -105,8 +143,11 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          challengeId,
-          challengeTitle,
+          challengeId: activeId,
+          challengeTitle: activeTitle,
+          challengeScenario: challenge?.scenario,
+          targetObjectives: challenge?.targetObjectives,
+          constraints: challenge?.constraints,
           problemStatement: problemStatement.trim(),
           solutionProposal: solutionProposal.trim(),
           keyMetrics: keyMetrics.trim(),
@@ -119,8 +160,8 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
 
       const newSub: ChallengeSubmission = {
         id: userSubmission?.id || `sub-${Date.now()}`,
-        challengeId,
-        challengeTitle,
+        challengeId: activeId,
+        challengeTitle: activeTitle,
         userId: user.id,
         authorName:
           profile?.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Product Manager',
@@ -157,13 +198,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
       openAuthModal('signin');
       return;
     }
+    const activeId = challenge?.id || 'challenge-current';
 
     setSubmissions((prev) =>
       prev.map((s) =>
         s.id === submissionId ? { ...s, upvotes: s.upvotes + 1, hasUpvoted: true } : s
       )
     );
-    await upvoteChallengeSubmissionInDb(submissionId, challengeId);
+    await upvoteChallengeSubmissionInDb(submissionId, activeId);
   };
 
   const sortedSubmissions = [...submissions].sort((a, b) => {
@@ -179,26 +221,49 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
         {/* Top Header */}
         <div className="p-5 sm:p-6 pb-4 border-b-2 border-[rgba(32,30,29,0.15)] flex justify-between items-start shrink-0">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <span className="text-[11px] uppercase tracking-widest text-[#ae1800] font-black flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 inline text-[#ec3013]" />
-                Weekly PM Challenge #23
+                Weekly PM Challenge #{challenge?.challengeNumber || 23}
               </span>
-              <span className="text-[10px] bg-[#201e1d] text-white px-2 py-0.5 font-bold uppercase tracking-wider">
-                Active Sprint
+              <span className="text-[10px] bg-[#201e1d] text-white px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
+                <Clock className="w-3 h-3 text-[#ec3013]" />
+                {challenge?.daysRemaining || 7} Days Left · Mon–Sun Sprint
               </span>
+              {challenge?.domain && (
+                <span className="text-[10px] bg-rose-100 text-[#ae1800] border border-rose-300 px-2 py-0.5 font-bold uppercase tracking-wider">
+                  {challenge.domain}
+                </span>
+              )}
             </div>
+
             <h2 className="text-xl sm:text-2xl font-black text-[#201e1d] tracking-tight m-0">
-              {challengeTitle}
+              {challenge?.title || 'Loading Active Weekly Challenge...'}
             </h2>
             <p className="text-xs text-[#605d5d] mt-1">
-              Evaluated by real AI Principal PM rubric across Product Sense, Feasibility, Metrics, and User Value.
+              AI-generated every Monday with authentic industry scenarios and graded by real Principal PM rubrics.
             </p>
           </div>
 
-          <button onClick={onClose} className="btn btn-icon btn-secondary shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRegenerateChallenge}
+              disabled={isRegenerating || isLoadingChallenge}
+              title="Generate fresh Monday challenge with AI"
+              className="btn btn-secondary text-xs font-bold py-1.5 px-2.5 flex items-center gap-1.5 shrink-0"
+            >
+              {isRegenerating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ec3013]" />
+              ) : (
+                <Wand2 className="w-3.5 h-3.5 text-[#ec3013]" />
+              )}
+              <span className="hidden sm:inline">New Challenge (AI)</span>
+            </button>
+
+            <button onClick={onClose} className="btn btn-icon btn-secondary shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Segmented Navigation */}
@@ -233,7 +298,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                 : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
             }`}
           >
-            3. Community Peer Solutions ({submissions.length})
+            3. Peer Solutions ({submissions.length})
           </button>
         </div>
 
@@ -243,15 +308,18 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
           {activeTab === 'brief' && (
             <div className="space-y-5 text-sm">
               <div className="bg-[#eae9e9] p-4 border border-[rgba(32,30,29,0.15)] space-y-2">
-                <div className="text-xs uppercase tracking-wider font-extrabold text-[#ae1800] flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-[#ec3013]" />
-                  Problem Scenario & Business Context
+                <div className="text-xs uppercase tracking-wider font-extrabold text-[#ae1800] flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-[#ec3013]" />
+                    Problem Scenario & Business Context
+                  </span>
+                  <span className="text-[10px] text-[#605d5d] font-bold">
+                    Week {challenge?.weekIdentifier || '2026-W42'}
+                  </span>
                 </div>
                 <p className="text-[#201e1d] leading-relaxed text-xs sm:text-sm">
-                  A freemium music streaming app with <strong>2M monthly downloads</strong> observes that{' '}
-                  <strong className="text-[#ae1800]">30% of new signups drop off before listening to a single track</strong>.
-                  Funnel drop-off analytics indicate that users experience immediate decision fatigue during mandatory
-                  onboarding genre/artist pickers, combined with intrusive system permission dialogs (Push, IDFA/Tracking).
+                  {challenge?.scenario ||
+                    'Loading active challenge scenario...'}
                 </p>
               </div>
 
@@ -262,15 +330,11 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                     Target Objectives
                   </div>
                   <ul className="list-disc pl-4 space-y-1.5 text-xs text-[#201e1d]">
-                    <li>
-                      <strong>Increase Day-1 first song completion:</strong> from 70% to <strong>85%+</strong>.
-                    </li>
-                    <li>
-                      <strong>Reduce time-to-first-song:</strong> from 3.2 minutes to <strong>under 45 seconds</strong>.
-                    </li>
-                    <li>
-                      <strong>Protect Day-7 retention:</strong> maintain active listening retention above <strong>42%</strong>.
-                    </li>
+                    {challenge?.targetObjectives?.map((obj, i) => (
+                      <li key={i}>{obj}</li>
+                    )) || (
+                      <li>Improve target funnel conversion rate.</li>
+                    )}
                   </ul>
                 </div>
 
@@ -280,9 +344,11 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                     Product & Technical Constraints
                   </div>
                   <ul className="list-disc pl-4 space-y-1.5 text-xs text-[#201e1d]">
-                    <li>Cannot require credit card or upfront subscription payment.</li>
-                    <li>3-sprint engineering budget across iOS and Android teams.</li>
-                    <li>Must preserve user privacy and maintain OS notification consent rates.</li>
+                    {challenge?.constraints?.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    )) || (
+                      <li>Pragmatic sprint engineering limit.</li>
+                    )}
                   </ul>
                 </div>
               </div>
@@ -296,23 +362,31 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="bg-white p-2.5 border border-[rgba(32,30,29,0.1)]">
                     <div className="text-[10px] text-[#605d5d] uppercase font-bold">Product Sense</div>
-                    <div className="text-sm font-black text-[#201e1d]">30%</div>
+                    <div className="text-sm font-black text-[#201e1d]">
+                      {challenge?.rubricWeights?.productSense || 30}%
+                    </div>
                     <div className="text-[10px] text-[#605d5d]">Root friction vs symptom</div>
                   </div>
                   <div className="bg-white p-2.5 border border-[rgba(32,30,29,0.1)]">
                     <div className="text-[10px] text-[#605d5d] uppercase font-bold">Feasibility</div>
-                    <div className="text-sm font-black text-[#201e1d]">25%</div>
-                    <div className="text-[10px] text-[#605d5d]">3-sprint engineering fit</div>
+                    <div className="text-sm font-black text-[#201e1d]">
+                      {challenge?.rubricWeights?.feasibility || 25}%
+                    </div>
+                    <div className="text-[10px] text-[#605d5d]">Sprint constraints fit</div>
                   </div>
                   <div className="bg-white p-2.5 border border-[rgba(32,30,29,0.1)]">
                     <div className="text-[10px] text-[#605d5d] uppercase font-bold">Metrics Rigor</div>
-                    <div className="text-sm font-black text-[#201e1d]">25%</div>
+                    <div className="text-sm font-black text-[#201e1d]">
+                      {challenge?.rubricWeights?.metrics || 25}%
+                    </div>
                     <div className="text-[10px] text-[#605d5d]">Primary & guardrails</div>
                   </div>
                   <div className="bg-white p-2.5 border border-[rgba(32,30,29,0.1)]">
                     <div className="text-[10px] text-[#605d5d] uppercase font-bold">User Value</div>
-                    <div className="text-sm font-black text-[#201e1d]">20%</div>
-                    <div className="text-[10px] text-[#605d5d]">Time-to-aha moment</div>
+                    <div className="text-sm font-black text-[#201e1d]">
+                      {challenge?.rubricWeights?.userValue || 20}%
+                    </div>
+                    <div className="text-[10px] text-[#605d5d]">Aha moment & retention</div>
                   </div>
                 </div>
               </div>
@@ -388,7 +462,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
 
                       <div>
                         <div className="flex justify-between text-xs font-bold mb-1">
-                          <span className="text-[#605d5d]">2. Feasibility (3 Sprints)</span>
+                          <span className="text-[#605d5d]">2. Feasibility & Scoping</span>
                           <span className="text-[#201e1d]">
                             {userSubmission.aiFeedback?.feasibilityScore || 8.0}/10
                           </span>
@@ -549,7 +623,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                   {isEditing && (
                     <div className="bg-[#eae9e9] p-3 border border-[rgba(32,30,29,0.15)] flex justify-between items-center text-xs">
                       <span className="font-bold text-[#201e1d]">
-                        Editing your submission · You can refine your diagnosis and metrics to achieve a higher score.
+                        Editing your submission · Refine your diagnosis and metrics to achieve a higher score.
                       </span>
                       <button
                         type="button"
@@ -567,14 +641,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                       <span className="text-[#ec3013] ml-1">*</span>
                     </label>
                     <p className="text-[11px] text-[#605d5d] mb-1.5">
-                      Where exactly are users dropping off and why? Distinguish between auditory intent vs administrative setup.
+                      Where exactly are users dropping off and why? Distinguish between user intent vs cognitive overhead.
                     </p>
                     <textarea
                       required
                       rows={3}
                       value={problemStatement}
                       onChange={(e) => setProblemStatement(e.target.value)}
-                      placeholder="e.g. Mandatory 5-screen genre and artist selection prior to audio playback creates cognitive fatigue. Users signed up with auditory intent, but are blocked by administrative profiling, causing 30% drop-off before song 1."
+                      placeholder="e.g. Identify where users experience cognitive friction, confusion, or lack of value delivery..."
                       className="input text-xs leading-relaxed"
                     />
                   </div>
@@ -585,14 +659,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                       <span className="text-[#ec3013] ml-1">*</span>
                     </label>
                     <p className="text-[11px] text-[#605d5d] mb-1.5">
-                      Outline the step-by-step UX flow to get to audio in under 45 seconds while respecting the 3-sprint constraint.
+                      Outline the step-by-step revised flow, MVP scope, and how it resolves the friction point.
                     </p>
                     <textarea
                       required
                       rows={4}
                       value={solutionProposal}
                       onChange={(e) => setSolutionProposal(e.target.value)}
-                      placeholder="e.g. Introduce a 1-tap 'Instant Vibe' starter on launch (Trending Hits, Chill Beats, Workout). Tapping immediately triggers background playback (<10s). Defer in-depth artist selection to progressive micro-prompts during song 2. Soft-gate OS notification requests with an in-app explainer after 60 seconds."
+                      placeholder="e.g. Outline the step-by-step user flow, progressive disclosure mechanics, and practical engineering scoping..."
                       className="input text-xs leading-relaxed"
                     />
                   </div>
@@ -610,14 +684,14 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                       rows={2}
                       value={keyMetrics}
                       onChange={(e) => setKeyMetrics(e.target.value)}
-                      placeholder="Primary: Day-1 First Song Completion Rate (>85%), Time-to-first-song (<30s). Guardrails: First-song skip rate (<20%), Day-7 listening retention (>42%), Notification opt-in rate."
+                      placeholder="Primary: Day-1 Activation / Conversion Rate. Guardrails: Churn, Drop-off rate, Satisfaction score."
                       className="input text-xs leading-relaxed"
                     />
                   </div>
 
                   <div className="pt-2 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-[rgba(32,30,29,0.15)]">
                     <span className="text-[11px] text-[#605d5d]">
-                      Evaluated by AI Principal PM with genuine rubric grading
+                      Evaluated by AI Principal PM against active challenge rubric
                     </span>
 
                     <button
@@ -836,7 +910,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                       No peer solutions submitted yet
                     </div>
                     <p className="text-xs text-[#605d5d] max-w-sm mx-auto">
-                      Be the first Product Manager to solve this week's onboarding challenge and receive an official AI rubric score.
+                      Be the first Product Manager to solve this week's challenge and receive an official AI rubric score.
                     </p>
                     <button
                       type="button"

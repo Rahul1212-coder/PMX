@@ -8,6 +8,7 @@ import {
   ConnectionInvitation,
   JobApplication,
   ChallengeSubmission,
+  WeeklyChallenge,
   ApplicationStage,
 } from '@/types';
 
@@ -859,6 +860,52 @@ export async function deleteJobApplicationInDb(appId: string, userId: string): P
     }
   }
   return true;
+}
+
+// Current Active Weekly Challenge (AI-generated every Monday)
+export async function getCurrentWeeklyChallenge(force = false): Promise<WeeklyChallenge> {
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/challenge/current${force ? '?force=true' : ''}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) return json.data;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  // High quality default fallback
+  return {
+    id: 'challenge-2026-w42',
+    challengeNumber: 23,
+    title: 'Enhance User Engagement in Personal Finance App',
+    scenario:
+      'Our personal finance app has seen a 25% drop in daily active users over the past month, primarily due to a lack of engaging features. User feedback indicates that 40% find the app\'s budgeting tools cumbersome and not user-friendly, leading to increased churn among millennials.',
+    targetObjectives: [
+      'Increase daily active users by 15% within the next quarter.',
+      'Achieve a user satisfaction score of at least 4.5 out of 5 for the budgeting tools.',
+      'Reduce the drop-off rate in the budgeting feature from 60% to 30%.',
+    ],
+    constraints: [
+      'Limited engineering resources with only two developers available for the next quarter.',
+      'Budget constraints cap new feature development at $50,000.',
+      'Existing app architecture limits significant UI changes without extensive refactoring.',
+    ],
+    rubricWeights: {
+      productSense: 30,
+      feasibility: 25,
+      metrics: 25,
+      userValue: 20,
+    },
+    domain: 'Fintech',
+    weekIdentifier: '2026-W42',
+    startsAt: new Date().toISOString(),
+    endsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    daysRemaining: 7,
+    isActive: true,
+  };
 }
 
 // Weekly Challenge Submissions
