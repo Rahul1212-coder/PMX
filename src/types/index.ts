@@ -264,9 +264,12 @@ export interface ChallengeSubmission {
     productSenseScore: number;
     feasibilityScore: number;
     metricsScore: number;
+    userValueScore?: number;
+    verdictLabel?: string;
     strengths: string[];
     improvements: string[];
     summary: string;
+    principalAdvice?: string;
   };
   createdAt: string;
 }
