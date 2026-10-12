@@ -11,310 +11,54 @@ import {
   UserProfile,
 } from '@/types';
 
-const CIRCLES_STORAGE_KEY = 'pmverse_circles_cache_v1';
-const CIRCLE_INVITES_STORAGE_KEY = 'pmverse_circle_invites_cache_v1';
-const CIRCLE_POSTS_STORAGE_KEY = 'pmverse_circle_posts_cache_v1';
-const CIRCLE_RESOURCES_STORAGE_KEY = 'pmverse_circle_resources_cache_v1';
-const CIRCLE_ACTIVITIES_STORAGE_KEY = 'pmverse_circle_activities_cache_v1';
+const CIRCLES_STORAGE_KEY = 'pmverse_circles_cache_v2';
+const CIRCLE_INVITES_STORAGE_KEY = 'pmverse_circle_invites_cache_v2';
+const CIRCLE_POSTS_STORAGE_KEY = 'pmverse_circle_posts_cache_v2';
+const CIRCLE_RESOURCES_STORAGE_KEY = 'pmverse_circle_resources_cache_v2';
+const CIRCLE_ACTIVITIES_STORAGE_KEY = 'pmverse_circle_activities_cache_v2';
 
-// Seed initial collaborative circles for realistic demonstration
-const SEED_CIRCLES: Circle[] = [
-  {
-    id: 'circle-teardown-alpha',
-    name: 'SaaS Teardowns & Growth Loops',
-    description: 'Weekly dissection of viral consumer & B2B software products. We analyze onboarding friction, retention hooks, and monetization triggers.',
-    category: 'Product Teardown',
-    coverIcon: '🔍',
-    purpose: 'Deep dive into 1 high-growth product every Thursday at 7 PM IST.',
-    creatorId: 'user-seed-1',
-    creatorName: 'Arjun Mehta',
-    maxMembers: 12,
-    membersCount: 4,
-    permissions: {
-      allowMemberInvites: true,
-      allowMemberPosts: true,
-      allowFileUploads: true,
-      enableNotifications: true,
-    },
-    members: [
-      {
-        id: 'cm-1',
-        userId: 'user-seed-1',
-        circleId: 'circle-teardown-alpha',
-        name: 'Arjun Mehta',
-        role: 'Senior PM @ Razorpay',
-        membershipRole: 'owner',
-        joinedAt: '2026-10-01T10:00:00Z',
-        pmFitScore: 88,
-      },
-      {
-        id: 'cm-2',
-        userId: 'user-seed-2',
-        circleId: 'circle-teardown-alpha',
-        name: 'Priya Sharma',
-        role: 'Growth PM @ Swiggy',
-        membershipRole: 'admin',
-        joinedAt: '2026-10-02T12:00:00Z',
-        pmFitScore: 84,
-      },
-      {
-        id: 'cm-3',
-        userId: 'user-seed-3',
-        circleId: 'circle-teardown-alpha',
-        name: 'Devansh Kulkarni',
-        role: 'Product Lead @ BrowserStack',
-        membershipRole: 'member',
-        joinedAt: '2026-10-04T15:30:00Z',
-        pmFitScore: 91,
-      },
-    ],
-    createdAt: '2026-10-01T10:00:00Z',
-    updatedAt: '2026-10-12T14:00:00Z',
-    lastActivityAt: '2026-10-12T11:45:00Z',
-    unreadCount: 2,
-    nextActivity: {
-      title: 'Notion 3.0 Agentic AI Teardown',
-      date: 'Thursday, 7:00 PM',
-      type: 'Teardown Session',
-    },
-  },
-  {
-    id: 'circle-mock-faang',
-    name: 'FAANG & Tier-1 Mock Interview Syndicate',
-    description: 'Peer-to-peer 1:1 mock interview practice for Product Sense, Execution, Metrics RCA, and System Architecture with live rubric scoring.',
-    category: 'Mock Interviews',
-    coverIcon: '🎯',
-    purpose: 'Practice at least 2 mock interviews per week with structured feedback.',
-    creatorId: 'user-seed-4',
-    creatorName: 'Rohan Gupta',
-    maxMembers: 8,
-    membersCount: 3,
-    permissions: {
-      allowMemberInvites: false,
-      allowMemberPosts: true,
-      allowFileUploads: true,
-      enableNotifications: true,
-    },
-    members: [
-      {
-        id: 'cm-4',
-        userId: 'user-seed-4',
-        circleId: 'circle-mock-faang',
-        name: 'Rohan Gupta',
-        role: 'Principal PM @ Microsoft',
-        membershipRole: 'owner',
-        joinedAt: '2026-10-05T08:00:00Z',
-        pmFitScore: 94,
-      },
-      {
-        id: 'cm-5',
-        userId: 'user-seed-5',
-        circleId: 'circle-mock-faang',
-        name: 'Ananya Verma',
-        role: 'PM @ Zepto',
-        membershipRole: 'member',
-        joinedAt: '2026-10-06T11:20:00Z',
-        pmFitScore: 82,
-      },
-    ],
-    createdAt: '2026-10-05T08:00:00Z',
-    updatedAt: '2026-10-12T13:00:00Z',
-    lastActivityAt: '2026-10-12T09:15:00Z',
-    unreadCount: 1,
-    nextActivity: {
-      title: 'Product Sense Mock: Uber for Senior Citizens',
-      date: 'Tomorrow, 8:30 PM',
-      type: 'Mock Interview',
-    },
-  },
-];
+// Purge any legacy v1 cache entries containing dummy demo circles
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('pmverse_circles_cache_v1');
+    localStorage.removeItem('pmverse_circle_invites_cache_v1');
+    localStorage.removeItem('pmverse_circle_posts_cache_v1_circle-teardown-alpha');
+    localStorage.removeItem('pmverse_circle_posts_cache_v1_circle-mock-faang');
+    localStorage.removeItem('pmverse_circle_activities_cache_v1_circle-teardown-alpha');
+    localStorage.removeItem('pmverse_circle_activities_cache_v1_circle-mock-faang');
+    localStorage.removeItem('pmverse_circle_resources_cache_v1_circle-teardown-alpha');
+    localStorage.removeItem('pmverse_circle_resources_cache_v1_circle-mock-faang');
+  } catch {}
+}
 
-const SEED_POSTS: Record<string, CirclePost[]> = {
-  'circle-teardown-alpha': [
-    {
-      id: 'cp-101',
-      circleId: 'circle-teardown-alpha',
-      authorId: 'user-seed-1',
-      authorName: 'Arjun Mehta',
-      authorRole: 'Senior PM @ Razorpay',
-      title: 'Linear 2026 Onboarding Teardown: Why zero-friction wins',
-      content: 'Here is my breakdown of how Linear handles new workspace creation without overwhelming developers or product teams with Jira-style configuration dialogs.\n\nKey finding: They ask only 2 inputs upfront (Workspace Name + Issue Prefix) and defer project hierarchy to the actual first commit/issue.',
-      templateType: 'teardown',
-      templateData: {
-        product: 'Linear App',
-        targetUser: 'Engineering & Product Squads',
-        coreProblem: 'Bloated project tracking software requiring hours of setup',
-        recommendation: 'Adopt default sensible views and progressive disclosure',
-      },
-      isPinned: true,
-      reactions: {
-        '🔥': { count: 4, users: ['user-seed-2', 'user-seed-3'] },
-        '💡': { count: 3, users: ['user-seed-2'] },
-      },
-      repliesCount: 2,
-      replies: [
-        {
-          id: 'cpr-1',
-          postId: 'cp-101',
-          circleId: 'circle-teardown-alpha',
-          authorId: 'user-seed-2',
-          authorName: 'Priya Sharma',
-          authorRole: 'Growth PM @ Swiggy',
-          content: 'Completely agree. Their keyboard shortcuts during onboarding (Cmd+K) also build high retention habits on day one.',
-          createdAt: '2026-10-11T16:20:00Z',
-        },
-      ],
-      createdAt: '2026-10-11T14:30:00Z',
-    },
-  ],
-  'circle-mock-faang': [
-    {
-      id: 'cp-201',
-      circleId: 'circle-mock-faang',
-      authorId: 'user-seed-4',
-      authorName: 'Rohan Gupta',
-      authorRole: 'Principal PM @ Microsoft',
-      title: 'Practice Prompt of the Week: Design Google Maps for Visually Impaired',
-      content: 'Tips to keep in mind for this Product Sense case:\n1. Segment visually impaired users (completely blind vs low vision vs temporary injury)\n2. Pinpoint non-visual sensory modalities (haptic vibrations, audio beaconing, spatial audio)\n3. Avoid generic features — focus on sidewalk obstructions and transit transfers.',
-      templateType: 'interview',
-      templateData: {
-        interviewType: 'Product Sense',
-        interviewer: 'Rohan Gupta',
-        casePrompt: 'Design Google Maps for Visually Impaired Commuters',
-      },
-      isPinned: true,
-      reactions: {
-        '🎯': { count: 3, users: ['user-seed-5'] },
-        '👍': { count: 2, users: ['user-seed-5'] },
-      },
-      repliesCount: 1,
-      createdAt: '2026-10-10T10:00:00Z',
-    },
-  ],
-};
-
-const SEED_ACTIVITIES: Record<string, CircleActivity[]> = {
-  'circle-teardown-alpha': [
-    {
-      id: 'ca-101',
-      circleId: 'circle-teardown-alpha',
-      title: 'Notion 3.0 Agentic AI Teardown',
-      description: 'Prepare a 10-minute slide or Figma teardown on how Notion Agents handle user permissions and multi-doc reasoning.',
-      activityType: 'Teardown Session',
-      scheduledDate: '2026-10-15T13:30:00Z',
-      dueDate: '2026-10-15T13:30:00Z',
-      assigneeName: 'Priya Sharma',
-      status: 'in_progress',
-      checklist: [
-        { id: 'chk-1', text: 'Document onboarding and AI permission prompt', completed: true },
-        { id: 'chk-2', text: 'Measure average response latency across 5 complex prompts', completed: true },
-        { id: 'chk-3', text: 'Synthesize 3 improvement opportunities', completed: false },
-      ],
-      createdAt: '2026-10-08T09:00:00Z',
-    },
-    {
-      id: 'ca-102',
-      circleId: 'circle-teardown-alpha',
-      title: 'Stripe Billing v2 Checkout Flow Review',
-      description: 'Analyze localized payment drop-offs and subscription renewal UX.',
-      activityType: 'Case Study',
-      scheduledDate: '2026-10-22T13:30:00Z',
-      status: 'not_started',
-      checklist: [
-        { id: 'chk-4', text: 'Map checkout funnel drop-offs', completed: false },
-        { id: 'chk-5', text: 'Review 3-D Secure fallback UX', completed: false },
-      ],
-      createdAt: '2026-10-10T11:00:00Z',
-    },
-  ],
-  'circle-mock-faang': [
-    {
-      id: 'ca-201',
-      circleId: 'circle-mock-faang',
-      title: 'Product Sense Mock: Uber for Senior Citizens',
-      description: '45-minute live mock session followed by 15-minute rubric feedback.',
-      activityType: 'Mock Interview',
-      scheduledDate: '2026-10-13T15:00:00Z',
-      assigneeName: 'Ananya Verma',
-      status: 'in_progress',
-      checklist: [
-        { id: 'chk-6', text: 'Clarifying questions & user segmentation', completed: true },
-        { id: 'chk-7', text: 'Pain points prioritization', completed: false },
-        { id: 'chk-8', text: 'North star & counter metrics definition', completed: false },
-      ],
-      sessionMetadata: {
-        interviewType: 'Product Sense',
-        interviewer: 'Rohan Gupta',
-        candidate: 'Ananya Verma',
-        casePrompt: 'Design Uber ride experience optimized for senior citizens living in assisted care.',
-      },
-      createdAt: '2026-10-11T12:00:00Z',
-    },
-  ],
-};
-
-const SEED_RESOURCES: Record<string, CircleResource[]> = {
-  'circle-teardown-alpha': [
-    {
-      id: 'cr-101',
-      circleId: 'circle-teardown-alpha',
-      authorId: 'user-seed-1',
-      authorName: 'Arjun Mehta',
-      title: 'Linear Method Principles & Workflow Guide',
-      description: 'Official Linear philosophy: Autonomous squads, outcome cycles, zero backlog grooming.',
-      url: 'https://linear.app/method',
-      category: 'Links',
-      createdAt: '2026-10-02T10:00:00Z',
-    },
-    {
-      id: 'cr-102',
-      circleId: 'circle-teardown-alpha',
-      authorId: 'user-seed-2',
-      authorName: 'Priya Sharma',
-      title: 'Product Teardown Framework Matrix (Notion/Doc)',
-      description: 'Standard 7-dimension rubric used across our Thursday evening teardown calls.',
-      content: '1. Problem Clarity\n2. User Segmentation\n3. Value Prop & Aha Moment\n4. Onboarding Friction\n5. Viral / Growth Loops\n6. Monetization UX\n7. Counter-metrics',
-      category: 'Case Studies',
-      createdAt: '2026-10-04T12:30:00Z',
-    },
-  ],
-  'circle-mock-faang': [
-    {
-      id: 'cr-201',
-      circleId: 'circle-mock-faang',
-      authorId: 'user-seed-4',
-      authorName: 'Rohan Gupta',
-      title: 'Meta & Google Product Sense Rubric (Level 5 / 6)',
-      description: 'The exact 4-bar evaluation matrix: Problem comprehension, creative vision, structural prioritization, trade-off defense.',
-      url: 'https://pmverse.in',
-      category: 'Interview Prep',
-      createdAt: '2026-10-07T14:00:00Z',
-    },
-  ],
-};
+// Legacy dummy circle IDs to purge from storage
+const DUMMY_CIRCLE_IDS = new Set(['circle-teardown-alpha', 'circle-mock-faang']);
 
 // ==============================================================================
 // LOCAL STORAGE HELPERS
 // ==============================================================================
 
 function getLocalCircles(): Circle[] {
-  if (typeof window === 'undefined') return SEED_CIRCLES;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(CIRCLES_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(CIRCLES_STORAGE_KEY, JSON.stringify(SEED_CIRCLES));
-      return SEED_CIRCLES;
+    if (!raw) return [];
+    const parsed: Circle[] = JSON.parse(raw);
+    const cleaned = parsed.filter((c) => !DUMMY_CIRCLE_IDS.has(c.id));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(CIRCLES_STORAGE_KEY, JSON.stringify(cleaned));
     }
-    return JSON.parse(raw);
+    return cleaned;
   } catch {
-    return SEED_CIRCLES;
+    return [];
   }
 }
 
 function saveLocalCircles(circles: Circle[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CIRCLES_STORAGE_KEY, JSON.stringify(circles));
+    const cleaned = circles.filter((c) => !DUMMY_CIRCLE_IDS.has(c.id));
+    localStorage.setItem(CIRCLES_STORAGE_KEY, JSON.stringify(cleaned));
   } catch {
     // Ignore storage quota
   }
@@ -324,7 +68,13 @@ function getLocalInvitations(): CircleInvitation[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(CIRCLE_INVITES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed: CircleInvitation[] = JSON.parse(raw);
+    const cleaned = parsed.filter((inv) => !DUMMY_CIRCLE_IDS.has(inv.circleId));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(CIRCLE_INVITES_STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch {
     return [];
   }
@@ -333,79 +83,59 @@ function getLocalInvitations(): CircleInvitation[] {
 function saveLocalInvitations(invites: CircleInvitation[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CIRCLE_INVITES_STORAGE_KEY, JSON.stringify(invites));
+    const cleaned = invites.filter((inv) => !DUMMY_CIRCLE_IDS.has(inv.circleId));
+    localStorage.setItem(CIRCLE_INVITES_STORAGE_KEY, JSON.stringify(cleaned));
   } catch {
     // Ignore storage quota
   }
 }
 
 function getLocalPosts(circleId: string): CirclePost[] {
-  if (typeof window === 'undefined') return SEED_POSTS[circleId] || [];
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return [];
   try {
     const raw = localStorage.getItem(`${CIRCLE_POSTS_STORAGE_KEY}_${circleId}`);
-    if (!raw) {
-      const initial = SEED_POSTS[circleId] || [];
-      if (initial.length > 0) {
-        localStorage.setItem(`${CIRCLE_POSTS_STORAGE_KEY}_${circleId}`, JSON.stringify(initial));
-      }
-      return initial;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return SEED_POSTS[circleId] || [];
+    return [];
   }
 }
 
 function saveLocalPosts(circleId: string, posts: CirclePost[]): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return;
   try {
     localStorage.setItem(`${CIRCLE_POSTS_STORAGE_KEY}_${circleId}`, JSON.stringify(posts));
   } catch {}
 }
 
 function getLocalResources(circleId: string): CircleResource[] {
-  if (typeof window === 'undefined') return SEED_RESOURCES[circleId] || [];
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return [];
   try {
     const raw = localStorage.getItem(`${CIRCLE_RESOURCES_STORAGE_KEY}_${circleId}`);
-    if (!raw) {
-      const initial = SEED_RESOURCES[circleId] || [];
-      if (initial.length > 0) {
-        localStorage.setItem(`${CIRCLE_RESOURCES_STORAGE_KEY}_${circleId}`, JSON.stringify(initial));
-      }
-      return initial;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return SEED_RESOURCES[circleId] || [];
+    return [];
   }
 }
 
 function saveLocalResources(circleId: string, resources: CircleResource[]): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return;
   try {
     localStorage.setItem(`${CIRCLE_RESOURCES_STORAGE_KEY}_${circleId}`, JSON.stringify(resources));
   } catch {}
 }
 
 function getLocalActivities(circleId: string): CircleActivity[] {
-  if (typeof window === 'undefined') return SEED_ACTIVITIES[circleId] || [];
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return [];
   try {
     const raw = localStorage.getItem(`${CIRCLE_ACTIVITIES_STORAGE_KEY}_${circleId}`);
-    if (!raw) {
-      const initial = SEED_ACTIVITIES[circleId] || [];
-      if (initial.length > 0) {
-        localStorage.setItem(`${CIRCLE_ACTIVITIES_STORAGE_KEY}_${circleId}`, JSON.stringify(initial));
-      }
-      return initial;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return SEED_ACTIVITIES[circleId] || [];
+    return [];
   }
 }
 
 function saveLocalActivities(circleId: string, activities: CircleActivity[]): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || DUMMY_CIRCLE_IDS.has(circleId)) return;
   try {
     localStorage.setItem(`${CIRCLE_ACTIVITIES_STORAGE_KEY}_${circleId}`, JSON.stringify(activities));
   } catch {}
@@ -489,18 +219,23 @@ export async function getUserCirclesFromDb(userId?: string): Promise<Circle[]> {
       };
     });
 
-    // Merge with any local user-created circles not yet in remote DB
-    const combined = [...mappedFromDb];
+    // Merge with any local user-created circles not yet in remote DB (purging dummy circles)
+    const combined = mappedFromDb.filter((c) => !DUMMY_CIRCLE_IDS.has(c.id));
     for (const lc of localCircles) {
-      if (!combined.some((c) => c.id === lc.id)) {
+      if (!DUMMY_CIRCLE_IDS.has(lc.id) && !combined.some((c) => c.id === lc.id)) {
         combined.push(lc);
       }
     }
 
+    if (userId) {
+      return combined.filter(
+        (c) => c.creatorId === userId || c.members.some((m) => m.userId === userId)
+      );
+    }
     return combined;
   } catch (err) {
     console.warn('Error reading circles from Supabase, falling back to local cache:', err);
-    return localCircles;
+    return localCircles.filter((c) => !DUMMY_CIRCLE_IDS.has(c.id));
   }
 }
 

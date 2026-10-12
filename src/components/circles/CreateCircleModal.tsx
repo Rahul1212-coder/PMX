@@ -84,14 +84,7 @@ export const CreateCircleModal: React.FC<CreateCircleModalProps> = ({
           }))
         );
       } else {
-        // Fallback default PM connections
-        setAvailableProfiles([
-          { id: 'usr-1', name: 'Elena Rostova', role: 'Staff PM', company: 'Linear', avatar: '' },
-          { id: 'usr-2', name: 'Marcus Chen', role: 'Head of Product', company: 'Ramp', avatar: '' },
-          { id: 'usr-3', name: 'Priya Sharma', role: 'Growth PM', company: 'Swiggy', avatar: '' },
-          { id: 'usr-4', name: 'Rohan Gupta', role: 'Principal PM', company: 'Microsoft', avatar: '' },
-          { id: 'usr-5', name: 'Devansh Kulkarni', role: 'Product Lead', company: 'BrowserStack', avatar: '' },
-        ]);
+        setAvailableProfiles([]);
       }
     }
 
@@ -604,7 +597,9 @@ export const CreateCircleModal: React.FC<CreateCircleModalProps> = ({
                   })
                 ) : (
                   <p className="text-center py-6 text-xs text-slate-400 font-medium">
-                    No connections found matching “{inviteSearch}”.
+                    {inviteSearch
+                      ? `No connections found matching “${inviteSearch}”.`
+                      : 'No connections found yet. You can invite colleagues anytime from the workspace.'}
                   </p>
                 )}
               </div>
