@@ -6,8 +6,31 @@ export const metadata: Metadata = {
   title: 'PMVerse | Modern Product Management Network & Intelligence',
   description: 'The premier career and competency platform for Product Managers. AI Mentor, 50-Question PM Competency Diagnostic, verified Job Board, Community, and Knowledge Hub.',
   icons: {
-    icon: '/pmverse-icon.png',
-    apple: '/pmverse-icon.png',
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/pmverse-icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: [
+      { url: '/pmverse-icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  openGraph: {
+    title: 'PMVerse | Modern Product Management Network & Intelligence',
+    description: 'The premier career and competency platform for Product Managers. AI Mentor, 50-Question PM Competency Diagnostic, verified Job Board, Community, and Knowledge Hub.',
+    url: 'https://pmverse.in',
+    siteName: 'PMVerse',
+    images: [
+      {
+        url: '/pmverse-logo.png',
+        width: 400,
+        height: 100,
+        alt: 'PMVerse Logo',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
   },
 };
 

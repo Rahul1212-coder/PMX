@@ -94,10 +94,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => setActiveTab('home')}
           className="flex items-baseline gap-2 cursor-pointer flex-shrink-0 select-none group"
         >
-          <span className="font-extrabold text-2xl tracking-tighter text-[#201e1d] group-hover:text-[#ec3013] transition-colors">
+          <span className="font-black text-2xl tracking-tight text-[#201e1d] group-hover:text-[#ec3013] transition-colors">
             PMVerse
           </span>
-          <span className="w-2 h-2 bg-[#ec3013] inline-block mb-0.5"></span>
+          <span className="w-2.5 h-2.5 bg-[#ec3013] inline-block mb-0.5"></span>
         </div>
 
         {/* Center: Desktop Navigation Bar */}
