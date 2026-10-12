@@ -830,8 +830,21 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                 })}
 
                 {sortedSubmissions.length === 0 && (
-                  <div className="py-8 text-center text-xs text-slate-500">
-                    No submissions yet. Be the first PM to submit an answer!
+                  <div className="py-12 text-center text-xs text-slate-500 border border-dashed border-[rgba(32,30,29,0.2)] bg-[#f9f8f8] p-6 space-y-2">
+                    <div className="text-xl">✍️</div>
+                    <div className="font-black text-[#201e1d] text-sm">
+                      No peer solutions submitted yet
+                    </div>
+                    <p className="text-xs text-[#605d5d] max-w-sm mx-auto">
+                      Be the first Product Manager to solve this week's onboarding challenge and receive an official AI rubric score.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('submit')}
+                      className="btn btn-primary text-xs font-bold mt-2"
+                    >
+                      Draft First Solution →
+                    </button>
                   </div>
                 )}
               </div>

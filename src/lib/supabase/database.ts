@@ -862,126 +862,6 @@ export async function deleteJobApplicationInDb(appId: string, userId: string): P
 }
 
 // Weekly Challenge Submissions
-export const SEED_CHALLENGE_SUBMISSIONS: ChallengeSubmission[] = [
-  {
-    id: 'seed-sub-1',
-    challengeId: 'challenge-23',
-    challengeTitle: 'Improve onboarding for a music streaming app.',
-    userId: 'seed-user-priya',
-    authorName: 'Priya Sharma',
-    authorRole: 'Lead Product Manager · Audio Discovery (ex-Spotify)',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
-    problemStatement:
-      'Users sign up with auditory intent (they want to hear music immediately), but encounter administrative friction: 5 mandatory screens of artist selection followed by system permission dialogs. Cognitive fatigue triggers a 30% drop-off before song 1.',
-    solutionProposal:
-      'Implement "Zero-Click Instant Play": on first launch, display 4 mood cards (Morning Energy, Chill Lo-Fi, Top Global, Workout). Tapping a card immediately begins playback in <8s. Defer in-depth artist and genre selection to progressive micro-prompts (e.g. "More like this" heart icon) during song 2. Soft-gate OS notifications with an in-app value explainer after 60 seconds of playback.',
-    keyMetrics:
-      'Primary: Day-1 first song completion rate (target 87%), Time-to-first-song (<30s). Guardrails: First-song skip rate (<20%), Day-7 listening retention (>45%), Push notification opt-in rate (>52%).',
-    upvotes: 48,
-    hasUpvoted: false,
-    aiFeedback: {
-      overallScore: 92,
-      productSenseScore: 9.4,
-      feasibilityScore: 9.0,
-      metricsScore: 9.2,
-      userValueScore: 9.3,
-      verdictLabel: 'Principal / Bar-Raiser Level',
-      summary:
-        'Exemplary product diagnosis that distinguishes between auditory intent and profile administration. Shifting to Progressive Profiling dramatically shortens time-to-value while staying within the 3-sprint constraint.',
-      strengths: [
-        'Distinguished user auditory intent vs administrative intent with acute empathy.',
-        'Zero-Click Instant Play paired with progressive heart prompts delivers an immediate aha moment.',
-        'Rigorous guardrails guarding against false-positive activation via song skip and D7 retention.',
-      ],
-      improvements: [
-        'Clarify the cold-start fallback algorithm if the user skips their initial mood card choice.',
-        'Define explicit handling for offline initial launch states.',
-      ],
-      principalAdvice:
-        'Present this with a phased rollout plan: release to 10% new installs in Sprint 2 to validate playback latency before full Sprint 3 cutover.',
-    },
-    createdAt: '2 days ago',
-  },
-  {
-    id: 'seed-sub-2',
-    challengeId: 'challenge-23',
-    challengeTitle: 'Improve onboarding for a music streaming app.',
-    userId: 'seed-user-alex',
-    authorName: 'Alex Chen',
-    authorRole: 'Growth PM · Activation & Onboarding',
-    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=faces',
-    problemStatement:
-      'Drop-off spikes specifically at Screen 3 where users are forced to select at least 5 artists from a grid of 60. This introduces decision paralysis and high interaction cost before delivering core auditory value.',
-    solutionProposal:
-      'Replace the mandatory 5-artist requirement with a 1-tap "Sample Mix" preview carousel. Users swipe between 3 short 10-second song clips. Liking any single clip immediately spins up a personalized radio station in background audio while completing the welcome flow.',
-    keyMetrics:
-      'Primary: Onboarding funnel conversion (84%), Time-to-first-song (<45s). Guardrails: Song completion percentage, Audio streaming buffer rate, Day-7 retention (>42%).',
-    upvotes: 35,
-    hasUpvoted: false,
-    aiFeedback: {
-      overallScore: 88,
-      productSenseScore: 8.8,
-      feasibilityScore: 8.6,
-      metricsScore: 8.9,
-      userValueScore: 9.0,
-      verdictLabel: 'Strong Senior PM Candidate',
-      summary:
-        'Creative activation mechanism that turns the selection chore into an engaging sensory preview. Audio snippet caching must be monitored to protect data budgets.',
-      strengths: [
-        'Transformed tedious selection checkboxes into an auditory micro-preview loop.',
-        'Clean North Star metric alignment on funnel velocity and first-song completion.',
-        'Respects the freemium non-payment constraint with zero friction.',
-      ],
-      improvements: [
-        'Assess licensing and audio buffering costs for multi-track pre-loading over cellular networks.',
-        'Provide an escape hatch for users with muted devices or accessibility constraints.',
-      ],
-      principalAdvice:
-        'Include a sound-muted fallback state (e.g. animated wave visualizer) so muted phone users don’t get confused.',
-    },
-    createdAt: '3 days ago',
-  },
-  {
-    id: 'seed-sub-3',
-    challengeId: 'challenge-23',
-    challengeTitle: 'Improve onboarding for a music streaming app.',
-    userId: 'seed-user-marcus',
-    authorName: 'Marcus Vance',
-    authorRole: 'Senior PM · Core Experience (ex-Audiomack)',
-    authorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=faces',
-    problemStatement:
-      'Aggressive upfront permission dialogs (Push notifications, IDFA/Tracking, Location) right after signup create trust deficit. Users reject permissions and bounce out of skepticism before experiencing why they need notifications.',
-    solutionProposal:
-      'Implement "Deferred Permission Priming": launch directly into a trending chart playlist for new signups with zero popups. Trigger contextual permission sheets only when the user takes a high-intent action (e.g. favoriting an artist triggers "Get notified when this artist drops new tracks").',
-    keyMetrics:
-      'Primary: Day-1 first song completion (86%), Time-to-first-song (<25s). Guardrails: OS notification opt-in acceptance rate (maintain >55%), Day-30 retention (>38%).',
-    upvotes: 29,
-    hasUpvoted: false,
-    aiFeedback: {
-      overallScore: 85,
-      productSenseScore: 8.6,
-      feasibilityScore: 9.1,
-      metricsScore: 8.2,
-      userValueScore: 8.3,
-      verdictLabel: 'Strong Senior PM Candidate',
-      summary:
-        'Highly pragmatic engineering approach with low implementation risk. Focuses on trust architecture and timing of permission sheets.',
-      strengths: [
-        'Extremely high feasibility: easily deliverable within 1-2 engineering sprints.',
-        'Smart contextual permission triggers based on user intent rather than arbitrary onboarding steps.',
-        'Protects long-term notification opt-in rates while removing activation blockers.',
-      ],
-      improvements: [
-        'Complement the permission deferral with initial genre guidance so first song relevance remains high.',
-        'Define explicit Day-7 retention cohort metrics to verify musical satisfaction.',
-      ],
-      principalAdvice:
-        'Measure notification acceptance rate segmented by day-of-lifecycle to prove contextual prompts convert higher than onboarding prompts.',
-    },
-    createdAt: '4 days ago',
-  },
-];
-
 export async function getChallengeSubmissionsFromDb(challengeId: string): Promise<ChallengeSubmission[]> {
   let dbSubmissions: ChallengeSubmission[] = [];
 
@@ -1021,7 +901,10 @@ export async function getChallengeSubmissionsFromDb(challengeId: string): Promis
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(`pmverse_challenge_${challengeId}`);
-      if (raw) localSubmissions = JSON.parse(raw);
+      if (raw) {
+        const parsed: ChallengeSubmission[] = JSON.parse(raw);
+        localSubmissions = parsed.filter((s) => !s.id.startsWith('seed-sub-'));
+      }
     } catch {
       // ignore
     }
@@ -1030,16 +913,19 @@ export async function getChallengeSubmissionsFromDb(challengeId: string): Promis
   // Merge DB and local submissions, deduplicating by ID
   const map = new Map<string, ChallengeSubmission>();
 
-  // Add seed submissions for challenge-23 so community solutions is always active
-  if (challengeId === 'challenge-23') {
-    SEED_CHALLENGE_SUBMISSIONS.forEach((sub) => map.set(sub.id, sub));
-  }
+  // Overlay DB submissions (ignoring any legacy seed items)
+  dbSubmissions.forEach((sub) => {
+    if (!sub.id.startsWith('seed-sub-')) {
+      map.set(sub.id, sub);
+    }
+  });
 
-  // Overlay DB submissions
-  dbSubmissions.forEach((sub) => map.set(sub.id, sub));
-
-  // Overlay local submissions (user's recent edits)
-  localSubmissions.forEach((sub) => map.set(sub.id, sub));
+  // Overlay local submissions (user's real submissions)
+  localSubmissions.forEach((sub) => {
+    if (!sub.id.startsWith('seed-sub-')) {
+      map.set(sub.id, sub);
+    }
+  });
 
   // Sort by upvotes descending, then recency
   return Array.from(map.values()).sort((a, b) => b.upvotes - a.upvotes);
