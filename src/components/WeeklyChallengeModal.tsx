@@ -8,6 +8,7 @@ import {
   getChallengeSubmissionsFromDb,
   submitChallengeSolutionToDb,
   upvoteChallengeSubmissionInDb,
+  deleteChallengeSubmissionFromDb,
 } from '@/lib/supabase/database';
 import {
   X,
@@ -27,6 +28,7 @@ import {
   Lightbulb,
   Clock,
   Wand2,
+  Trash2,
 } from 'lucide-react';
 import { UserAvatar } from './UserAvatar';
 
@@ -110,6 +112,28 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
     } finally {
       setIsRegenerating(false);
     }
+  };
+
+  const handleDeleteSubmission = async (targetSubId?: string) => {
+    const subId = targetSubId || userSubmission?.id;
+    if (!subId) return;
+
+    if (typeof window !== 'undefined' && !window.confirm('Are you sure you want to delete this solution? This will remove it completely.')) {
+      return;
+    }
+
+    const activeId = challenge?.id || 'challenge-current';
+    await deleteChallengeSubmissionFromDb(subId, activeId);
+
+    if (userSubmission && userSubmission.id === subId) {
+      setUserSubmission(null);
+      setProblemStatement('');
+      setSolutionProposal('');
+      setKeyMetrics('');
+      setIsEditing(false);
+    }
+
+    setSubmissions((prev) => prev.filter((s) => s.id !== subId));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -615,6 +639,15 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                       <span>Explore Peer Solutions</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubmission()}
+                      className="btn btn-secondary text-xs font-bold py-2.5 px-3.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 flex items-center justify-center gap-1.5"
+                      title="Delete your solution"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -790,6 +823,18 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                                 </div>
                               )}
                             </div>
+                          )}
+
+                          {isMine && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSubmission(sub.id)}
+                              className="btn btn-secondary text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 text-xs font-bold py-1 px-2 flex items-center gap-1"
+                              title="Delete your solution"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
                           )}
 
                           <button

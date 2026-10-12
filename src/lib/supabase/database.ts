@@ -1047,3 +1047,34 @@ export async function upvoteChallengeSubmissionInDb(submissionId: string, challe
   return true;
 }
 
+export async function deleteChallengeSubmissionFromDb(submissionId: string, challengeId: string): Promise<boolean> {
+  // 1. Clean from localStorage across all challenge storage keys
+  if (typeof window !== 'undefined') {
+    try {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('pmverse_challenge_'));
+      for (const k of keys) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const list: ChallengeSubmission[] = JSON.parse(raw);
+          const filtered = list.filter((s) => s.id !== submissionId);
+          localStorage.setItem(k, JSON.stringify(filtered));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Clean from Supabase if table exists
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('challenge_submissions').delete().eq('id', submissionId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
