@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
+import { isAiMentorEnabled } from '@/lib/features';
 
 export type NavTabType =
   | 'home'
@@ -44,12 +45,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const mentorEnabled = isAiMentorEnabled();
 
   const notifications = user
     ? [
         {
           id: 'n-welcome',
-          text: `Welcome to PMVerse, ${profile?.fullName || 'Product Manager'}! Your profile is connected. Explore the PM Fit assessment, AI Mentor, and job matches.`,
+          text: mentorEnabled
+            ? `Welcome to PMVerse, ${profile?.fullName || 'Product Manager'}! Your profile is connected. Explore the PM Fit assessment, AI Mentor, and job matches.`
+            : `Welcome to PMVerse, ${profile?.fullName || 'Product Manager'}! Your profile is connected. Explore PM Fit assessments, Resume Intelligence, and job matches.`,
           time: 'Just now',
           unread: true,
         },
@@ -59,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems: Array<{ id: NavTabType; label: string; badge?: string }> = [
     { id: 'home', label: 'Home' },
     { id: 'resume', label: 'Resume AI', badge: 'AI' },
-    { id: 'mentor', label: 'AI Mentor' },
+    ...(mentorEnabled ? [{ id: 'mentor' as NavTabType, label: 'AI Mentor' }] : []),
     { id: 'assess', label: 'Assessment' },
     { id: 'jobs', label: 'Jobs' },
     { id: 'community', label: 'Community' },

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
+import { isAiMentorEnabled } from '@/lib/features';
 
 interface LearnHubProps {
   initialTerm?: string;
@@ -14,6 +15,7 @@ export const LearnHub: React.FC<LearnHubProps> = ({
 }) => {
   const [selectedTermKey, setSelectedTermKey] = useState<string>(initialTerm);
   const [query, setQuery] = useState('');
+  const mentorEnabled = isAiMentorEnabled();
 
   const TERMS_DATA: Record<
     string,
@@ -227,17 +229,17 @@ export const LearnHub: React.FC<LearnHubProps> = ({
               })}
             </div>
 
-            <button
-              onClick={() => {
-                if (onAskMentor) {
+            {mentorEnabled && onAskMentor && (
+              <button
+                onClick={() => {
                   onAskMentor(`Explain the concept of ${activeTerm.name} in detail.`);
-                }
-              }}
-              className="btn btn-primary text-xs font-bold px-6 py-3 justify-between w-full sm:w-auto"
-            >
-              <span>Ask the Mentor about {activeTerm.name}</span>
-              <span>→</span>
-            </button>
+                }}
+                className="btn btn-primary text-xs font-bold px-6 py-3 justify-between w-full sm:w-auto"
+              >
+                <span>Ask the Mentor about {activeTerm.name}</span>
+                <span>→</span>
+              </button>
+            )}
           </div>
         </article>
       </div>

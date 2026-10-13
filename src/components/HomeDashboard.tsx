@@ -11,6 +11,7 @@ import {
 } from '@/lib/supabase/database';
 import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge } from '@/types';
 import { ArrowRight, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
+import { isAiMentorEnabled } from '@/lib/features';
 
 interface HomeDashboardProps {
   setActiveTab: (tab: NavTabType) => void;
@@ -28,6 +29,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenResumeAudit,
 }) => {
   const { user, profile } = useAuth();
+  const mentorEnabled = isAiMentorEnabled();
   const [latestQuizResult, setLatestQuizResult] = useState<SavedQuizResult | null>(null);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
@@ -377,24 +379,42 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               <span className="text-lg pt-1 group-hover:translate-x-1 transition-transform">→</span>
             </div>
 
-            <div
-              onClick={() => {
-                if (onOpenCase) onOpenCase();
-                setActiveTab('mentor');
-              }}
-              className="py-3 flex items-start justify-between gap-3 cursor-pointer group"
-            >
-              <div>
-                <div className="text-[11px] tracking-wider uppercase text-[#ae1800] font-bold">
-                  Practice
+            {mentorEnabled ? (
+              <div
+                onClick={() => {
+                  if (onOpenCase) onOpenCase();
+                  setActiveTab('mentor');
+                }}
+                className="py-3 flex items-start justify-between gap-3 cursor-pointer group"
+              >
+                <div>
+                  <div className="text-[11px] tracking-wider uppercase text-[#ae1800] font-bold">
+                    Practice
+                  </div>
+                  <div className="font-extrabold text-sm sm:text-base group-hover:text-[#ec3013] transition-colors">
+                    Practice a Product Sense case
+                  </div>
+                  <div className="text-xs text-[#605d5d]">A 15-minute case with AI feedback.</div>
                 </div>
-                <div className="font-extrabold text-sm sm:text-base group-hover:text-[#ec3013] transition-colors">
-                  Practice a Product Sense case
-                </div>
-                <div className="text-xs text-[#605d5d]">A 15-minute case with AI feedback.</div>
+                <span className="text-lg pt-1 group-hover:translate-x-1 transition-transform">→</span>
               </div>
-              <span className="text-lg pt-1 group-hover:translate-x-1 transition-transform">→</span>
-            </div>
+            ) : (
+              <div
+                onClick={() => setActiveTab('resume')}
+                className="py-3 flex items-start justify-between gap-3 cursor-pointer group"
+              >
+                <div>
+                  <div className="text-[11px] tracking-wider uppercase text-[#ae1800] font-bold">
+                    Resume Intelligence
+                  </div>
+                  <div className="font-extrabold text-sm sm:text-base group-hover:text-[#ec3013] transition-colors">
+                    AI ATS Resume Audit
+                  </div>
+                  <div className="text-xs text-[#605d5d]">Optimize bullets and target PM job descriptions.</div>
+                </div>
+                <span className="text-lg pt-1 group-hover:translate-x-1 transition-transform">→</span>
+              </div>
+            )}
           </div>
         </div>
 

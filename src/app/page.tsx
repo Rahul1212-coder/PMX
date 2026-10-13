@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navbar, NavTabType } from '@/components/Navbar';
 import { HomeDashboard } from '@/components/HomeDashboard';
 import { AiPmTutor } from '@/components/AiPmTutor';
@@ -14,6 +14,7 @@ import { ResumeIntelligence } from '@/components/resume/ResumeIntelligence';
 import { WeeklyChallengeModal } from '@/components/WeeklyChallengeModal';
 import { INITIAL_POSTS, INITIAL_JOBS } from '@/data/mockData';
 import { Home, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
+import { isAiMentorEnabled } from '@/lib/features';
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState<NavTabType>('home');
@@ -30,7 +31,17 @@ export default function Page() {
     description: string;
   } | undefined>();
 
+  const mentorEnabled = isAiMentorEnabled();
+
+  // If in production or feature disabled, redirect away from mentor tab
+  useEffect(() => {
+    if (!mentorEnabled && activeTab === 'mentor') {
+      setActiveTab('home');
+    }
+  }, [mentorEnabled, activeTab]);
+
   const handleAskMentor = (prompt: string, mode: 'explain' | 'coach' | 'case' | 'prd' | 'interview' = 'explain') => {
+    if (!mentorEnabled) return;
     setMentorStarterPrompt(prompt);
     setMentorStarterMode(mode);
     setActiveTab('mentor');
@@ -54,7 +65,7 @@ export default function Page() {
     handleAskMentor(q, 'explain');
   };
 
-  const showBottomAskBar = activeTab !== 'mentor';
+  const showBottomAskBar = mentorEnabled && activeTab !== 'mentor';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f3f2f2] text-[#201e1d] selection:bg-[rgba(236,48,19,0.25)]">
@@ -80,7 +91,7 @@ export default function Page() {
         )}
 
         {/* TAB 2: AI Mentor */}
-        {activeTab === 'mentor' && (
+        {mentorEnabled && activeTab === 'mentor' && (
           <AiPmTutor
             starterPrompt={mentorStarterPrompt}
             starterMode={mentorStarterMode}
@@ -169,15 +180,27 @@ export default function Page() {
           <span>Home</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('mentor')}
-          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
-            activeTab === 'mentor' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Mentor</span>
-        </button>
+        {mentorEnabled ? (
+          <button
+            onClick={() => setActiveTab('mentor')}
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
+              activeTab === 'mentor' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Mentor</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setActiveTab('resume')}
+            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
+              activeTab === 'resume' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Resume</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('assess')}

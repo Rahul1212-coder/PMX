@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getOpenAIClient } from '@/lib/openai';
+import { isAiMentorEnabled } from '@/lib/features';
 
 export async function POST(request: Request) {
+  if (!isAiMentorEnabled()) {
+    return NextResponse.json(
+      { error: 'AI Mentor is only available in local development environment.' },
+      { status: 404 }
+    );
+  }
+
   try {
     const { term, userRole, questionType } = await request.json();
 

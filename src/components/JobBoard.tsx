@@ -23,6 +23,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { isAiMentorEnabled } from '@/lib/features';
 import {
   getSavedJobIdsFromDb,
   toggleSavedJobInDb,
@@ -51,6 +52,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   onAnalyzeJobResume,
 }) => {
   const { user, profile, openAuthModal, isConfigured } = useAuth();
+  const mentorEnabled = isAiMentorEnabled();
   const [jobs, setJobs] = useState<JobListing[]>(initialJobs);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -552,18 +554,20 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                 >
                   <span>{savedJobIds.has(selectedJob.id) ? 'Saved' : 'Save job'}</span>
                 </button>
-                <button
-                  onClick={() => {
-                    if (onNavigateToMentor) {
-                      onNavigateToMentor(
-                        `Start a mock interview for the ${selectedJob.title} role at ${selectedJob.company}.`
-                      );
-                    }
-                  }}
-                  className="btn btn-secondary text-xs font-bold"
-                >
-                  <span>Prepare for interview</span>
-                </button>
+                {mentorEnabled && (
+                  <button
+                    onClick={() => {
+                      if (onNavigateToMentor) {
+                        onNavigateToMentor(
+                          `Start a mock interview for the ${selectedJob.title} role at ${selectedJob.company}.`
+                        );
+                      }
+                    }}
+                    className="btn btn-secondary text-xs font-bold"
+                  >
+                    <span>Prepare for interview</span>
+                  </button>
+                )}
                 {onAnalyzeJobResume && (
                   <button
                     onClick={() => {
@@ -683,19 +687,21 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                 </button>
               )}
 
-              <button
-                onClick={() => {
-                  if (onNavigateToMentor) {
-                    onNavigateToMentor(
-                      `Help me build a 4-week plan to prepare for ${selectedJob.title} at ${selectedJob.company}.`
-                    );
-                  }
-                }}
-                className="btn btn-secondary w-full justify-between text-xs font-bold mt-2"
-              >
-                <span>Close gaps with AI Mentor</span>
-                <span>→</span>
-              </button>
+              {mentorEnabled && (
+                <button
+                  onClick={() => {
+                    if (onNavigateToMentor) {
+                      onNavigateToMentor(
+                        `Help me build a 4-week plan to prepare for ${selectedJob.title} at ${selectedJob.company}.`
+                      );
+                    }
+                  }}
+                  className="btn btn-secondary w-full justify-between text-xs font-bold mt-2"
+                >
+                  <span>Close gaps with AI Mentor</span>
+                  <span>→</span>
+                </button>
+              )}
             </aside>
           </div>
         </div>
