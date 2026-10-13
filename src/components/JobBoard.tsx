@@ -40,6 +40,7 @@ interface JobBoardProps {
   initialActiveSubTab?: 'browse' | 'tracker';
   onNavigateToMentor?: (prompt: string) => void;
   onNavigateToAssessment?: () => void;
+  onAnalyzeJobResume?: (job: { title: string; company: string; description: string }) => void;
 }
 
 export const JobBoard: React.FC<JobBoardProps> = ({
@@ -47,6 +48,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({
   initialActiveSubTab = 'browse',
   onNavigateToMentor,
   onNavigateToAssessment,
+  onAnalyzeJobResume,
 }) => {
   const { user, profile, openAuthModal, isConfigured } = useAuth();
   const [jobs, setJobs] = useState<JobListing[]>(initialJobs);
@@ -562,6 +564,21 @@ export const JobBoard: React.FC<JobBoardProps> = ({
                 >
                   <span>Prepare for interview</span>
                 </button>
+                {onAnalyzeJobResume && (
+                  <button
+                    onClick={() => {
+                      onAnalyzeJobResume({
+                        title: selectedJob.title,
+                        company: selectedJob.company,
+                        description: selectedJob.description || '',
+                      });
+                    }}
+                    className="btn btn-primary text-xs font-black flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Match My Resume</span>
+                  </button>
+                )}
               </div>
 
               <div className="space-y-4 pt-4 border-t border-[rgba(32,30,29,0.15)]">

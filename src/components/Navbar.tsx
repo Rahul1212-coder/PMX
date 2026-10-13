@@ -16,6 +16,7 @@ import { UserAvatar } from './UserAvatar';
 
 export type NavTabType =
   | 'home'
+  | 'resume'
   | 'mentor'
   | 'assess'
   | 'jobs'
@@ -55,8 +56,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       ]
     : [];
 
-  const navItems: Array<{ id: NavTabType; label: string }> = [
+  const navItems: Array<{ id: NavTabType; label: string; badge?: string }> = [
     { id: 'home', label: 'Home' },
+    { id: 'resume', label: 'Resume AI', badge: 'AI' },
     { id: 'mentor', label: 'AI Mentor' },
     { id: 'assess', label: 'Assessment' },
     { id: 'jobs', label: 'Jobs' },
@@ -119,13 +121,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`px-3 py-1.5 cursor-pointer text-sm font-semibold transition-colors border-b-2 whitespace-nowrap ${
+                className={`px-3 py-1.5 cursor-pointer text-sm font-semibold transition-colors border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
                   isActive
                     ? 'text-[#ae1800] border-[#ec3013]'
                     : 'text-[#201e1d] border-transparent hover:text-[#ec3013]'
                 }`}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-[#ef2b18]/10 text-[#ef2b18] border border-[#ef2b18]/20">
+                    {item.badge}
+                  </span>
+                )}
               </div>
             );
           })}

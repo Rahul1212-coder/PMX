@@ -17,6 +17,7 @@ interface HomeDashboardProps {
   onOpenTopic?: (topicId: string) => void;
   onOpenCase?: () => void;
   onOpenChallenge?: () => void;
+  onOpenResumeAudit?: () => void;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
@@ -24,6 +25,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenTopic,
   onOpenCase,
   onOpenChallenge,
+  onOpenResumeAudit,
 }) => {
   const { user, profile } = useAuth();
   const [latestQuizResult, setLatestQuizResult] = useState<SavedQuizResult | null>(null);
@@ -320,6 +322,26 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             Recommended For You
           </div>
           <div className="divide-y divide-[rgba(32,30,29,0.15)]">
+            <div
+              onClick={() => {
+                if (onOpenResumeAudit) onOpenResumeAudit();
+                else setActiveTab('resume');
+              }}
+              className="py-3 flex items-start justify-between gap-3 cursor-pointer group bg-white/80 -mx-2 px-2.5 rounded border border-[#ef2b18]/30 mb-1"
+            >
+              <div>
+                <div className="text-[10px] tracking-wider uppercase text-[#ef2b18] font-black flex items-center gap-1.5">
+                  <span>AI Career Tool</span>
+                  <span className="bg-[#ef2b18] text-white px-1.5 py-0.2 rounded text-[9px]">NEW</span>
+                </div>
+                <div className="font-extrabold text-sm sm:text-base group-hover:text-[#ec3013] transition-colors">
+                  Resume Intelligence & ATS Audit
+                </div>
+                <div className="text-xs text-[#605d5d]">Audit ATS readiness, match target roles & optimize bullets.</div>
+              </div>
+              <span className="text-lg pt-1 group-hover:translate-x-1 transition-transform text-[#ef2b18]">→</span>
+            </div>
+
             <div
               onClick={() => {
                 if (onOpenTopic) onOpenTopic('activation');

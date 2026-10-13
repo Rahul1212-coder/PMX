@@ -10,9 +10,10 @@ import { CommunityFeed } from '@/components/CommunityFeed';
 import { NetworkConnect } from '@/components/NetworkConnect';
 import { LearnHub } from '@/components/LearnHub';
 import { CirclesLanding } from '@/components/circles/CirclesLanding';
+import { ResumeIntelligence } from '@/components/resume/ResumeIntelligence';
 import { WeeklyChallengeModal } from '@/components/WeeklyChallengeModal';
 import { INITIAL_POSTS, INITIAL_JOBS } from '@/data/mockData';
-import { Home, Sparkles, Award, Briefcase, Users } from 'lucide-react';
+import { Home, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState<NavTabType>('home');
@@ -23,6 +24,11 @@ export default function Page() {
   >('explain');
   const [learnInitialTerm, setLearnInitialTerm] = useState<string>('pmf');
   const [bottomAskText, setBottomAskText] = useState('');
+  const [resumeInitialJob, setResumeInitialJob] = useState<{
+    title: string;
+    company: string;
+    description: string;
+  } | undefined>();
 
   const handleAskMentor = (prompt: string, mode: 'explain' | 'coach' | 'case' | 'prd' | 'interview' = 'explain') => {
     setMentorStarterPrompt(prompt);
@@ -33,6 +39,11 @@ export default function Page() {
   const handleOpenLearnTopic = (termKey: string) => {
     setLearnInitialTerm(termKey);
     setActiveTab('learn');
+  };
+
+  const handleAnalyzeJobResume = (job: { title: string; company: string; description: string }) => {
+    setResumeInitialJob(job);
+    setActiveTab('resume');
   };
 
   const handleBottomAskSubmit = (e?: React.FormEvent) => {
@@ -59,7 +70,13 @@ export default function Page() {
             onOpenTopic={handleOpenLearnTopic}
             onOpenCase={() => handleAskMentor('Orders dropped 15% in one city — diagnose', 'case')}
             onOpenChallenge={() => setIsChallengeModalOpen(true)}
+            onOpenResumeAudit={() => setActiveTab('resume')}
           />
+        )}
+
+        {/* TAB: PMVerse Resume Intelligence */}
+        {activeTab === 'resume' && (
+          <ResumeIntelligence initialJobContext={resumeInitialJob} />
         )}
 
         {/* TAB 2: AI Mentor */}
@@ -82,6 +99,7 @@ export default function Page() {
             initialActiveSubTab={activeTab === 'tracker' ? 'tracker' : 'browse'}
             onNavigateToMentor={(prompt) => handleAskMentor(prompt, 'coach')}
             onNavigateToAssessment={() => setActiveTab('assess')}
+            onAnalyzeJobResume={handleAnalyzeJobResume}
           />
         )}
 
