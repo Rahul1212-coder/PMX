@@ -47,11 +47,11 @@ export async function parseResumeDocument(options: ParseOptions): Promise<Parsed
   if (ext === 'pdf' || mimeType === 'application/pdf') {
     fileType = 'pdf';
     try {
-      // Dynamic import to prevent bundler SSR issues
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(buffer);
-      rawText = data.text || '';
-      pageCount = data.numpages || 1;
+      const { extractText } = require('unpdf');
+      const uint8 = new Uint8Array(buffer);
+      const res = await extractText(uint8);
+      rawText = Array.isArray(res.text) ? res.text.join('\n\n') : res.text || '';
+      pageCount = res.totalPages || 1;
     } catch (err: any) {
       if (err?.message?.includes('password') || err?.message?.includes('encrypt')) {
         throw new Error('This PDF is password-protected or encrypted. Please remove password protection before uploading.');

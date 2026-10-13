@@ -115,6 +115,33 @@ async function runParserTest() {
 
   console.log(`✔ Parser accurately extracted ${parsed.wordCount} words and identified sections: [${parsed.detectedSections.join(', ')}]`);
   console.log(`✔ Extraction confidence: ${parsed.extractionConfidence}%`);
+
+  // Test PDF parsing via unpdf
+  const validPdfBuffer = Buffer.from(
+    '%PDF-1.4\n' +
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n' +
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n' +
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n' +
+    '5 0 obj\n<< /Length 67 >>\nstream\n' +
+    'BT /F1 12 Tf 72 712 Td (Alex Mercer - Senior Product Manager) Tj ET\n' +
+    'endstream\nendobj\n' +
+    'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000241 00000 n \n0000000311 00000 n \n' +
+    'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n428\n%%EOF\n',
+    'utf-8'
+  );
+
+  const parsedPdf = await parseResumeDocument({
+    fileName: 'resume.pdf',
+    fileSize: validPdfBuffer.length,
+    buffer: validPdfBuffer,
+    mimeType: 'application/pdf',
+  });
+
+  assert.strictEqual(parsedPdf.fileType, 'pdf', 'File type should be pdf');
+  assert.strictEqual(parsedPdf.pageCount, 1, 'Page count should be 1');
+  assert(parsedPdf.rawText.includes('Alex Mercer'), 'Parsed PDF text must include Alex Mercer');
+  console.log(`✔ PDF parser (unpdf) successfully extracted text: "${parsedPdf.rawText.trim()}", pages: ${parsedPdf.pageCount}`);
 }
 
 // 3. Test DOCX Generation with docx library
