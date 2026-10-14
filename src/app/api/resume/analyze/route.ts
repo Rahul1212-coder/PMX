@@ -8,6 +8,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    const userEmail = searchParams.get('userEmail');
+    const clientReported = searchParams.get('clientUsageCount');
+    const authHeader = request.headers.get('authorization');
+    const authToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
 
     if (!userId || userId === 'guest') {
       return NextResponse.json({
@@ -19,7 +23,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const usage = await getUserResumeUsage(userId);
+    const usage = await getUserResumeUsage(userId, {
+      authToken,
+      userEmail,
+      clientReportedCount: clientReported ? parseInt(clientReported, 10) : undefined,
+    });
+
     return NextResponse.json({
       ...usage,
       authenticated: true,
@@ -34,6 +43,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get('authorization');
+    const authToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+
     const body = await request.json();
     const {
       resumeText,
@@ -44,6 +56,8 @@ export async function POST(request: Request) {
       detectedFormattingRisks = [],
       resumeId,
       userId,
+      userEmail,
+      clientUsageCount,
     } = body;
 
     // 1. Enforce that only signed in users can use Resume AI
@@ -54,8 +68,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Enforce 2-evaluations maximum usage limit per user
-    const currentUsage = await getUserResumeUsage(userId);
+    // 2. Enforce 2-evaluations maximum usage limit per user account
+    const currentUsage = await getUserResumeUsage(userId, {
+      authToken,
+      userEmail,
+      clientReportedCount: typeof clientUsageCount === 'number' ? clientUsageCount : undefined,
+    });
+
     if (currentUsage.hasReachedLimit) {
       return NextResponse.json(
         {
@@ -127,11 +146,15 @@ export async function POST(request: Request) {
     };
 
     // 4. Record usage count for this user
-    const updatedUsage = await recordResumeUsage(userId, {
-      resumeId: analysisResult.resumeId,
-      targetRole,
-      score: scoringResult.overallScore,
-    });
+    const updatedUsage = await recordResumeUsage(
+      userId,
+      {
+        resumeId: analysisResult.resumeId,
+        targetRole,
+        score: scoringResult.overallScore,
+      },
+      { authToken }
+    );
 
     return NextResponse.json({
       success: true,

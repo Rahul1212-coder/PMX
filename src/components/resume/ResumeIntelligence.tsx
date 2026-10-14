@@ -28,6 +28,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { ResumeUsageInfo, MAX_RESUME_ANALYSES } from '@/lib/resume/usage-types';
+import { getClientAccountUsage, recordClientAccountUsage } from '@/lib/resume/client-usage';
 
 interface ResumeIntelligenceProps {
   initialJobContext?: {
@@ -38,14 +39,37 @@ interface ResumeIntelligenceProps {
 }
 
 export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJobContext }) => {
-  const { user, openAuthModal } = useAuth();
+  const { user, session, openAuthModal } = useAuth();
 
-  // Usage quota state (max 2 evaluations per user)
-  const [usageInfo, setUsageInfo] = useState<ResumeUsageInfo>({
-    usageCount: 0,
-    remaining: MAX_RESUME_ANALYSES,
-    maxAllowed: MAX_RESUME_ANALYSES,
-    hasReachedLimit: false,
+  // Usage quota state (max 2 evaluations per user account)
+  const [usageInfo, setUsageInfo] = useState<ResumeUsageInfo>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedUser = localStorage.getItem('pmverse_user');
+        const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+        const uid = parsedUser?.id;
+        const email = parsedUser?.email;
+        const byId = uid ? parseInt(localStorage.getItem(`pmverse_resume_usage_${uid}`) || '0', 10) : 0;
+        const byEmail = email ? parseInt(localStorage.getItem(`pmverse_resume_usage_${email}`) || '0', 10) : 0;
+        const count = Math.min(MAX_RESUME_ANALYSES, Math.max(isNaN(byId) ? 0 : byId, isNaN(byEmail) ? 0 : byEmail));
+        if (count > 0) {
+          return {
+            usageCount: count,
+            remaining: Math.max(0, MAX_RESUME_ANALYSES - count),
+            maxAllowed: MAX_RESUME_ANALYSES,
+            hasReachedLimit: count >= MAX_RESUME_ANALYSES,
+            history: [],
+          };
+        }
+      } catch {}
+    }
+    return {
+      usageCount: 0,
+      remaining: MAX_RESUME_ANALYSES,
+      maxAllowed: MAX_RESUME_ANALYSES,
+      hasReachedLimit: false,
+      history: [],
+    };
   });
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
 
@@ -81,34 +105,52 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
   const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
 
-  // Fetch current user's evaluation usage from server & database
-  const fetchUsage = async (userId: string) => {
+  // Sync account usage across Supabase Auth user_metadata, saved_jobs table, localStorage, and API
+  const syncUsage = React.useCallback(async () => {
+    if (!user?.id || user.id === 'guest') return;
     try {
       setIsLoadingUsage(true);
-      const res = await fetch(`/api/resume/analyze?userId=${encodeURIComponent(userId)}`);
+
+      // 1. Resolve client-side usage (instantaneous from user_metadata + saved_jobs + localStorage)
+      const clientUsage = await getClientAccountUsage(user, session);
+      setUsageInfo(clientUsage);
+
+      // 2. Fetch server-verified usage to ensure server cache is warm and synced
+      const query = new URLSearchParams({
+        userId: user.id,
+        ...(user.email ? { userEmail: user.email } : {}),
+        clientUsageCount: clientUsage.usageCount.toString(),
+      });
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch(`/api/resume/analyze?${query.toString()}`, { headers });
       if (res.ok) {
         const data = await res.json();
-        const count = typeof data.usageCount === 'number' ? data.usageCount : 0;
+        const serverCount = typeof data.usageCount === 'number' ? data.usageCount : 0;
+        const finalCount = Math.min(MAX_RESUME_ANALYSES, Math.max(clientUsage.usageCount, serverCount));
         setUsageInfo({
-          usageCount: count,
-          remaining: typeof data.remaining === 'number' ? data.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
+          usageCount: finalCount,
+          remaining: Math.max(0, MAX_RESUME_ANALYSES - finalCount),
           maxAllowed: MAX_RESUME_ANALYSES,
-          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
-          history: data.history || [],
+          hasReachedLimit: finalCount >= MAX_RESUME_ANALYSES,
+          history: data.history || clientUsage.history || [],
         });
       }
     } catch (err) {
-      console.warn('Failed to fetch resume usage:', err);
+      console.warn('Failed to sync resume usage:', err);
     } finally {
       setIsLoadingUsage(false);
     }
-  };
+  }, [user, session]);
 
   useEffect(() => {
     if (user?.id) {
-      fetchUsage(user.id);
+      syncUsage();
     }
-  }, [user?.id]);
+  }, [user?.id, user?.user_metadata?.resume_eval_count, user?.user_metadata?.resume_analyses_count, syncUsage]);
 
   // Load saved analysis from localStorage on initial render
   useEffect(() => {
@@ -247,9 +289,14 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
     }, 3600);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/api/resume/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           resumeText,
           targetRole: params.targetRole,
@@ -259,6 +306,8 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           detectedFormattingRisks: parsedDoc?.formattingRisks || [],
           resumeId: parsedDoc?.id,
           userId: user.id,
+          userEmail: user.email,
+          clientUsageCount: usageInfo.usageCount,
         }),
       });
 
@@ -267,21 +316,17 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
         throw new Error(data.error || 'Failed to complete resume analysis');
       }
 
-      // Update usage quota from server response
-      if (data.usage) {
-        const count = typeof data.usage.newCount === 'number' ? data.usage.newCount : usageInfo.usageCount + 1;
-        setUsageInfo({
-          usageCount: count,
-          remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
-          maxAllowed: MAX_RESUME_ANALYSES,
-          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
-          history: usageInfo.history,
-        });
-      }
-
       const result: ResumeAnalysisResult = data.analysis;
       setCurrentAnalysis(result);
       setOriginalAnalysis(result);
+
+      // Record client account usage permanently in Supabase user_metadata, saved_jobs, and localStorage
+      const updatedUsage = await recordClientAccountUsage(user, {
+        targetRole: params.targetRole,
+        score: result.overallScore,
+        resumeId: parsedDoc?.id,
+      });
+      setUsageInfo(updatedUsage);
 
       // Save initial version
       const initialVer: ResumeVersion = {
@@ -343,9 +388,14 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
     }
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/api/resume/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           resumeText: reconstructedText,
           targetRole,
@@ -355,6 +405,8 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           detectedFormattingRisks: parsedDoc?.formattingRisks || [],
           resumeId: parsedDoc?.id,
           userId: user.id,
+          userEmail: user.email,
+          clientUsageCount: usageInfo.usageCount,
         }),
       });
 
@@ -363,16 +415,12 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
         throw new Error(data.error || 'Failed to re-score resume');
       }
 
-      if (data.usage) {
-        const count = typeof data.usage.newCount === 'number' ? data.usage.newCount : usageInfo.usageCount + 1;
-        setUsageInfo({
-          usageCount: count,
-          remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
-          maxAllowed: MAX_RESUME_ANALYSES,
-          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
-          history: usageInfo.history,
-        });
-      }
+      const updatedUsage = await recordClientAccountUsage(user, {
+        targetRole,
+        score: data.analysis?.overallScore,
+        resumeId: parsedDoc?.id,
+      });
+      setUsageInfo(updatedUsage);
 
       const newAnalysis: ResumeAnalysisResult = data.analysis;
       newAnalysis.structuredResume = updatedResume; // Ensure latest client edits are preserved
