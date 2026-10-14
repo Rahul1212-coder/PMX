@@ -187,10 +187,52 @@ async function runBulletRewriterTest() {
   console.log(`✔ Metric Probing Question: "${res.metricPromptQuestion}"`);
 }
 
+// 5. Test Member Authentication & 2-Use Quota Enforcement
+console.log('\n--- TEST 5: Member Authentication & 2-Use Quota Enforcement ---');
+const { getUserResumeUsage, recordResumeUsage, MAX_RESUME_ANALYSES } = require('../src/lib/resume/usage.ts');
+
+async function runUsageQuotaTest() {
+  assert.strictEqual(MAX_RESUME_ANALYSES, 2, 'Max resume analyses must equal exactly 2');
+  console.log('✔ MAX_RESUME_ANALYSES verified as 2');
+
+  // Test guest user rejection
+  const guestUsage = await getUserResumeUsage('guest');
+  assert.strictEqual(guestUsage.hasReachedLimit, true, 'Guest user must be treated as limit reached / gated');
+  assert.strictEqual(guestUsage.remaining, 0, 'Guest user must have 0 remaining');
+  console.log('✔ Guest user access gated successfully');
+
+  // Test new member quota tracking
+  const testUserId = `test-user-${Date.now()}`;
+  const initialUsage = await getUserResumeUsage(testUserId);
+  assert.strictEqual(initialUsage.usageCount, 0, 'New user must start at 0 uses');
+  assert.strictEqual(initialUsage.remaining, 2, 'New user must have 2 uses remaining');
+  assert.strictEqual(initialUsage.hasReachedLimit, false, 'New user must not have reached limit');
+  console.log(`✔ New user starts at 0/2 used (${initialUsage.remaining} remaining)`);
+
+  // Record 1st analysis
+  const usage1 = await recordResumeUsage(testUserId, { targetRole: 'Senior PM', score: 85 });
+  assert.strictEqual(usage1.newCount, 1, 'First analysis must result in count 1');
+  assert.strictEqual(usage1.remaining, 1, 'First analysis must leave 1 remaining');
+  console.log(`✔ First analysis recorded: count = 1, remaining = 1`);
+
+  // Record 2nd analysis
+  const usage2 = await recordResumeUsage(testUserId, { targetRole: 'Staff PM', score: 92 });
+  assert.strictEqual(usage2.newCount, 2, 'Second analysis must result in count 2');
+  assert.strictEqual(usage2.remaining, 0, 'Second analysis must leave 0 remaining');
+  console.log(`✔ Second analysis recorded: count = 2, remaining = 0`);
+
+  // Verify user state after 2 analyses
+  const postLimitUsage = await getUserResumeUsage(testUserId);
+  assert.strictEqual(postLimitUsage.hasReachedLimit, true, 'User with 2 analyses must have reached limit');
+  assert.strictEqual(postLimitUsage.remaining, 0, 'User with 2 analyses must have 0 remaining');
+  console.log(`✔ 2-use evaluation quota strictly enforced (hasReachedLimit = true)`);
+}
+
 async function runAll() {
   await runParserTest();
   await runDocxTest();
   await runBulletRewriterTest();
+  await runUsageQuotaTest();
   console.log('\n========================================');
   console.log('🎉 ALL RESUME INTELLIGENCE TESTS PASSED!');
   console.log('========================================\n');

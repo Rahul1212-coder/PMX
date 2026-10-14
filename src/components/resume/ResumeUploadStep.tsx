@@ -8,12 +8,16 @@ interface ResumeUploadStepProps {
   onParsedDocument: (doc: ParsedResumeDocument, rawText: string) => void;
   initialDoc?: ParsedResumeDocument | null;
   initialRawText?: string;
+  hasReachedLimit?: boolean;
+  onViewExistingAnalysis?: () => void;
 }
 
 export const ResumeUploadStep: React.FC<ResumeUploadStepProps> = ({
   onParsedDocument,
   initialDoc,
   initialRawText,
+  hasReachedLimit = false,
+  onViewExistingAnalysis,
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -112,6 +116,30 @@ export const ResumeUploadStep: React.FC<ResumeUploadStepProps> = ({
           Upload your PDF or DOCX file. Our parser extracts reading order, bullets, and section boundaries without discarding content.
         </p>
       </div>
+
+      {/* Limit Reached Notification */}
+      {hasReachedLimit && (
+        <div className="p-4 bg-red-50 border border-red-300 rounded text-xs text-red-900 flex flex-wrap items-center justify-between gap-3 text-left">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Evaluation Limit Reached (2 of 2 Free Analyses Used)</p>
+              <p className="text-[11px] text-red-700 mt-0.5 leading-snug">
+                You have completed your 2 complimentary AI evaluations. You can still view, edit, and export your previously analyzed resume.
+              </p>
+            </div>
+          </div>
+          {onViewExistingAnalysis && (
+            <button
+              type="button"
+              onClick={onViewExistingAnalysis}
+              className="btn btn-secondary text-xs font-bold py-1.5 px-3 shrink-0"
+            >
+              <span>View Existing Analysis →</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Upload Box */}
       <div

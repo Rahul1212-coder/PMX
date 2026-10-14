@@ -24,7 +24,10 @@ import {
   CheckCircle,
   AlertCircle,
   Plus,
+  Shield,
+  CheckCircle2,
 } from 'lucide-react';
+import { ResumeUsageInfo, MAX_RESUME_ANALYSES } from '@/lib/resume/usage-types';
 
 interface ResumeIntelligenceProps {
   initialJobContext?: {
@@ -35,7 +38,16 @@ interface ResumeIntelligenceProps {
 }
 
 export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJobContext }) => {
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
+
+  // Usage quota state (max 2 evaluations per user)
+  const [usageInfo, setUsageInfo] = useState<ResumeUsageInfo>({
+    usageCount: 0,
+    remaining: MAX_RESUME_ANALYSES,
+    maxAllowed: MAX_RESUME_ANALYSES,
+    hasReachedLimit: false,
+  });
+  const [isLoadingUsage, setIsLoadingUsage] = useState(false);
 
   // Wizard state: 1 = Upload, 2 = Target Role & JD, 3 = Results & Editor
   const [step, setStep] = useState<number>(1);
@@ -69,6 +81,35 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
   const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
 
+  // Fetch current user's evaluation usage from server & database
+  const fetchUsage = async (userId: string) => {
+    try {
+      setIsLoadingUsage(true);
+      const res = await fetch(`/api/resume/analyze?userId=${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const count = typeof data.usageCount === 'number' ? data.usageCount : 0;
+        setUsageInfo({
+          usageCount: count,
+          remaining: typeof data.remaining === 'number' ? data.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
+          maxAllowed: MAX_RESUME_ANALYSES,
+          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
+          history: data.history || [],
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch resume usage:', err);
+    } finally {
+      setIsLoadingUsage(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchUsage(user.id);
+    }
+  }, [user?.id]);
+
   // Load saved analysis from localStorage on initial render
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -89,6 +130,81 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
     }
   }, []);
 
+  // If user is not signed in, show members-only lock screen
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 px-4 text-center space-y-6 animate-in fade-in duration-200">
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#ef2b18]/10 text-[#ef2b18] border border-[#ef2b18]/25 text-xs font-black uppercase tracking-wider rounded">
+          <Shield className="w-3.5 h-3.5" />
+          <span>PMVerse Members Only</span>
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl sm:text-4xl font-black text-[#201e1d] tracking-tight">
+            Resume Intelligence & ATS Optimization
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto">
+            AI-powered, evidence-based resume evaluation for Product Management roles. Sign in to access your complimentary analyses.
+          </p>
+        </div>
+
+        <div className="bg-white border-2 border-[#201e1d] p-6 sm:p-8 rounded space-y-6 text-left shadow-lg">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-[#201e1d] text-white flex items-center justify-center font-black rounded shrink-0">
+              <Sparkles className="w-6 h-6 text-[#ef2b18]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-base text-[#201e1d]">2 Free Analyses Per Account</h3>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase rounded">
+                  Member Benefit
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Sign in or create a free account to unlock 2 full AI resume audits compared against real PM competencies, ATS keyword matrices, and job descriptions.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-slate-100 text-xs">
+            <div className="flex items-center gap-2 text-slate-700">
+              <CheckCircle2 className="w-4 h-4 text-[#ef2b18] shrink-0" />
+              <span>100-pt ATS Compatibility Rubric</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-700">
+              <CheckCircle2 className="w-4 h-4 text-[#ef2b18] shrink-0" />
+              <span>Hard Skill & Keyword Gap Scans</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-700">
+              <CheckCircle2 className="w-4 h-4 text-[#ef2b18] shrink-0" />
+              <span>Outcome-Focused Bullet Rewriting</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-700">
+              <CheckCircle2 className="w-4 h-4 text-[#ef2b18] shrink-0" />
+              <span>Native ATS DOCX Export</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-slate-200">
+            <button
+              onClick={() => openAuthModal('signin')}
+              className="btn btn-primary w-full sm:w-auto flex-1 text-xs font-black py-3 px-6 justify-center shadow"
+            >
+              <span>Sign In to Continue</span>
+              <span>→</span>
+            </button>
+            <button
+              onClick={() => openAuthModal('signup')}
+              className="btn btn-secondary w-full sm:w-auto flex-1 text-xs font-bold py-3 px-6 justify-center"
+            >
+              <span>Create Free Account</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Step 1: Document parsed
   const handleDocumentParsed = (doc: ParsedResumeDocument, rawText: string) => {
     setParsedDoc(doc);
@@ -105,6 +221,14 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
     experienceLevel?: string;
     preferredRegion?: string;
   }) => {
+    // Quota check before requesting analysis
+    if (usageInfo.hasReachedLimit) {
+      setErrorMessage(
+        'You have reached your limit of 2 free AI resume evaluations. You can continue reviewing, editing, and exporting your existing resume.'
+      );
+      return;
+    }
+
     setTargetRole(params.targetRole);
     setTargetCompany(params.targetCompany || '');
     setJobDescription(params.jobDescription || '');
@@ -134,13 +258,25 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           mode: params.mode,
           detectedFormattingRisks: parsedDoc?.formattingRisks || [],
           resumeId: parsedDoc?.id,
-          userId: user?.id,
+          userId: user.id,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to complete resume analysis');
+      }
+
+      // Update usage quota from server response
+      if (data.usage) {
+        const count = typeof data.usage.newCount === 'number' ? data.usage.newCount : usageInfo.usageCount + 1;
+        setUsageInfo({
+          usageCount: count,
+          remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
+          maxAllowed: MAX_RESUME_ANALYSES,
+          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
+          history: usageInfo.history,
+        });
       }
 
       const result: ResumeAnalysisResult = data.analysis;
@@ -177,6 +313,13 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
 
   // Re-analyze updated structured resume
   const handleReanalyze = async (updatedResume: StructuredResumeData) => {
+    if (usageInfo.hasReachedLimit) {
+      setErrorMessage(
+        'You have reached your limit of 2 free AI resume evaluations. You can continue editing bullets and exporting your ATS DOCX resume.'
+      );
+      return;
+    }
+
     setIsAnalyzing(true);
     setErrorMessage(null);
     setAnalysisStage('Re-scoring updated resume content and verifying bullet improvements...');
@@ -211,13 +354,24 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           mode: analysisMode,
           detectedFormattingRisks: parsedDoc?.formattingRisks || [],
           resumeId: parsedDoc?.id,
-          userId: user?.id,
+          userId: user.id,
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to re-score resume');
+      }
+
+      if (data.usage) {
+        const count = typeof data.usage.newCount === 'number' ? data.usage.newCount : usageInfo.usageCount + 1;
+        setUsageInfo({
+          usageCount: count,
+          remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : Math.max(0, MAX_RESUME_ANALYSES - count),
+          maxAllowed: MAX_RESUME_ANALYSES,
+          hasReachedLimit: count >= MAX_RESUME_ANALYSES,
+          history: usageInfo.history,
+        });
       }
 
       const newAnalysis: ResumeAnalysisResult = data.analysis;
@@ -298,6 +452,12 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
   };
 
   const handleStartNewAnalysis = () => {
+    if (usageInfo.hasReachedLimit) {
+      setErrorMessage(
+        'You have completed your 2 free AI resume evaluations for this account. You can continue reviewing, editing, and exporting your existing analyzed resume.'
+      );
+      return;
+    }
     setParsedDoc(null);
     setResumeText('');
     setCurrentAnalysis(null);
@@ -312,6 +472,37 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
 
   return (
     <div className="w-full space-y-6">
+      {/* Quota & Usage Status Bar */}
+      <div className="bg-white border-2 border-[#201e1d] p-3 sm:p-4 rounded flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <Sparkles className="w-4 h-4 text-[#ef2b18]" />
+          <span className="font-bold text-[#201e1d]">AI Resume Evaluations:</span>
+          <span
+            className={`px-2.5 py-0.5 font-black uppercase text-[11px] rounded tracking-wide ${
+              usageInfo.hasReachedLimit
+                ? 'bg-red-100 text-red-700 border border-red-300'
+                : usageInfo.remaining === 1
+                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+            }`}
+          >
+            {usageInfo.hasReachedLimit
+              ? 'Limit Reached (2 of 2 Used)'
+              : `${usageInfo.remaining} of 2 Remaining`}
+          </span>
+        </div>
+
+        <div className="text-slate-500 text-[11px]">
+          {usageInfo.hasReachedLimit ? (
+            <span className="text-red-700 font-semibold">
+              Maximum 2 free analyses used. You can continue editing and exporting your existing ATS resume.
+            </span>
+          ) : (
+            <span>Each registered account receives 2 complimentary AI evaluations.</span>
+          )}
+        </div>
+      </div>
+
       {/* Platform Header Banner */}
       <div className="bg-white border-2 border-[#201e1d] p-5 sm:p-6 shadow-sm rounded flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-left">
         <div className="space-y-1">
@@ -379,6 +570,8 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           onParsedDocument={handleDocumentParsed}
           initialDoc={parsedDoc}
           initialRawText={resumeText}
+          hasReachedLimit={usageInfo.hasReachedLimit}
+          onViewExistingAnalysis={currentAnalysis ? () => setStep(3) : undefined}
         />
       )}
 
@@ -392,6 +585,8 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           initialJobDescription={jobDescription}
           initialMode={analysisMode}
           isLoading={isAnalyzing}
+          hasReachedLimit={usageInfo.hasReachedLimit}
+          remainingCount={usageInfo.remaining}
         />
       )}
 
@@ -404,6 +599,8 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
           onOpenCompare={() => setIsCompareOpen(true)}
           onReanalyze={handleReanalyze}
           hasPreviousVersion={versions.length > 1}
+          hasReachedLimit={usageInfo.hasReachedLimit}
+          remainingCount={usageInfo.remaining}
         />
       )}
 

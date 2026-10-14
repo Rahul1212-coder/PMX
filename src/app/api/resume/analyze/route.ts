@@ -2,6 +2,35 @@ import { NextResponse } from 'next/server';
 import { analyzeResumeWithOpenAI, PROMPT_VERSION, RESUME_MODEL } from '@/lib/resume/openai';
 import { calculateDeterministicScores } from '@/lib/resume/scoring';
 import { ResumeAnalysisResult, ResumeAnalysisMode } from '@/types/resume';
+import { getUserResumeUsage, recordResumeUsage, MAX_RESUME_ANALYSES } from '@/lib/resume/usage';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+
+    if (!userId || userId === 'guest') {
+      return NextResponse.json({
+        usageCount: 0,
+        remaining: 0,
+        maxAllowed: MAX_RESUME_ANALYSES,
+        hasReachedLimit: true,
+        authenticated: false,
+      });
+    }
+
+    const usage = await getUserResumeUsage(userId);
+    return NextResponse.json({
+      ...usage,
+      authenticated: true,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || 'Failed to fetch resume usage' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +45,29 @@ export async function POST(request: Request) {
       resumeId,
       userId,
     } = body;
+
+    // 1. Enforce that only signed in users can use Resume AI
+    if (!userId || typeof userId !== 'string' || userId.trim() === '' || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in to PMVerse to use Resume AI.' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Enforce 2-evaluations maximum usage limit per user
+    const currentUsage = await getUserResumeUsage(userId);
+    if (currentUsage.hasReachedLimit) {
+      return NextResponse.json(
+        {
+          error: `You have reached the limit of ${MAX_RESUME_ANALYSES} free AI resume evaluations for this account.`,
+          code: 'QUOTA_EXCEEDED',
+          usageCount: currentUsage.usageCount,
+          remaining: 0,
+          maxAllowed: MAX_RESUME_ANALYSES,
+        },
+        { status: 403 }
+      );
+    }
 
     if (!resumeText || typeof resumeText !== 'string' || resumeText.trim().length < 50) {
       return NextResponse.json(
@@ -74,9 +126,17 @@ export async function POST(request: Request) {
       structuredResume: semanticOutput.structuredResume,
     };
 
+    // 4. Record usage count for this user
+    const updatedUsage = await recordResumeUsage(userId, {
+      resumeId: analysisResult.resumeId,
+      targetRole,
+      score: scoringResult.overallScore,
+    });
+
     return NextResponse.json({
       success: true,
       analysis: analysisResult,
+      usage: updatedUsage,
     });
   } catch (error: any) {
     console.error('API analyze error:', error);

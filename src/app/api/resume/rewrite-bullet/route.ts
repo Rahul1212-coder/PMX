@@ -4,7 +4,15 @@ import { rewriteResumeBullet } from '@/lib/resume/openai';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { originalBullet, goal = 'impact', targetRole, targetJobContext, metricAnswers } = body;
+    const { originalBullet, goal = 'impact', targetRole, targetJobContext, metricAnswers, userId } = body;
+
+    // Enforce that only signed in users can rewrite bullets
+    if (!userId || typeof userId !== 'string' || userId.trim() === '' || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in to PMVerse to improve resume bullets.' },
+        { status: 401 }
+      );
+    }
 
     if (!originalBullet || typeof originalBullet !== 'string' || originalBullet.trim().length < 5) {
       return NextResponse.json(

@@ -38,6 +38,8 @@ interface ResultsDashboardProps {
   onOpenCompare?: () => void;
   onReanalyze: (updatedResume: StructuredResumeData) => void;
   hasPreviousVersion?: boolean;
+  hasReachedLimit?: boolean;
+  remainingCount?: number;
 }
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
@@ -47,6 +49,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   onOpenCompare,
   onReanalyze,
   hasPreviousVersion = false,
+  hasReachedLimit = false,
+  remainingCount = 2,
 }) => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'requirements' | 'competencies' | 'ats' | 'suggestions' | 'editor'
@@ -712,11 +716,19 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={hasReachedLimit}
                 onClick={() => onReanalyze(editableResume)}
-                className="btn btn-primary text-xs font-black py-2 px-4 flex items-center gap-1.5 shadow-md"
+                className={`btn btn-primary text-xs font-black py-2 px-4 flex items-center gap-1.5 shadow-md ${
+                  hasReachedLimit ? 'opacity-50 cursor-not-allowed bg-slate-400 border-slate-400 hover:bg-slate-400' : ''
+                }`}
+                title={hasReachedLimit ? 'You have used your 2 free AI evaluations.' : undefined}
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Re-Analyze & Update Score</span>
+                <span>
+                  {hasReachedLimit
+                    ? 'Re-Analyze Limit Reached (2/2 Used)'
+                    : `Re-Analyze & Update Score (${remainingCount} left)`}
+                </span>
               </button>
             </div>
           </div>

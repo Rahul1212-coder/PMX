@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Check, X, RefreshCw, HelpCircle, ArrowRight, Copy } from 'lucide-react';
 import { BulletRewriteResult, BulletRewriteVariation } from '@/types/resume';
+import { useAuth } from '@/context/AuthContext';
 
 interface BulletRewriterModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const BulletRewriterModal: React.FC<BulletRewriterModalProps> = ({
   targetJobContext,
   onApplyBullet,
 }) => {
+  const { user } = useAuth();
   const [selectedGoal, setSelectedGoal] = useState<string>('impact');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<BulletRewriteResult | null>(null);
@@ -58,6 +60,7 @@ export const BulletRewriterModal: React.FC<BulletRewriterModalProps> = ({
           goal: goalToUse,
           targetRole,
           targetJobContext,
+          userId: user?.id,
           metricAnswers: {
             percent: metricPercent.trim() || undefined,
             scale: metricScale.trim() || undefined,

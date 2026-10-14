@@ -499,8 +499,26 @@ CREATE POLICY "Members can create resources" ON public.circle_resources FOR INSE
 CREATE POLICY "Members can view and create activities" ON public.circle_activities FOR ALL USING (EXISTS (SELECT 1 FROM public.circle_members cm WHERE cm.circle_id = circle_id AND cm.user_id = auth.uid()));
 
 -- ==============================================================================
+-- 10. RESUME INTELLIGENCE USAGE TABLE (Max 2 free evaluations per account)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.resume_usage (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  resume_id TEXT,
+  target_role TEXT,
+  overall_score INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.resume_usage ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own resume usage" ON public.resume_usage
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can record own resume usage" ON public.resume_usage
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- ==============================================================================
 -- CLEAN RESET COMMAND:
--- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results, public.connections, public.job_applications, public.challenge_submissions, public.circles, public.circle_members, public.circle_invitations, public.circle_posts, public.circle_post_replies, public.circle_post_reactions, public.circle_resources, public.circle_activities;
+-- TRUNCATE TABLE public.community_posts, public.post_upvotes, public.saved_jobs, public.quiz_results, public.connections, public.job_applications, public.challenge_submissions, public.circles, public.circle_members, public.circle_invitations, public.circle_posts, public.circle_post_replies, public.circle_post_reactions, public.circle_resources, public.circle_activities, public.resume_usage;
 -- ==============================================================================
 
 

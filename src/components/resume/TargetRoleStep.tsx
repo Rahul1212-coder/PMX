@@ -19,6 +19,8 @@ interface TargetRoleStepProps {
   initialJobDescription?: string;
   initialMode?: ResumeAnalysisMode;
   isLoading?: boolean;
+  hasReachedLimit?: boolean;
+  remainingCount?: number;
 }
 
 export const TargetRoleStep: React.FC<TargetRoleStepProps> = ({
@@ -29,6 +31,8 @@ export const TargetRoleStep: React.FC<TargetRoleStepProps> = ({
   initialJobDescription = '',
   initialMode = 'job_match',
   isLoading = false,
+  hasReachedLimit = false,
+  remainingCount = 2,
 }) => {
   const [selectedRole, setSelectedRole] = useState<string>(initialRole);
   const [customRole, setCustomRole] = useState<string>('');
@@ -220,12 +224,22 @@ export const TargetRoleStep: React.FC<TargetRoleStepProps> = ({
           </div>
         )}
 
-        {validationError && (
+        {hasReachedLimit ? (
+          <div className="p-3.5 bg-red-50 text-red-800 border border-red-300 rounded text-xs space-y-1">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>Evaluation Limit Reached (2 of 2 Used)</span>
+            </div>
+            <p className="text-[11px] text-red-700 leading-snug">
+              You have completed the maximum 2 complimentary AI resume evaluations for this account. You can continue reviewing, editing, and exporting your existing analyzed resume.
+            </p>
+          </div>
+        ) : validationError ? (
           <div className="p-3 bg-red-50 text-red-800 border border-red-300 rounded text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
             <span>{validationError}</span>
           </div>
-        )}
+        ) : null}
 
         {/* Footer Actions */}
         <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
@@ -240,11 +254,19 @@ export const TargetRoleStep: React.FC<TargetRoleStepProps> = ({
 
           <button
             type="submit"
-            disabled={isLoading}
-            className="btn btn-primary text-xs font-black py-2.5 px-6 flex items-center gap-2 shadow-md"
+            disabled={isLoading || hasReachedLimit}
+            className={`btn btn-primary text-xs font-black py-2.5 px-6 flex items-center gap-2 shadow-md ${
+              hasReachedLimit ? 'opacity-50 cursor-not-allowed bg-slate-400 border-slate-400 hover:bg-slate-400' : ''
+            }`}
           >
             <Sparkles className="w-4 h-4" />
-            <span>{isLoading ? 'Analyzing Resume with AI...' : 'Run AI Resume Audit'}</span>
+            <span>
+              {isLoading
+                ? 'Analyzing Resume with AI...'
+                : hasReachedLimit
+                ? 'Evaluation Limit Reached (2/2 Used)'
+                : `Run AI Resume Audit (${remainingCount} left)`}
+            </span>
           </button>
         </div>
       </form>
