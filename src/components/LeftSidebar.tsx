@@ -22,7 +22,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
     'outcome-roadmaps',
   ];
 
-  const displayName = profile?.fullName || user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'Product Manager');
+  const emailPrefix = user?.email ? user.email.split('@')[0] : '';
+  const displayName = profile?.fullName && !profile.fullName.includes('@') && profile.fullName !== emailPrefix
+    ? profile.fullName
+    : user?.user_metadata?.full_name || user?.user_metadata?.name || profile?.fullName || (emailPrefix || 'Product Manager');
   const displayRole = profile?.role
     ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
     : (user ? 'Product Manager' : 'Product Management Platform');

@@ -313,13 +313,19 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
       return false;
     }
 
-    // Attempt 4: Try direct update if upsert failed due to RLS insert policy
-    const { error: directUpdateError } = await supabase.from('profiles').update(baseRecord).eq('id', profile.id);
+    // Attempt 4: Try direct update with extendedRecord if upsert failed due to RLS insert policy
+    const { error: directUpdateError } = await supabase.from('profiles').update(extendedRecord).eq('id', profile.id);
     if (!directUpdateError) {
       return true;
     }
 
-    console.warn('Profile upsert failed:', extError);
+    // Attempt 5: Fallback direct update with baseRecord
+    const { error: baseUpdateError } = await supabase.from('profiles').update(baseRecord).eq('id', profile.id);
+    if (!baseUpdateError) {
+      return true;
+    }
+
+    console.warn('Profile upsert failed:', extError || directUpdateError || baseUpdateError);
     return false;
   } catch (err) {
     console.warn('Exception in upsertUserProfileInDb:', err);

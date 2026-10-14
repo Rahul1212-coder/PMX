@@ -127,6 +127,7 @@ BEGIN
     company,
     pm_stage,
     previous_role,
+    years_of_experience,
     avatar_url
   )
   VALUES (
@@ -137,6 +138,7 @@ BEGIN
     COALESCE(NULLIF(NEW.raw_user_meta_data->>'company', ''), 'Tech Company'),
     COALESCE(NULLIF(NEW.raw_user_meta_data->>'pm_stage', ''), 'existing_pm'),
     COALESCE(NULLIF(NEW.raw_user_meta_data->>'previous_role', ''), NULL),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'years_of_experience', '')::INTEGER, 2),
     NULL
   )
   ON CONFLICT (id) DO UPDATE
@@ -146,6 +148,7 @@ BEGIN
     company = EXCLUDED.company,
     pm_stage = EXCLUDED.pm_stage,
     previous_role = EXCLUDED.previous_role,
+    years_of_experience = EXCLUDED.years_of_experience,
     updated_at = NOW();
   RETURN NEW;
 END;

@@ -31,20 +31,36 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   useEffect(() => {
     if (isOpen && profile) {
-      setFullName(profile.fullName || user?.user_metadata?.full_name || '');
-      setPmStage(profile.pmStage || 'existing_pm');
+      const emailPrefix = user?.email?.split('@')[0] || '';
+      let initialName = profile.fullName || '';
+      if (!initialName || initialName === emailPrefix || initialName === 'Product Manager' || initialName.includes('@')) {
+        initialName = user?.user_metadata?.full_name || user?.user_metadata?.name || initialName;
+      }
+
+      setFullName(initialName || '');
+      setPmStage(profile.pmStage || (user?.user_metadata?.pm_stage as PmStage) || 'existing_pm');
       setYearsOfExperience(
         typeof profile.yearsOfExperience === 'number'
           ? profile.yearsOfExperience
+          : typeof user?.user_metadata?.years_of_experience === 'number'
+          ? user.user_metadata.years_of_experience
           : profile.pmStage === 'fresher'
           ? 0
-          : 3
+          : 2
       );
-      setRole(profile.role || 'Product Manager');
-      setCompany(profile.company || '');
-      setBio(profile.bio || '');
-      setAvatarUrl(profile.avatarUrl || '');
-      setUrlInput(profile.avatarUrl || '');
+      setRole(
+        profile.role && profile.role !== 'Product Manager'
+          ? profile.role
+          : (user?.user_metadata?.role || profile.role || 'Product Manager')
+      );
+      setCompany(
+        profile.company === 'Tech Company' || profile.company === 'Independent PM' || profile.company === 'Tech Squad'
+          ? (user?.user_metadata?.company || '')
+          : (profile.company || user?.user_metadata?.company || '')
+      );
+      setBio(profile.bio || user?.user_metadata?.bio || '');
+      setAvatarUrl(profile.avatarUrl || user?.user_metadata?.avatar_url || '');
+      setUrlInput(profile.avatarUrl || user?.user_metadata?.avatar_url || '');
       setStatusMessage(null);
       setShowUrlInput(false);
     }

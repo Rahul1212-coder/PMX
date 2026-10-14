@@ -52,65 +52,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (supabaseUser: User) => {
     try {
+      const emailLower = supabaseUser.email?.toLowerCase().trim() || '';
+      const pendingKey = `pmverse_pending_profile_${emailLower}`;
+      let pending: any = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem(pendingKey);
+          if (raw) pending = JSON.parse(raw);
+        } catch {}
+      }
+
       const dbProfile = await getUserProfileFromDb(supabaseUser.id);
       const metadata = supabaseUser.user_metadata || {};
-      const metaName = (metadata.full_name || metadata.name || '').trim();
-      const metaRole = (metadata.role || '').trim();
-      const metaCompany = (metadata.company || '').trim();
+      const metaName = (pending?.fullName || metadata.full_name || metadata.name || '').trim();
+      const metaRole = (pending?.role || metadata.role || '').trim();
+      const metaCompany = (pending?.company !== undefined ? pending.company : (metadata.company || '')).trim();
       const metaAvatar = (metadata.avatar_url || '').trim();
 
-      const metaStage = (metadata.pm_stage as PmStage) || 'existing_pm';
-      const metaPrev = metadata.previous_role || '';
-      const metaYears = metadata.years_of_experience;
+      const metaStage = (pending?.pmStage || (metadata.pm_stage as PmStage) || undefined);
+      const metaPrev = pending?.previousRole !== undefined ? pending.previousRole : (metadata.previous_role || '');
+      const metaYears = typeof pending?.yearsOfExperience === 'number'
+        ? pending.yearsOfExperience
+        : typeof metadata.years_of_experience === 'number'
+        ? metadata.years_of_experience
+        : undefined;
       const metaBio = metadata.bio || '';
       const emailUsername = supabaseUser.email?.split('@')[0] || '';
 
       let shouldSyncDb = false;
 
       if (dbProfile) {
-        // Enforce user's actual name if DB profile had default or raw email username
+        // Enforce user's actual name if DB profile had default or raw email username or if pending/metadata provided
         const isPlaceholderName =
           !dbProfile.fullName ||
           dbProfile.fullName === 'Product Manager' ||
-          dbProfile.fullName === emailUsername;
+          dbProfile.fullName === emailUsername ||
+          dbProfile.fullName.includes('@');
 
-        if (metaName && (isPlaceholderName || metaName !== dbProfile.fullName)) {
+        if (metaName && (isPlaceholderName || metaName !== dbProfile.fullName || pending?.fullName)) {
           dbProfile.fullName = metaName;
           shouldSyncDb = true;
         }
 
-        // Enforce user's actual role from metadata if DB has default trigger role or different
+        // Enforce user's actual role from metadata/pending
         const isDefaultRole =
           !dbProfile.role ||
           dbProfile.role === 'Product Manager' ||
           dbProfile.role === 'Associate PM';
 
-        if (metaRole && (isDefaultRole || dbProfile.role !== metaRole)) {
+        if (metaRole && (isDefaultRole || dbProfile.role !== metaRole || pending?.role)) {
           dbProfile.role = metaRole;
           shouldSyncDb = true;
         }
 
-        // Enforce user's actual company from metadata if DB has default trigger company or different
+        // Enforce user's actual company from metadata/pending
         const isDefaultCompany =
           !dbProfile.company ||
           dbProfile.company === 'Independent PM' ||
           dbProfile.company === 'Tech Company' ||
           dbProfile.company === 'Tech Squad';
 
-        if (metaCompany && (isDefaultCompany || dbProfile.company !== metaCompany)) {
+        if (metaCompany && (isDefaultCompany || dbProfile.company !== metaCompany || pending?.company !== undefined)) {
           dbProfile.company = metaCompany;
           shouldSyncDb = true;
         }
 
-        if (metaStage && (!dbProfile.pmStage || dbProfile.pmStage === 'existing_pm')) {
+        if (metaStage && (!dbProfile.pmStage || dbProfile.pmStage !== metaStage || pending?.pmStage)) {
           dbProfile.pmStage = metaStage;
           shouldSyncDb = true;
         }
-        if (!dbProfile.previousRole && metaPrev) {
+        if (metaPrev && (!dbProfile.previousRole || pending?.previousRole !== undefined)) {
           dbProfile.previousRole = metaPrev;
           shouldSyncDb = true;
         }
-        if (typeof dbProfile.yearsOfExperience !== 'number' && typeof metaYears === 'number') {
+        if (typeof metaYears === 'number' && (dbProfile.yearsOfExperience !== metaYears || pending?.yearsOfExperience !== undefined)) {
           dbProfile.yearsOfExperience = metaYears;
           shouldSyncDb = true;
         }
@@ -136,29 +151,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(dbProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_user', JSON.stringify(dbProfile));
+          if (pending) {
+            localStorage.removeItem(pendingKey);
+          }
         }
 
-        // Persist reconciled profile to Supabase DB so other users see true role & company
+        // Persist reconciled profile to Supabase DB and Supabase Auth metadata
         if (shouldSyncDb) {
           upsertUserProfileInDb(dbProfile).catch(() => {});
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            supabase.auth.updateUser({
+              data: {
+                full_name: dbProfile.fullName,
+                name: dbProfile.fullName,
+                role: dbProfile.role,
+                company: dbProfile.company,
+                pm_stage: dbProfile.pmStage,
+                previous_role: dbProfile.previousRole,
+                years_of_experience: dbProfile.yearsOfExperience,
+              },
+            }).catch(() => {});
+          }
         }
       } else {
-        // Fallback profile from user metadata - NO dummy Unsplash avatar!
+        // Fallback profile from user metadata or pending profile
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
           fullName: metaName || emailUsername || 'Product Manager',
           role: metaRole || 'Product Manager',
-          company: metaCompany || 'Tech Company',
+          company: metaCompany || '',
           avatarUrl: metaAvatar && !metaAvatar.includes('unsplash') ? metaAvatar : '',
           bio: metaBio,
-          pmStage: metaStage,
+          pmStage: metaStage || 'existing_pm',
           previousRole: metaPrev,
-          yearsOfExperience: typeof metaYears === 'number' ? metaYears : undefined,
+          yearsOfExperience: typeof metaYears === 'number' ? metaYears : 2,
         };
         setProfile(fallbackProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_user', JSON.stringify(fallbackProfile));
+          if (pending) {
+            localStorage.removeItem(pendingKey);
+          }
         }
         upsertUserProfileInDb(fallbackProfile).catch(() => {});
       }
@@ -268,7 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -279,7 +314,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data?.user) {
         setUser(data.user);
         setSession(data.session);
-        await loadUserProfile(data.user);
+
+        const emailLower = data.user.email?.toLowerCase().trim() || email.toLowerCase().trim();
+        const pendingKey = `pmverse_pending_profile_${emailLower}`;
+        let pendingMeta: any = null;
+        if (typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem(pendingKey);
+            if (raw) pendingMeta = JSON.parse(raw);
+          } catch {}
+        }
+
+        if (pendingMeta) {
+          await updateProfile({
+            id: data.user.id,
+            email: data.user.email || email,
+            fullName: pendingMeta.fullName,
+            role: pendingMeta.role,
+            company: pendingMeta.company,
+            pmStage: pendingMeta.pmStage,
+            previousRole: pendingMeta.previousRole,
+            yearsOfExperience: pendingMeta.yearsOfExperience,
+          });
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(pendingKey);
+          }
+        } else {
+          await loadUserProfile(data.user);
+        }
       }
 
       closeAuthModal();
@@ -301,6 +363,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       yearsOfExperience?: number;
     }
   ) => {
+    const trimmedEmail = email.trim();
+    const cleanProfile: Partial<UserProfile> = {
+      fullName: meta.fullName.trim(),
+      role: meta.role.trim() || 'Product Manager',
+      company: meta.company.trim(),
+      pmStage: meta.pmStage || 'existing_pm',
+      previousRole: meta.previousRole || '',
+      yearsOfExperience: typeof meta.yearsOfExperience === 'number' ? meta.yearsOfExperience : 2,
+    };
+
+    const pendingKey = `pmverse_pending_profile_${trimmedEmail.toLowerCase()}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(pendingKey, JSON.stringify(cleanProfile));
+      const existingRaw = localStorage.getItem('pmverse_user');
+      let existingUser: any = {};
+      try {
+        if (existingRaw) existingUser = JSON.parse(existingRaw);
+      } catch {}
+      localStorage.setItem(
+        'pmverse_user',
+        JSON.stringify({
+          ...existingUser,
+          email: trimmedEmail,
+          ...cleanProfile,
+        })
+      );
+    }
+
     if (!configured) {
       let localDiagScore: number | undefined = undefined;
       if (typeof window !== 'undefined') {
@@ -315,27 +405,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
       }
 
-      const cleanProfile: UserProfile = {
+      const fullDemoProfile: UserProfile = {
         id: `user-${Date.now()}`,
-        email,
-        fullName: meta.fullName.trim() || 'Product Manager',
-        role: meta.role.trim() || 'Associate PM',
-        company: meta.company.trim() || 'Independent PM',
-        pmStage: meta.pmStage || 'existing_pm',
-        previousRole: meta.previousRole || '',
-        yearsOfExperience: meta.yearsOfExperience,
+        email: trimmedEmail,
+        fullName: cleanProfile.fullName || 'Product Manager',
+        role: cleanProfile.role || 'Associate PM',
+        company: cleanProfile.company || '',
+        pmStage: cleanProfile.pmStage || 'existing_pm',
+        previousRole: cleanProfile.previousRole || '',
+        yearsOfExperience: cleanProfile.yearsOfExperience,
         pmFitScore: localDiagScore,
         avatarUrl: '',
         connectionsCount: 0,
         profileViews: 0,
         postImpressions: 0,
       };
-      setUser({ id: cleanProfile.id, email } as any);
-      setProfile(cleanProfile);
+      setUser({ id: fullDemoProfile.id, email: trimmedEmail } as any);
+      setProfile(fullDemoProfile);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('pmverse_user', JSON.stringify(cleanProfile));
+        localStorage.setItem('pmverse_user', JSON.stringify(fullDemoProfile));
+        localStorage.removeItem(pendingKey);
         if (localDiagScore !== undefined) {
-          localStorage.setItem(`pmverse_diagnostic_${cleanProfile.id}`, localStorage.getItem('pmverse_latest_diagnostic') || '');
+          localStorage.setItem(`pmverse_diagnostic_${fullDemoProfile.id}`, localStorage.getItem('pmverse_latest_diagnostic') || '');
         }
       }
       closeAuthModal();
@@ -354,21 +445,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : PRODUCTION_SITE_URL);
 
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: trimmedEmail,
         password,
         options: {
           emailRedirectTo: siteRedirectUrl,
           data: {
-            full_name: meta.fullName.trim(),
-            name: meta.fullName.trim(),
-            role: meta.role.trim() || 'Product Manager',
-            company: meta.company.trim() || 'Tech Company',
-            pm_stage: meta.pmStage || 'existing_pm',
-            previous_role: meta.previousRole || '',
-            years_of_experience: meta.yearsOfExperience ?? null,
+            full_name: cleanProfile.fullName,
+            name: cleanProfile.fullName,
+            role: cleanProfile.role,
+            company: cleanProfile.company,
+            pm_stage: cleanProfile.pmStage,
+            previous_role: cleanProfile.previousRole,
+            years_of_experience: cleanProfile.yearsOfExperience,
           },
         },
       });
+
+      // Handle duplicate user (already registered account)
+      const isDuplicateUser = Boolean(
+        (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) ||
+        (error && (
+          error.message.toLowerCase().includes('already registered') ||
+          error.message.toLowerCase().includes('already exists') ||
+          error.message.toLowerCase().includes('user already exists')
+        ))
+      );
+
+      if (isDuplicateUser) {
+        // Attempt immediate login with the password provided
+        const signInRes = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+
+        if (!signInRes.error && signInRes.data.user) {
+          setUser(signInRes.data.user);
+          setSession(signInRes.data.session);
+
+          // Update their profile in Supabase & local storage with their new Join Now inputs
+          await updateProfile({
+            id: signInRes.data.user.id,
+            email: signInRes.data.user.email || trimmedEmail,
+            ...cleanProfile,
+          });
+
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(pendingKey);
+          }
+
+          closeAuthModal();
+          return { message: 'Welcome back! Your profile details have been updated successfully.' };
+        } else {
+          return {
+            error:
+              'An account with this email already exists. Please switch to the Sign In tab and enter your password.',
+          };
+        }
+      }
 
       if (error) {
         if (error.message.toLowerCase().includes('rate limit')) {
@@ -398,13 +531,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initialProfile: UserProfile = {
           id: data.user.id,
-          email: data.user.email || email,
-          fullName: meta.fullName.trim() || email.split('@')[0] || 'Product Manager',
-          role: meta.role.trim() || 'Product Manager',
-          company: meta.company.trim() || 'Tech Company',
-          pmStage: meta.pmStage || 'existing_pm',
-          previousRole: meta.previousRole || '',
-          yearsOfExperience: meta.yearsOfExperience,
+          email: data.user.email || trimmedEmail,
+          fullName: cleanProfile.fullName || trimmedEmail.split('@')[0] || 'Product Manager',
+          role: cleanProfile.role || 'Product Manager',
+          company: cleanProfile.company || '',
+          pmStage: cleanProfile.pmStage || 'existing_pm',
+          previousRole: cleanProfile.previousRole || '',
+          yearsOfExperience: cleanProfile.yearsOfExperience,
           pmFitScore: cachedScore,
           avatarUrl: '',
           connectionsCount: 0,
@@ -412,27 +545,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           postImpressions: 0,
         };
 
-        // Cache locally immediately
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_user', JSON.stringify(initialProfile));
         }
 
-        // Directly sync user profile to Supabase database
+        // Direct DB upsert
         await upsertUserProfileInDb(initialProfile).catch(() => {});
 
-        // Sync to backend API endpoint to persist even if unconfirmed
+        // Background profile-sync endpoint
         fetch('/api/auth/profile-sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: data.user.id,
-            email: data.user.email || email,
-            fullName: meta.fullName.trim(),
-            role: meta.role.trim() || 'Product Manager',
-            company: meta.company.trim() || 'Tech Company',
-            pmStage: meta.pmStage || 'existing_pm',
-            previousRole: meta.previousRole || '',
-            yearsOfExperience: meta.yearsOfExperience,
+            email: data.user.email || trimmedEmail,
+            ...cleanProfile,
           }),
         }).catch(() => {});
 
@@ -443,7 +570,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setUser(data.user);
         setSession(data.session);
-        await loadUserProfile(data.user);
+        await updateProfile({
+          id: data.user.id,
+          email: data.user.email || trimmedEmail,
+          ...cleanProfile,
+        });
+
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(pendingKey);
+        }
       }
 
       closeAuthModal();

@@ -111,12 +111,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     }
   }, []);
 
-  const displayName = profile?.fullName
-    ? profile.fullName.split(' ')[0]
+  const emailPrefix = user?.email?.split('@')[0] || '';
+  const rawFullName = profile?.fullName && !profile.fullName.includes('@') && profile.fullName !== emailPrefix
+    ? profile.fullName
+    : user?.user_metadata?.full_name || user?.user_metadata?.name || profile?.fullName;
+
+  const displayName = rawFullName && !rawFullName.includes('@') && rawFullName !== emailPrefix
+    ? rawFullName.split(' ')[0]
     : user
     ? 'Product Manager'
     : 'Product Leader';
-  const targetRole = profile?.role || 'Product Manager';
+  const targetRole = profile?.role || user?.user_metadata?.role || 'Product Manager';
 
   // Real assessment analytics
   const hasTakenTest = Boolean(profile?.pmFitScore || latestQuizResult);
