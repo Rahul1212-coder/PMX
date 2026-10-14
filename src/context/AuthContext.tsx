@@ -54,36 +54,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const dbProfile = await getUserProfileFromDb(supabaseUser.id);
       const metadata = supabaseUser.user_metadata || {};
-      const metaName = metadata.full_name || metadata.name || supabaseUser.email?.split('@')[0] || '';
-      const metaRole = metadata.role || 'Product Manager';
-      const metaCompany = metadata.company || 'Independent PM';
-      const metaAvatar = metadata.avatar_url || '';
+      const metaName = (metadata.full_name || metadata.name || '').trim();
+      const metaRole = (metadata.role || '').trim();
+      const metaCompany = (metadata.company || '').trim();
+      const metaAvatar = (metadata.avatar_url || '').trim();
 
       const metaStage = (metadata.pm_stage as PmStage) || 'existing_pm';
       const metaPrev = metadata.previous_role || '';
       const metaYears = metadata.years_of_experience;
       const metaBio = metadata.bio || '';
+      const emailUsername = supabaseUser.email?.split('@')[0] || '';
+
+      let shouldSyncDb = false;
 
       if (dbProfile) {
-        // Enforce user's actual name if DB profile had default or empty name
-        if ((!dbProfile.fullName || dbProfile.fullName === 'Product Manager') && metaName) {
+        // Enforce user's actual name if DB profile had default or raw email username
+        const isPlaceholderName =
+          !dbProfile.fullName ||
+          dbProfile.fullName === 'Product Manager' ||
+          dbProfile.fullName === emailUsername;
+
+        if (metaName && (isPlaceholderName || metaName !== dbProfile.fullName)) {
           dbProfile.fullName = metaName;
+          shouldSyncDb = true;
         }
+
+        // Enforce user's actual role from metadata if DB has default trigger role or different
+        const isDefaultRole =
+          !dbProfile.role ||
+          dbProfile.role === 'Product Manager' ||
+          dbProfile.role === 'Associate PM';
+
+        if (metaRole && (isDefaultRole || dbProfile.role !== metaRole)) {
+          dbProfile.role = metaRole;
+          shouldSyncDb = true;
+        }
+
+        // Enforce user's actual company from metadata if DB has default trigger company or different
+        const isDefaultCompany =
+          !dbProfile.company ||
+          dbProfile.company === 'Independent PM' ||
+          dbProfile.company === 'Tech Company' ||
+          dbProfile.company === 'Tech Squad';
+
+        if (metaCompany && (isDefaultCompany || dbProfile.company !== metaCompany)) {
+          dbProfile.company = metaCompany;
+          shouldSyncDb = true;
+        }
+
         if (metaStage && (!dbProfile.pmStage || dbProfile.pmStage === 'existing_pm')) {
           dbProfile.pmStage = metaStage;
+          shouldSyncDb = true;
         }
         if (!dbProfile.previousRole && metaPrev) {
           dbProfile.previousRole = metaPrev;
+          shouldSyncDb = true;
         }
         if (typeof dbProfile.yearsOfExperience !== 'number' && typeof metaYears === 'number') {
           dbProfile.yearsOfExperience = metaYears;
+          shouldSyncDb = true;
         }
         if (!dbProfile.bio && metaBio) {
           dbProfile.bio = metaBio;
+          shouldSyncDb = true;
         }
         if (!dbProfile.avatarUrl && metaAvatar) {
           dbProfile.avatarUrl = metaAvatar;
+          shouldSyncDb = true;
         }
+
         // Strip out legacy dummy Unsplash URLs if stored from prior default schemas
         if (
           dbProfile.avatarUrl &&
@@ -91,20 +130,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             dbProfile.avatarUrl.includes('photo-1535713875002-d1d0cf377fde'))
         ) {
           dbProfile.avatarUrl = '';
+          shouldSyncDb = true;
         }
+
         setProfile(dbProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_user', JSON.stringify(dbProfile));
+        }
+
+        // Persist reconciled profile to Supabase DB so other users see true role & company
+        if (shouldSyncDb) {
+          upsertUserProfileInDb(dbProfile).catch(() => {});
         }
       } else {
         // Fallback profile from user metadata - NO dummy Unsplash avatar!
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
-          fullName: metaName || 'Product Manager',
-          role: metaRole,
-          company: metaCompany,
-          avatarUrl: metaAvatar,
+          fullName: metaName || emailUsername || 'Product Manager',
+          role: metaRole || 'Product Manager',
+          company: metaCompany || 'Tech Company',
+          avatarUrl: metaAvatar && !metaAvatar.includes('unsplash') ? metaAvatar : '',
           bio: metaBio,
           pmStage: metaStage,
           previousRole: metaPrev,
@@ -313,9 +359,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         options: {
           emailRedirectTo: siteRedirectUrl,
           data: {
-            full_name: meta.fullName,
-            role: meta.role,
-            company: meta.company,
+            full_name: meta.fullName.trim(),
+            name: meta.fullName.trim(),
+            role: meta.role.trim() || 'Product Manager',
+            company: meta.company.trim() || 'Tech Company',
             pm_stage: meta.pmStage || 'existing_pm',
             previous_role: meta.previousRole || '',
             years_of_experience: meta.yearsOfExperience ?? null,
@@ -352,9 +399,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initialProfile: UserProfile = {
           id: data.user.id,
           email: data.user.email || email,
-          fullName: meta.fullName.trim() || 'Product Manager',
-          role: meta.role.trim() || 'Associate PM',
-          company: meta.company.trim() || 'Independent PM',
+          fullName: meta.fullName.trim() || email.split('@')[0] || 'Product Manager',
+          role: meta.role.trim() || 'Product Manager',
+          company: meta.company.trim() || 'Tech Company',
           pmStage: meta.pmStage || 'existing_pm',
           previousRole: meta.previousRole || '',
           yearsOfExperience: meta.yearsOfExperience,
@@ -364,8 +411,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profileViews: 0,
           postImpressions: 0,
         };
+
+        // Cache locally immediately
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pmverse_user', JSON.stringify(initialProfile));
+        }
+
         // Directly sync user profile to Supabase database
         await upsertUserProfileInDb(initialProfile).catch(() => {});
+
+        // Sync to backend API endpoint to persist even if unconfirmed
+        fetch('/api/auth/profile-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email || email,
+            fullName: meta.fullName.trim(),
+            role: meta.role.trim() || 'Product Manager',
+            company: meta.company.trim() || 'Tech Company',
+            pmStage: meta.pmStage || 'existing_pm',
+            previousRole: meta.previousRole || '',
+            yearsOfExperience: meta.yearsOfExperience,
+          }),
+        }).catch(() => {});
 
         // Check if email confirmation is required
         if (!data.session) {

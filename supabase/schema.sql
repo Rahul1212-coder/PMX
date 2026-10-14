@@ -93,21 +93,54 @@ CREATE TABLE IF NOT EXISTS public.quiz_results (
 -- ==============================================================================
 -- AUTOMATIC PROFILE CREATION TRIGGER ON SIGNUP
 -- ==============================================================================
+-- 1. Batch sync all existing signed-up users from auth.users into public.profiles
+UPDATE public.profiles p
+SET
+  full_name = COALESCE(NULLIF(u.raw_user_meta_data->>'full_name', ''), NULLIF(u.raw_user_meta_data->>'name', ''), p.full_name),
+  role = COALESCE(NULLIF(u.raw_user_meta_data->>'role', ''), p.role),
+  company = COALESCE(NULLIF(u.raw_user_meta_data->>'company', ''), p.company),
+  pm_stage = COALESCE(NULLIF(u.raw_user_meta_data->>'pm_stage', ''), p.pm_stage),
+  previous_role = COALESCE(NULLIF(u.raw_user_meta_data->>'previous_role', ''), p.previous_role),
+  avatar_url = CASE
+    WHEN p.avatar_url LIKE '%photo-1535713875002%' OR p.avatar_url LIKE '%photo-1534528741775%' THEN ''
+    ELSE p.avatar_url
+  END,
+  updated_at = NOW()
+FROM auth.users u
+WHERE p.id = u.id;
+
+-- 2. Trigger function to automatically create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role, company, pm_stage, previous_role, avatar_url)
+  INSERT INTO public.profiles (
+    id,
+    email,
+    full_name,
+    role,
+    company,
+    pm_stage,
+    previous_role,
+    avatar_url
+  )
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'Product Manager'),
-    COALESCE(NEW.raw_user_meta_data->>'company', 'Independent PM'),
-    COALESCE(NEW.raw_user_meta_data->>'pm_stage', 'existing_pm'),
-    COALESCE(NEW.raw_user_meta_data->>'previous_role', NULL),
-    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'full_name', ''), NULLIF(NEW.raw_user_meta_data->>'name', ''), split_part(NEW.email, '@', 1)),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', ''), 'Product Manager'),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'company', ''), 'Tech Company'),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'pm_stage', ''), 'existing_pm'),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'previous_role', ''), NULL),
+    NULL
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE
+  SET
+    full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
+    company = EXCLUDED.company,
+    pm_stage = EXCLUDED.pm_stage,
+    previous_role = EXCLUDED.previous_role,
+    updated_at = NOW();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

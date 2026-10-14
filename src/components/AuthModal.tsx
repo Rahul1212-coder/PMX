@@ -60,12 +60,12 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        let classifiedRole = role;
+        let classifiedRole = role.trim() || 'Product Manager';
         let classifiedCompany = company.trim();
 
         if (pmStage === 'existing_pm') {
-          classifiedRole = role;
-          classifiedCompany = company.trim() || 'Tech Squad';
+          classifiedRole = role.trim() || 'Product Manager';
+          classifiedCompany = company.trim() || 'Tech Company';
         } else if (pmStage === 'switching_roles') {
           classifiedRole = previousRole ? `Aspiring PM (ex-${previousRole})` : 'Aspiring PM (Career Switcher)';
           classifiedCompany = company.trim() || 'Transitioning Professional';
