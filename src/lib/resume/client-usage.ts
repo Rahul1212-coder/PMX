@@ -141,12 +141,12 @@ export async function recordClientAccountUsage(
   try {
     const supabase = getSupabaseClient();
     if (supabase) {
+      // Keep user_metadata compact (only scalars, no unbounded history arrays) so JWT cookie stays <1KB
       await supabase.auth.updateUser({
         data: {
           resume_eval_count: newCount,
           resume_analyses_count: newCount,
           resume_usage_count: newCount,
-          resume_eval_history: updatedHistory,
         },
       });
     }

@@ -148,6 +148,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           shouldSyncDb = true;
         }
 
+        // Self-healing: purge oversized payloads from Supabase Auth user_metadata
+        // Storing base64 images or arrays in user_metadata bloats the auth JWT across multiple cookies,
+        // triggering Vercel HTTP 494 REQUEST_HEADER_TOO_LARGE.
+        if (
+          (metadata.avatar_url && (metadata.avatar_url.startsWith('data:') || metadata.avatar_url.length > 500)) ||
+          metadata.resume_eval_history
+        ) {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            supabase.auth.updateUser({
+              data: {
+                avatar_url: null,
+                resume_eval_history: null,
+              },
+            }).catch(() => {});
+          }
+        }
+
         setProfile(dbProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('pmverse_user', JSON.stringify(dbProfile));
@@ -628,15 +646,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (configured && user) {
       const supabase = getSupabaseClient();
       if (supabase) {
-        // Update user metadata in Supabase Auth (stores all profile fields reliably across sessions)
+        // Update user metadata in Supabase Auth (stores only small scalar fields reliably across sessions)
         try {
+          // Never store base64/data URLs or large strings in Supabase Auth user_metadata,
+          // as user_metadata is encoded directly into the auth JWT, bloating the cookie header beyond Vercel's 16KB limit (HTTP 494).
+          // Large avatar URLs/data are persisted safely in the public.profiles database table below.
+          const safeAvatarUrl =
+            updated.avatarUrl && !updated.avatarUrl.startsWith('data:') && updated.avatarUrl.length < 500
+              ? updated.avatarUrl
+              : null;
+
           await supabase.auth.updateUser({
             data: {
               full_name: updated.fullName,
               role: updated.role,
               company: updated.company,
               bio: updated.bio,
-              avatar_url: updated.avatarUrl,
+              avatar_url: safeAvatarUrl,
               pm_stage: updated.pmStage,
               years_of_experience: updated.yearsOfExperience,
               previous_role: updated.previousRole,
