@@ -15,9 +15,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const { user, profile, updateProfile } = useAuth();
 
   const [fullName, setFullName] = useState('');
-  const [pmStage, setPmStage] = useState<PmStage>('existing_pm');
-  const [yearsOfExperience, setYearsOfExperience] = useState<number>(2);
-  const [role, setRole] = useState('Product Manager');
+  const [pmStage, setPmStage] = useState<PmStage | ''>('');
+  const [yearsOfExperience, setYearsOfExperience] = useState<number | ''>('');
+  const [role, setRole] = useState('');
   const [company, setCompany] = useState('');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -38,20 +38,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }
 
       setFullName(initialName || '');
-      setPmStage(profile.pmStage || (user?.user_metadata?.pm_stage as PmStage) || 'existing_pm');
+      setPmStage(profile.pmStage || (user?.user_metadata?.pm_stage as PmStage) || '');
       setYearsOfExperience(
         typeof profile.yearsOfExperience === 'number'
           ? profile.yearsOfExperience
           : typeof user?.user_metadata?.years_of_experience === 'number'
           ? user.user_metadata.years_of_experience
-          : profile.pmStage === 'fresher'
-          ? 0
-          : 2
+          : ''
       );
       setRole(
         profile.role && profile.role !== 'Product Manager'
           ? profile.role
-          : (user?.user_metadata?.role || profile.role || 'Product Manager')
+          : (user?.user_metadata?.role && user.user_metadata.role !== 'Product Manager'
+              ? user.user_metadata.role
+              : (profile.role && profile.role !== 'Product Manager' ? profile.role : ''))
       );
       setCompany(
         profile.company === 'Tech Company' || profile.company === 'Independent PM' || profile.company === 'Tech Squad'
@@ -139,8 +139,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         company: company.trim(),
         bio: bio.trim(),
         avatarUrl: avatarUrl.trim(),
-        pmStage,
-        yearsOfExperience,
+        pmStage: pmStage || undefined,
+        yearsOfExperience: typeof yearsOfExperience === 'number' ? yearsOfExperience : undefined,
       });
 
       if (res?.error) {
@@ -281,12 +281,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 onChange={(e) => {
                   const nextStage = e.target.value as PmStage;
                   setPmStage(nextStage);
-                  if (nextStage === 'fresher' && yearsOfExperience > 1) {
+                  if (nextStage === 'fresher' && typeof yearsOfExperience === 'number' && yearsOfExperience > 1) {
                     setYearsOfExperience(0);
                   }
                 }}
                 className="input bg-white text-xs"
               >
+                <option value="" disabled>
+                  Select your stage...
+                </option>
                 <option value="existing_pm">Practicing PM</option>
                 <option value="switching_roles">Switching to PM</option>
                 <option value="fresher">Fresher / APM</option>
@@ -296,9 +299,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <label className="block text-xs font-bold text-[#201e1d] mb-1">Experience (Years)</label>
               <select
                 value={yearsOfExperience}
-                onChange={(e) => setYearsOfExperience(Number(e.target.value))}
+                onChange={(e) => setYearsOfExperience(e.target.value === '' ? '' : Number(e.target.value))}
                 className="input bg-white text-xs"
               >
+                <option value="" disabled>
+                  Select experience...
+                </option>
                 <option value={0}>0 Yrs (Fresher / Student)</option>
                 <option value={1}>1 Yr (APM / Associate)</option>
                 <option value={2}>2 Yrs</option>
@@ -319,6 +325,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <input
                 type="text"
                 required
+                placeholder="e.g. Associate PM, Senior PM"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 className="input"
@@ -330,7 +337,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 type="text"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
-                placeholder="Tech Squad"
+                placeholder="e.g. Swiggy, Razorpay or Independent"
                 className="input"
               />
             </div>

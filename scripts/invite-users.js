@@ -292,10 +292,7 @@ async function sendInvitations() {
         },
         body: JSON.stringify({
           email,
-          data: {
-            role: 'Product Manager',
-            pm_stage: 'existing_pm',
-          },
+          data: {},
         }),
       });
 

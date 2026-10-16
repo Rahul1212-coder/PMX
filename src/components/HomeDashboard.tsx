@@ -28,7 +28,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenChallenge,
   onOpenResumeAudit,
 }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, openProfileModal } = useAuth();
   const mentorEnabled = isAiMentorEnabled();
   const [latestQuizResult, setLatestQuizResult] = useState<SavedQuizResult | null>(null);
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -121,7 +121,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     : user
     ? 'Product Manager'
     : 'Product Leader';
-  const targetRole = profile?.role || user?.user_metadata?.role || 'Product Manager';
+  const targetRole = profile?.role || user?.user_metadata?.role || '';
 
   // Real assessment analytics
   const hasTakenTest = Boolean(profile?.pmFitScore || latestQuizResult);
@@ -195,12 +195,21 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
               Your PM Journey
             </span>
-            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
+            <span
+              onClick={!profile?.pmStage ? openProfileModal : undefined}
+              className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                !profile?.pmStage
+                  ? 'bg-[#ec3013] text-white cursor-pointer hover:bg-[#ae1800] transition'
+                  : 'bg-[#201e1d] text-[#f3f2f2]'
+              }`}
+            >
               {profile?.pmStage === 'switching_roles'
                 ? 'Career Switcher'
                 : profile?.pmStage === 'fresher'
                 ? 'Fresher / APM Candidate'
-                : 'Practicing PM'}
+                : profile?.pmStage === 'existing_pm'
+                ? 'Practicing PM'
+                : 'Select Your PM Stage +'}
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight m-0 text-[#201e1d]">
@@ -208,7 +217,18 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </h1>
         </div>
         <div className="text-sm text-[#605d5d] max-w-sm">
-          Target role: <strong className="text-[#201e1d] font-bold">{targetRole}</strong>.{' '}
+          Target role:{' '}
+          {targetRole ? (
+            <strong className="text-[#201e1d] font-bold">{targetRole}</strong>
+          ) : (
+            <button
+              onClick={openProfileModal}
+              className="text-[#ec3013] font-bold underline hover:text-[#ae1800] transition"
+            >
+              Select your PM title →
+            </button>
+          )}
+          .{' '}
           {profile?.pmStage === 'switching_roles' ? (
             <span>Translating past domain depth into product judgment. Take the diagnostic to benchmark transferable skills.</span>
           ) : profile?.pmStage === 'fresher' ? (
@@ -220,6 +240,26 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Onboarding Banner for users with unconfigured stage or role */}
+      {user && (!profile?.pmStage || !profile?.role) && (
+        <div className="bg-[#fdf3f2] border-2 border-[#ec3013] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-[#ec3013]">
+              Welcome to PMVerse!
+            </div>
+            <p className="text-xs text-[#201e1d] font-semibold mt-0.5">
+              Select your career stage and current or target PM title to personalize your diagnostic benchmarks, job matches, and peer circles.
+            </p>
+          </div>
+          <button
+            onClick={openProfileModal}
+            className="btn btn-primary text-xs py-2 px-4 whitespace-nowrap font-bold"
+          >
+            Select PM Stage & Title →
+          </button>
+        </div>
+      )}
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)]">

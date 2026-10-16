@@ -28,7 +28,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
     : user?.user_metadata?.full_name || user?.user_metadata?.name || profile?.fullName || (emailPrefix || 'Product Manager');
   const displayRole = profile?.role
     ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
-    : (user ? 'Product Manager' : 'Product Management Platform');
+    : (user ? 'Select your PM title' : 'Product Management Platform');
 
   return (
     <aside className="w-full space-y-2">

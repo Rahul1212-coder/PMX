@@ -234,9 +234,9 @@ export async function getUserProfileFromDb(userId: string): Promise<UserProfile 
     return {
       id: data.id,
       email: data.email || '',
-      fullName: data.full_name || 'Product Manager',
-      role: data.role || 'Associate PM',
-      company: data.company || 'Tech Company',
+      fullName: data.full_name || '',
+      role: data.role || '',
+      company: data.company || '',
       avatarUrl: data.avatar_url || '',
       bio: data.bio || '',
       pmStage: data.pm_stage || undefined,
@@ -267,8 +267,8 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
     // Base columns guaranteed to exist in public.profiles table
     const baseRecord: Record<string, any> = {
       id: profile.id,
-      full_name: profile.fullName || 'Product Manager',
-      role: profile.role || 'Associate PM',
+      full_name: profile.fullName || '',
+      role: profile.role || '',
       company: profile.company || '',
       avatar_url: profile.avatarUrl || '',
       bio: profile.bio || '',
@@ -281,10 +281,10 @@ export async function upsertUserProfileInDb(profile: Partial<UserProfile> & { id
     // Extended columns (in case table has them migrated)
     const extendedRecord: Record<string, any> = {
       ...baseRecord,
-      ...(profile.pmStage ? { pm_stage: profile.pmStage } : {}),
-      ...(profile.previousRole !== undefined ? { previous_role: profile.previousRole } : {}),
-      ...(typeof profile.yearsOfExperience === 'number' ? { years_of_experience: profile.yearsOfExperience } : {}),
-      ...(profile.pmFitScore !== undefined ? { pm_fit_score: profile.pmFitScore } : {}),
+      pm_stage: profile.pmStage || null,
+      previous_role: profile.previousRole || null,
+      years_of_experience: typeof profile.yearsOfExperience === 'number' ? profile.yearsOfExperience : null,
+      pm_fit_score: profile.pmFitScore || null,
     };
 
     // Attempt 1: Upsert with all fields
@@ -349,9 +349,9 @@ export async function getOtherProfilesFromDb(currentUserId?: string): Promise<Us
     return data.map((row: any) => ({
       id: row.id,
       email: row.email || '',
-      fullName: row.full_name || 'Product Manager',
-      role: row.role || 'Associate PM',
-      company: row.company || 'Tech Company',
+      fullName: row.full_name || '',
+      role: row.role || '',
+      company: row.company || '',
       avatarUrl: row.avatar_url || '',
       bio: row.bio || '',
       createdAt: row.created_at,

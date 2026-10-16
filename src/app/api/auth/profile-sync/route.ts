@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       fullName,
       role,
       company,
-      pmStage = 'existing_pm',
+      pmStage,
       previousRole,
       yearsOfExperience,
       action,
@@ -66,10 +66,10 @@ export async function POST(request: Request) {
 
       for (const u of users) {
         const meta = u.user_metadata || {};
-        const metaName = (meta.full_name || meta.name || u.email?.split('@')[0] || 'Product Manager').trim();
-        const metaRole = (meta.role || 'Product Manager').trim();
-        const metaCompany = (meta.company || 'Tech Company').trim();
-        const metaStage = meta.pm_stage || 'existing_pm';
+        const metaName = (meta.full_name || meta.name || u.email?.split('@')[0] || '').trim();
+        const metaRole = (meta.role || '').trim();
+        const metaCompany = (meta.company || '').trim();
+        const metaStage = meta.pm_stage || null;
         const metaPrev = meta.previous_role || null;
         const metaYears = typeof meta.years_of_experience === 'number' ? meta.years_of_experience : null;
 
@@ -111,10 +111,10 @@ export async function POST(request: Request) {
     const cleanRecord = {
       id: userId,
       email: email || '',
-      full_name: (fullName || email?.split('@')[0] || 'Product Manager').trim(),
-      role: (role || 'Product Manager').trim(),
-      company: (company || 'Tech Company').trim(),
-      pm_stage: pmStage,
+      full_name: (fullName || email?.split('@')[0] || '').trim(),
+      role: (role || '').trim(),
+      company: (company || '').trim(),
+      pm_stage: pmStage || null,
       previous_role: previousRole || null,
       years_of_experience: typeof yearsOfExperience === 'number' ? yearsOfExperience : null,
       avatar_url: '', // strip fake unsplash

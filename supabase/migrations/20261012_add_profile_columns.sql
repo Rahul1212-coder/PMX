@@ -4,9 +4,9 @@
 -- ==============================================================================
 
 -- 1. Add missing profile columns if they do not exist
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pm_stage TEXT DEFAULT 'existing_pm';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pm_stage TEXT DEFAULT NULL;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS previous_role TEXT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS years_of_experience INTEGER DEFAULT 2;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS years_of_experience INTEGER DEFAULT NULL;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pm_fit_score INTEGER DEFAULT NULL;
 
 -- 2. Ensure RLS policies exist on public.profiles
@@ -52,11 +52,11 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NULLIF(NEW.raw_user_meta_data->>'full_name', ''), NULLIF(NEW.raw_user_meta_data->>'name', ''), split_part(NEW.email, '@', 1)),
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', ''), 'Product Manager'),
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'company', ''), 'Tech Company'),
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'pm_stage', ''), 'existing_pm'),
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'previous_role', ''), NULL),
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'years_of_experience', '')::INTEGER, 2),
+    NULLIF(NEW.raw_user_meta_data->>'role', ''),
+    NULLIF(NEW.raw_user_meta_data->>'company', ''),
+    NULLIF(NEW.raw_user_meta_data->>'pm_stage', ''),
+    NULLIF(NEW.raw_user_meta_data->>'previous_role', ''),
+    NULLIF(NEW.raw_user_meta_data->>'years_of_experience', '')::INTEGER,
     NULL
   )
   ON CONFLICT (id) DO UPDATE

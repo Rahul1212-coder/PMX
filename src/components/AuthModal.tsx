@@ -29,11 +29,11 @@ export const AuthModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [pmStage, setPmStage] = useState<PmStage>('existing_pm');
-  const [role, setRole] = useState('Product Manager');
-  const [previousRole, setPreviousRole] = useState('Software Engineer');
+  const [pmStage, setPmStage] = useState<PmStage | ''>('');
+  const [role, setRole] = useState('');
+  const [previousRole, setPreviousRole] = useState('');
   const [company, setCompany] = useState('');
-  const [yearsOfExperience, setYearsOfExperience] = useState<number>(3);
+  const [yearsOfExperience, setYearsOfExperience] = useState<number | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,27 +60,40 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        let classifiedRole = role.trim() || 'Product Manager';
+        if (!pmStage) {
+          setError('Please select what best describes your product path');
+          setIsLoading(false);
+          return;
+        }
+
+        let classifiedRole = role.trim();
         let classifiedCompany = company.trim();
 
         if (pmStage === 'existing_pm') {
-          classifiedRole = role.trim() || 'Product Manager';
-          classifiedCompany = company.trim() || 'Tech Company';
+          if (!role.trim()) {
+            setError('Please select your current PM level');
+            setIsLoading(false);
+            return;
+          }
+          classifiedRole = role.trim();
         } else if (pmStage === 'switching_roles') {
-          classifiedRole = previousRole ? `Aspiring PM (ex-${previousRole})` : 'Aspiring PM (Career Switcher)';
-          classifiedCompany = company.trim() || 'Transitioning Professional';
+          if (!previousRole.trim()) {
+            setError('Please select your current background');
+            setIsLoading(false);
+            return;
+          }
+          classifiedRole = previousRole ? `Aspiring PM (ex-${previousRole})` : 'Aspiring PM';
         } else if (pmStage === 'fresher') {
-          classifiedRole = 'Aspiring Associate PM (Fresher)';
-          classifiedCompany = company.trim() || 'Recent Graduate';
+          classifiedRole = role.trim() || 'Associate PM';
         }
 
         const res = await signUp(email, password, {
           fullName,
           role: classifiedRole,
           company: classifiedCompany,
-          pmStage,
+          pmStage: pmStage || undefined,
           previousRole: pmStage === 'switching_roles' ? previousRole : undefined,
-          yearsOfExperience: pmStage === 'fresher' ? 0 : yearsOfExperience,
+          yearsOfExperience: pmStage === 'fresher' ? 0 : (typeof yearsOfExperience === 'number' ? yearsOfExperience : undefined),
         });
 
         if (res.error) {
@@ -244,8 +257,8 @@ export const AuthModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setPmStage('existing_pm');
-                        setRole('Product Manager');
-                        setYearsOfExperience(3);
+                        setRole('');
+                        setYearsOfExperience('');
                       }}
                       className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
                         pmStage === 'existing_pm'
@@ -271,8 +284,9 @@ export const AuthModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setPmStage('switching_roles');
-                        setRole('Aspiring PM');
-                        setYearsOfExperience(2);
+                        setRole('');
+                        setPreviousRole('');
+                        setYearsOfExperience('');
                       }}
                       className={`p-2 text-left border-2 transition-all flex flex-col justify-between min-h-[72px] ${
                         pmStage === 'switching_roles'
@@ -351,6 +365,9 @@ export const AuthModal: React.FC = () => {
                           onChange={(e) => setRole(e.target.value)}
                           className="input bg-white text-xs"
                         >
+                          <option value="" disabled>
+                            Select PM level...
+                          </option>
                           {pmRoles.map((r) => (
                             <option key={r} value={r}>
                               {r}
@@ -365,9 +382,12 @@ export const AuthModal: React.FC = () => {
                         </label>
                         <select
                           value={yearsOfExperience}
-                          onChange={(e) => setYearsOfExperience(Number(e.target.value))}
+                          onChange={(e) => setYearsOfExperience(e.target.value === '' ? '' : Number(e.target.value))}
                           className="input bg-white text-xs"
                         >
+                          <option value="" disabled>
+                            Select experience...
+                          </option>
                           <option value={1}>1 Year</option>
                           <option value={2}>2 Years</option>
                           <option value={3}>3 Years</option>
@@ -404,6 +424,9 @@ export const AuthModal: React.FC = () => {
                         onChange={(e) => setPreviousRole(e.target.value)}
                         className="input bg-white text-xs"
                       >
+                        <option value="" disabled>
+                          Select background...
+                        </option>
                         {switcherRoles.map((r) => (
                           <option key={r} value={r}>
                             {r}

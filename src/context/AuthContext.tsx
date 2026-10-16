@@ -95,25 +95,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Enforce user's actual role from metadata/pending
-        const isDefaultRole =
-          !dbProfile.role ||
-          dbProfile.role === 'Product Manager' ||
-          dbProfile.role === 'Associate PM';
-
-        if (metaRole && (isDefaultRole || dbProfile.role !== metaRole || pending?.role)) {
+        if (metaRole && (dbProfile.role !== metaRole || pending?.role)) {
           dbProfile.role = metaRole;
+          shouldSyncDb = true;
+        } else if (dbProfile.role === 'Product Manager' && !metaRole && !pending?.role) {
+          // Clear legacy static role default so user can select their own
+          dbProfile.role = '';
           shouldSyncDb = true;
         }
 
         // Enforce user's actual company from metadata/pending
-        const isDefaultCompany =
-          !dbProfile.company ||
-          dbProfile.company === 'Independent PM' ||
-          dbProfile.company === 'Tech Company' ||
-          dbProfile.company === 'Tech Squad';
-
-        if (metaCompany && (isDefaultCompany || dbProfile.company !== metaCompany || pending?.company !== undefined)) {
+        if (metaCompany && (dbProfile.company !== metaCompany || pending?.company !== undefined)) {
           dbProfile.company = metaCompany;
+          shouldSyncDb = true;
+        } else if ((dbProfile.company === 'Independent PM' || dbProfile.company === 'Tech Company' || dbProfile.company === 'Tech Squad') && !metaCompany && !pending?.company) {
+          // Clear legacy static company default
+          dbProfile.company = '';
           shouldSyncDb = true;
         }
 
@@ -197,14 +194,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const fallbackProfile: UserProfile = {
           id: supabaseUser.id,
           email: supabaseUser.email || '',
-          fullName: metaName || emailUsername || 'Product Manager',
-          role: metaRole || 'Product Manager',
+          fullName: metaName || emailUsername || '',
+          role: metaRole || '',
           company: metaCompany || '',
           avatarUrl: metaAvatar && !metaAvatar.includes('unsplash') ? metaAvatar : '',
           bio: metaBio,
-          pmStage: metaStage || 'existing_pm',
+          pmStage: (metaStage as any) || undefined,
           previousRole: metaPrev,
-          yearsOfExperience: typeof metaYears === 'number' ? metaYears : 2,
+          yearsOfExperience: typeof metaYears === 'number' ? metaYears : undefined,
         };
         setProfile(fallbackProfile);
         if (typeof window !== 'undefined') {
@@ -383,12 +380,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const trimmedEmail = email.trim();
     const cleanProfile: Partial<UserProfile> = {
-      fullName: meta.fullName.trim(),
-      role: meta.role.trim() || 'Product Manager',
-      company: meta.company.trim(),
-      pmStage: meta.pmStage || 'existing_pm',
+      fullName: meta.fullName ? meta.fullName.trim() : '',
+      role: meta.role ? meta.role.trim() : '',
+      company: meta.company ? meta.company.trim() : '',
+      pmStage: meta.pmStage,
       previousRole: meta.previousRole || '',
-      yearsOfExperience: typeof meta.yearsOfExperience === 'number' ? meta.yearsOfExperience : 2,
+      yearsOfExperience: typeof meta.yearsOfExperience === 'number' ? meta.yearsOfExperience : undefined,
     };
 
     const pendingKey = `pmverse_pending_profile_${trimmedEmail.toLowerCase()}`;
@@ -426,10 +423,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fullDemoProfile: UserProfile = {
         id: `user-${Date.now()}`,
         email: trimmedEmail,
-        fullName: cleanProfile.fullName || 'Product Manager',
-        role: cleanProfile.role || 'Associate PM',
+        fullName: cleanProfile.fullName || trimmedEmail.split('@')[0] || '',
+        role: cleanProfile.role || '',
         company: cleanProfile.company || '',
-        pmStage: cleanProfile.pmStage || 'existing_pm',
+        pmStage: cleanProfile.pmStage,
         previousRole: cleanProfile.previousRole || '',
         yearsOfExperience: cleanProfile.yearsOfExperience,
         pmFitScore: localDiagScore,
@@ -550,10 +547,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initialProfile: UserProfile = {
           id: data.user.id,
           email: data.user.email || trimmedEmail,
-          fullName: cleanProfile.fullName || trimmedEmail.split('@')[0] || 'Product Manager',
-          role: cleanProfile.role || 'Product Manager',
+          fullName: cleanProfile.fullName || trimmedEmail.split('@')[0] || '',
+          role: cleanProfile.role || '',
           company: cleanProfile.company || '',
-          pmStage: cleanProfile.pmStage || 'existing_pm',
+          pmStage: cleanProfile.pmStage,
           previousRole: cleanProfile.previousRole || '',
           yearsOfExperience: cleanProfile.yearsOfExperience,
           pmFitScore: cachedScore,
@@ -629,9 +626,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const current = profile || {
       id: user?.id || 'guest',
       email: user?.email || '',
-      fullName: 'Product Manager',
-      role: 'Associate PM',
-      company: 'Tech Company',
+      fullName: '',
+      role: '',
+      company: '',
     };
 
     const updated: UserProfile = { ...current, ...updates };
