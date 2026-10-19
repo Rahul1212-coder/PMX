@@ -23,9 +23,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
   ];
 
   const emailPrefix = user?.email ? user.email.split('@')[0] : '';
-  const displayName = profile?.fullName && !profile.fullName.includes('@') && profile.fullName !== emailPrefix
-    ? profile.fullName
-    : user?.user_metadata?.full_name || user?.user_metadata?.name || profile?.fullName || (emailPrefix || 'Product Manager');
+  const candidateName =
+    (profile?.fullName && !profile.fullName.includes('@') ? profile.fullName.trim() : '') ||
+    (user?.user_metadata?.full_name ? String(user.user_metadata.full_name).trim() : '') ||
+    (user?.user_metadata?.name ? String(user.user_metadata.name).trim() : '') ||
+    (profile?.fullName ? profile.fullName.trim() : '') ||
+    emailPrefix;
+
+  const displayName = candidateName || (user ? 'Member' : 'Product Manager');
   const displayRole = profile?.role
     ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
     : (user ? 'Select your PM title' : 'Product Management Platform');

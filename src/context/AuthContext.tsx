@@ -82,11 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let shouldSyncDb = false;
 
       if (dbProfile) {
-        // Enforce user's actual name if DB profile had default or raw email username or if pending/metadata provided
+        // Enforce user's actual name if DB profile had default or if pending/metadata provided
         const isPlaceholderName =
           !dbProfile.fullName ||
           dbProfile.fullName === 'Product Manager' ||
-          dbProfile.fullName === emailUsername ||
           dbProfile.fullName.includes('@');
 
         if (metaName && (isPlaceholderName || metaName !== dbProfile.fullName || pending?.fullName)) {
@@ -174,6 +173,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Persist reconciled profile to Supabase DB and Supabase Auth metadata
         if (shouldSyncDb) {
           upsertUserProfileInDb(dbProfile).catch(() => {});
+          fetch('/api/auth/profile-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: dbProfile.id,
+              email: dbProfile.email,
+              fullName: dbProfile.fullName,
+              role: dbProfile.role,
+              company: dbProfile.company,
+              pmStage: dbProfile.pmStage,
+              previousRole: dbProfile.previousRole,
+              yearsOfExperience: dbProfile.yearsOfExperience,
+            }),
+          }).catch(() => {});
+
           const supabase = getSupabaseClient();
           if (supabase) {
             supabase.auth.updateUser({
@@ -674,10 +688,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
       if (isUuid) {
         try {
-          const ok = await upsertUserProfileInDb(updated);
-          if (!ok) {
-            console.warn('Supabase DB table sync returned false, but local and auth metadata were saved.');
-          }
+          await upsertUserProfileInDb(updated);
+          fetch('/api/auth/profile-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              email: user.email,
+              fullName: updated.fullName,
+              role: updated.role,
+              company: updated.company,
+              bio: updated.bio,
+              avatarUrl: updated.avatarUrl,
+              pmStage: updated.pmStage,
+              previousRole: updated.previousRole,
+              yearsOfExperience: updated.yearsOfExperience,
+            }),
+          }).catch(() => {});
         } catch (dbErr) {
           console.warn('Supabase DB profile sync error:', dbErr);
         }

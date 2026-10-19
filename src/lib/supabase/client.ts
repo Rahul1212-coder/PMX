@@ -8,7 +8,8 @@ export const DEFAULT_SUPABASE_ANON_KEY =
 export const getSupabaseConfig = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-  return { url, key };
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || key;
+  return { url, key, serviceKey };
 };
 
 export const isSupabaseConfigured = (): boolean => {
@@ -41,3 +42,13 @@ export const getSupabaseClient = (): SupabaseClient | null => {
 
   return browserClient;
 };
+
+export const getSupabaseAdminClient = (): SupabaseClient | null => {
+  const { url, serviceKey, key } = getSupabaseConfig();
+  const activeKey = serviceKey || key;
+  if (!url || !activeKey) return null;
+  return createSupabaseClient(url, activeKey, {
+    auth: { persistSession: false },
+  });
+};
+

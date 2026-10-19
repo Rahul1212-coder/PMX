@@ -67,10 +67,11 @@ async function syncAll() {
   let updatedCount = 0;
   for (const u of users) {
     const meta = u.user_metadata || {};
-    const metaName = (meta.full_name || meta.name || u.email?.split('@')[0] || 'Product Manager').trim();
-    const metaRole = (meta.role || 'Product Manager').trim();
-    const metaCompany = (meta.company || 'Tech Company').trim();
-    const metaStage = meta.pm_stage || 'existing_pm';
+    const metaName = (meta.full_name || meta.name || u.email?.split('@')[0] || '').trim();
+    const metaRole = (meta.role || '').trim();
+    const rawCo = (meta.company || '').trim();
+    const metaCompany = rawCo === 'Tech Company' || rawCo === 'Independent PM' || rawCo === 'Tech Squad' ? '' : rawCo;
+    const metaStage = meta.pm_stage || null;
     const metaPrev = meta.previous_role || null;
     const metaYears = typeof meta.years_of_experience === 'number' ? meta.years_of_experience : null;
 

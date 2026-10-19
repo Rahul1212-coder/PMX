@@ -32,10 +32,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     if (isOpen && profile) {
       const emailPrefix = user?.email?.split('@')[0] || '';
-      let initialName = profile.fullName || '';
-      if (!initialName || initialName === emailPrefix || initialName === 'Product Manager' || initialName.includes('@')) {
-        initialName = user?.user_metadata?.full_name || user?.user_metadata?.name || initialName;
-      }
+      const initialName =
+        (profile.fullName && !profile.fullName.includes('@') ? profile.fullName.trim() : '') ||
+        (user?.user_metadata?.full_name ? String(user.user_metadata.full_name).trim() : '') ||
+        (user?.user_metadata?.name ? String(user.user_metadata.name).trim() : '') ||
+        (profile.fullName ? profile.fullName.trim() : '') ||
+        emailPrefix;
 
       setFullName(initialName || '');
       setPmStage(profile.pmStage || (user?.user_metadata?.pm_stage as PmStage) || '');
@@ -46,18 +48,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           ? user.user_metadata.years_of_experience
           : ''
       );
-      setRole(
-        profile.role && profile.role !== 'Product Manager'
-          ? profile.role
-          : (user?.user_metadata?.role && user.user_metadata.role !== 'Product Manager'
-              ? user.user_metadata.role
-              : (profile.role && profile.role !== 'Product Manager' ? profile.role : ''))
-      );
-      setCompany(
-        profile.company === 'Tech Company' || profile.company === 'Independent PM' || profile.company === 'Tech Squad'
-          ? (user?.user_metadata?.company || '')
-          : (profile.company || user?.user_metadata?.company || '')
-      );
+
+      const rawRole = (profile.role || user?.user_metadata?.role || '').trim();
+      setRole(rawRole);
+
+      const rawCompany = (profile.company || user?.user_metadata?.company || '').trim();
+      const cleanCompany =
+        rawCompany === 'Tech Company' || rawCompany === 'Independent PM' || rawCompany === 'Tech Squad'
+          ? (user?.user_metadata?.company && !['Tech Company', 'Independent PM', 'Tech Squad'].includes(user.user_metadata.company)
+              ? user.user_metadata.company
+              : '')
+          : rawCompany;
+      setCompany(cleanCompany);
       setBio(profile.bio || user?.user_metadata?.bio || '');
       setAvatarUrl(profile.avatarUrl || user?.user_metadata?.avatar_url || '');
       setUrlInput(profile.avatarUrl || user?.user_metadata?.avatar_url || '');
@@ -146,6 +148,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (res?.error) {
         setStatusMessage({ type: 'error', text: res.error });
       } else {
+        // Also sync to backend service-role API to guarantee Supabase DB and auth metadata stay in sync
+        if (user?.id) {
+          fetch('/api/auth/profile-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              email: user.email,
+              fullName: fullName.trim(),
+              role: role.trim(),
+              company: company.trim(),
+              bio: bio.trim(),
+              avatarUrl: avatarUrl.trim(),
+              pmStage: pmStage || undefined,
+              yearsOfExperience: typeof yearsOfExperience === 'number' ? yearsOfExperience : undefined,
+            }),
+          }).catch(() => {});
+        }
+
         setStatusMessage({ type: 'success', text: 'Profile updated successfully!' });
         setTimeout(() => {
           onClose();

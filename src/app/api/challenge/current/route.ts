@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAiClient, getAiModel } from '@/lib/ai';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdminClient } from '@/lib/supabase/client';
 import fs from 'fs';
 import path from 'path';
 import { WeeklyChallenge } from '@/types';
@@ -261,9 +261,7 @@ export async function GET(request: Request) {
     const endsAt = sunday.toISOString();
 
     const cache = readCache();
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+    const supabase = getSupabaseAdminClient();
 
     // 1. If not forcing, check Supabase first
     if (!force && supabase) {
@@ -389,10 +387,8 @@ export async function POST(request: Request) {
     writeCache(cache);
 
     // Save to Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (supabaseUrl && supabaseKey) {
-      const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
       try {
         await supabase.from('weekly_challenges').upsert({
           id: newChallenge.id,

@@ -86,13 +86,17 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const emailPrefix = user?.email ? user.email.split('@')[0] : '';
   const displayName =
-    profile?.fullName ||
-    user?.user_metadata?.full_name ||
-    (user ? (user.email ? user.email.split('@')[0] : 'Product Manager') : 'Guest PM');
+    (profile?.fullName && !profile.fullName.includes('@') ? profile.fullName.trim() : '') ||
+    (user?.user_metadata?.full_name ? String(user.user_metadata.full_name).trim() : '') ||
+    (user?.user_metadata?.name ? String(user.user_metadata.name).trim() : '') ||
+    (profile?.fullName ? profile.fullName.trim() : '') ||
+    emailPrefix ||
+    (user ? 'Member' : 'Guest PM');
   const displayRole = profile?.role
     ? `${profile.role}${profile.company ? ` @ ${profile.company}` : ''}`
-    : (user ? 'Associate PM' : 'Sign in to personalize');
+    : (user ? 'Member' : 'Sign in to personalize');
 
   return (
     <header className="sticky top-0 z-50 bg-[#f3f2f2] border-b-2 border-[rgba(32,30,29,0.15)] flex-none">

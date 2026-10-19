@@ -44,8 +44,8 @@ export async function getCommunityPostsFromDb(): Promise<CommunityPost[] | null>
       userId: row.user_id,
       author: {
         name: row.author_name || 'PM Community Member',
-        role: row.author_role || 'Product Manager',
-        company: row.author_company || 'Tech Company',
+        role: row.author_role || '',
+        company: row.author_company || '',
         avatar: row.author_avatar || '',
       },
       title: row.title,

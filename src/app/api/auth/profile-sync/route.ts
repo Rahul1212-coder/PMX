@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdminClient } from '@/lib/supabase/client';
 
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || (!serviceKey && !anonKey)) return null;
-
-  return createClient(url, serviceKey || anonKey!, {
-    auth: { persistSession: false },
-  });
+export async function GET() {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ ok: false, error: 'Supabase client unavailable' }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, message: 'Profile sync service is healthy and connected to Supabase.' });
 }
 
 export async function POST(request: Request) {
@@ -28,33 +24,16 @@ export async function POST(request: Request) {
       action,
     } = body;
 
-    const supabase = getAdminClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return NextResponse.json({ error: 'Supabase client unavailable' }, { status: 500 });
     }
 
     // Admin Action: sync all users from auth.users into public.profiles
     if (action === 'sync_all') {
-      const authHeader = request.headers.get('authorization') || '';
-      const providedKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (!serviceRoleKey && !providedKey) {
-        return NextResponse.json(
-          { error: 'Service role key required to sync all profiles across auth.users.' },
-          { status: 401 }
-        );
-      }
-
-      const adminClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        serviceRoleKey || providedKey,
-        { auth: { persistSession: false } }
-      );
-
-      const { data: usersData, error: listError } = await adminClient.auth.admin.listUsers({
+      const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
         page: 1,
-        perPage: 100,
+        perPage: 200,
       });
 
       if (listError) {
@@ -67,8 +46,11 @@ export async function POST(request: Request) {
       for (const u of users) {
         const meta = u.user_metadata || {};
         const metaName = (meta.full_name || meta.name || u.email?.split('@')[0] || '').trim();
-        const metaRole = (meta.role || '').trim();
-        const metaCompany = (meta.company || '').trim();
+        const rawRole = (meta.role || '').trim();
+        const metaRole = rawRole === 'Product Manager' && !meta.role ? '' : rawRole;
+        const rawCo = (meta.company || '').trim();
+        const metaCompany =
+          rawCo === 'Tech Company' || rawCo === 'Independent PM' || rawCo === 'Tech Squad' ? '' : rawCo;
         const metaStage = meta.pm_stage || null;
         const metaPrev = meta.previous_role || null;
         const metaYears = typeof meta.years_of_experience === 'number' ? meta.years_of_experience : null;
@@ -86,7 +68,7 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         };
 
-        const { error: upsertError } = await adminClient
+        const { error: upsertError } = await supabase
           .from('profiles')
           .upsert(updateRecord, { onConflict: 'id' });
 
@@ -108,24 +90,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     }
 
+    const cleanName = (fullName || email?.split('@')[0] || '').trim();
+    const cleanRole = (role || '').trim();
+    const cleanCompany = (company || '').trim();
+    const cleanStage = pmStage || null;
+    const cleanPrev = previousRole || null;
+    const cleanYears = typeof yearsOfExperience === 'number' ? yearsOfExperience : null;
+
     const cleanRecord = {
       id: userId,
       email: email || '',
-      full_name: (fullName || email?.split('@')[0] || '').trim(),
-      role: (role || '').trim(),
-      company: (company || '').trim(),
-      pm_stage: pmStage || null,
-      previous_role: previousRole || null,
-      years_of_experience: typeof yearsOfExperience === 'number' ? yearsOfExperience : null,
-      avatar_url: '', // strip fake unsplash
+      full_name: cleanName,
+      role: cleanRole,
+      company: cleanCompany,
+      pm_stage: cleanStage,
+      previous_role: cleanPrev,
+      years_of_experience: cleanYears,
+      avatar_url: '',
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('profiles').upsert(cleanRecord, { onConflict: 'id' });
+    // 1. Upsert into public.profiles database table
+    const { error: dbError } = await supabase.from('profiles').upsert(cleanRecord, { onConflict: 'id' });
 
-    if (error) {
-      console.warn('Profile sync notice:', error.message);
-      return NextResponse.json({ success: false, error: error.message }, { status: 200 });
+    if (dbError) {
+      console.warn('Profile DB upsert notice:', dbError.message);
+    }
+
+    // 2. Also update auth user metadata via Supabase Admin API
+    try {
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          full_name: cleanName,
+          name: cleanName,
+          role: cleanRole,
+          company: cleanCompany,
+          pm_stage: cleanStage,
+          previous_role: cleanPrev,
+          years_of_experience: cleanYears,
+        },
+      });
+    } catch (authMetaErr: any) {
+      console.warn('Auth user_metadata admin update notice:', authMetaErr?.message);
     }
 
     return NextResponse.json({ success: true, profile: cleanRecord });

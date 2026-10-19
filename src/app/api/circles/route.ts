@@ -1,19 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdminClient } from '@/lib/supabase/client';
 
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       return NextResponse.json({ circles: [], message: 'Supabase client not initialized' });
     }
@@ -64,7 +58,7 @@ export async function POST(request: Request) {
     const newId = `circle-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdminClient();
     if (supabase) {
       const { error: insertErr } = await supabase.from('circles').insert({
         id: newId,

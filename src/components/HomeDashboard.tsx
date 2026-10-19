@@ -112,14 +112,19 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   }, []);
 
   const emailPrefix = user?.email?.split('@')[0] || '';
-  const rawFullName = profile?.fullName && !profile.fullName.includes('@') && profile.fullName !== emailPrefix
-    ? profile.fullName
-    : user?.user_metadata?.full_name || user?.user_metadata?.name || profile?.fullName;
+  const candidateName =
+    (profile?.fullName && !profile.fullName.includes('@') ? profile.fullName.trim() : '') ||
+    (user?.user_metadata?.full_name ? String(user.user_metadata.full_name).trim() : '') ||
+    (user?.user_metadata?.name ? String(user.user_metadata.name).trim() : '') ||
+    (profile?.fullName ? profile.fullName.trim() : '') ||
+    emailPrefix;
 
-  const displayName = rawFullName && !rawFullName.includes('@') && rawFullName !== emailPrefix
-    ? rawFullName.split(' ')[0]
+  const displayName = candidateName
+    ? candidateName.includes(' ')
+      ? candidateName.split(' ')[0]
+      : candidateName
     : user
-    ? 'Product Manager'
+    ? 'Member'
     : 'Product Leader';
   const targetRole = profile?.role || user?.user_metadata?.role || '';
 
