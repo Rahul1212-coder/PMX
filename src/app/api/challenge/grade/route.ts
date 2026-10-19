@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { getOpenAIClient } from '@/lib/openai';
+import { getAiClient, getAiModel, isGeminiActive } from '@/lib/ai';
 import { WeeklyChallenge } from '@/types';
 
 interface GradeRequestBody {
@@ -179,9 +179,10 @@ export async function POST(request: Request) {
       .filter((w: string) => w.length > 0);
     const wordCount = candidateRawWords.length;
 
-    // 1. Live AI Rubric Grading with OpenAI GPT-4o-mini
+    // 1. Live AI Rubric Grading with Gemini / AI Model
     try {
-      const openai = getOpenAIClient();
+      const aiClient = getAiClient();
+      const model = getAiModel('gemini-3.5-flash');
 
       const candidateTextSection = rawSubmission
         ? `[CANDIDATE PM PROPOSAL]:\n${rawSubmission}`
@@ -236,8 +237,8 @@ OUTPUT JSON FORMAT (Return strictly valid JSON only):
   "principalAdvice": string (1-2 sentences of senior product leadership wisdom)
 }`;
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+      const completion = await aiClient.chat.completions.create({
+        model,
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.3,
@@ -307,16 +308,16 @@ OUTPUT JSON FORMAT (Return strictly valid JSON only):
         strengths: wordCount < 30 ? [] : strengths,
         improvements: improvements.length > 0 ? improvements : ['Consider establishing explicit counter-metrics to protect retention.'],
         principalAdvice: parsed.principalAdvice || 'Always validate your assumptions with progressive cohort rollouts.',
-        evaluatorModel: 'OpenAI GPT-4o-mini',
+        evaluatorModel: isGeminiActive() ? 'Google Gemini 3.5 Flash' : 'OpenAI GPT-4o-mini',
       };
 
       return NextResponse.json({
         success: true,
         data: feedback,
-        source: 'openai-gpt-4o-mini',
+        source: isGeminiActive() ? 'gemini-3.5-flash' : 'openai-gpt-4o-mini',
       });
     } catch (err: any) {
-      console.warn('OpenAI live evaluation error, using dynamic heuristic rubric:', err?.message);
+      console.warn('AI live evaluation error, using dynamic heuristic rubric:', err?.message);
     }
 
     // 2. Dynamic Heuristic PM Evaluation Engine (Non-static fallback)

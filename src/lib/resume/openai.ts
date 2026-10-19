@@ -1,4 +1,4 @@
-import { getOpenAIClient } from '@/lib/openai';
+import { getAiClient, getAiModel } from '@/lib/ai';
 import {
   StructuredResumeData,
   JobDescriptionRequirement,
@@ -11,7 +11,7 @@ import {
 import { calculateDeterministicScores } from './scoring';
 
 export const PROMPT_VERSION = 'pmverse-resume-v1.0';
-export const RESUME_MODEL = process.env.OPENAI_RESUME_MODEL || 'gpt-4o-mini';
+export const RESUME_MODEL = getAiModel('gemini-3.5-flash');
 
 const SYSTEM_GUARDRAIL = `You are a Principal Product Manager, Senior PM Recruiter, and ATS Document Evaluation Specialist.
 You analyze resumes for Product Management roles with uncompromising objectivity, evidence-based rigor, and factual integrity.
@@ -45,7 +45,7 @@ export async function analyzeResumeWithOpenAI(params: {
   const { resumeText, targetRole, targetCompany, jobDescription, mode, detectedFormattingRisks = [] } = params;
 
   try {
-    const openai = getOpenAIClient();
+    const aiClient = getAiClient();
 
     const isJobMatch = mode === 'job_match' && Boolean(jobDescription && jobDescription.trim().length > 30);
 
@@ -170,7 +170,7 @@ Return ONLY a valid JSON object matching this schema:
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const response = await aiClient.chat.completions.create({
       model: RESUME_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_GUARDRAIL },
@@ -182,13 +182,13 @@ Return ONLY a valid JSON object matching this schema:
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      throw new Error('Received empty response from OpenAI');
+      throw new Error('Received empty response from AI model');
     }
 
     const parsed = JSON.parse(content);
     return sanitizeAnalysisOutput(parsed, isJobMatch, targetRole);
   } catch (err: any) {
-    console.warn('OpenAI resume analysis failed or unavailable, running intelligent fallback:', err?.message);
+    console.warn('AI resume analysis failed or unavailable, running intelligent fallback:', err?.message);
     return generateFallbackAnalysis(resumeText, targetRole, targetCompany, jobDescription, mode, detectedFormattingRisks);
   }
 }
@@ -203,7 +203,7 @@ export async function rewriteResumeBullet(params: {
   const { originalBullet, goal, targetRole, targetJobContext, metricAnswers } = params;
 
   try {
-    const openai = getOpenAIClient();
+    const aiClient = getAiClient();
 
     const prompt = `
 You are a Principal Product Manager mentor helping a candidate refine an individual resume bullet point.
@@ -256,7 +256,7 @@ Return JSON with:
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const response = await aiClient.chat.completions.create({
       model: RESUME_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_GUARDRAIL },
@@ -271,7 +271,7 @@ Return JSON with:
       return JSON.parse(content);
     }
   } catch (err: any) {
-    console.warn('OpenAI bullet rewrite fallback:', err?.message);
+    console.warn('AI bullet rewrite fallback:', err?.message);
   }
 
   // Fallback generation for bullet rewriting

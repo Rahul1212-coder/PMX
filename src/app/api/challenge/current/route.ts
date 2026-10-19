@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getOpenAIClient } from '@/lib/openai';
+import { getAiClient, getAiModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
@@ -165,7 +165,8 @@ async function generateAiChallenge(
   requestedDomain?: string
 ): Promise<WeeklyChallenge> {
   try {
-    const openai = getOpenAIClient();
+    const aiClient = getAiClient();
+    const model = getAiModel('gemini-3.5-flash');
     const prompt = `You are the Head of Product Management Evaluation and Principal PM Coach at Google / Stripe.
 Generate a brand-new, realistic, high-standard weekly product management challenge for PMs for week ${weekIdentifier} (Challenge #${challengeNumber}).
 Domain focus: ${requestedDomain || 'Pick one: Consumer Tech, Fintech, B2B SaaS, Quick Commerce, Healthtech, or Generative AI'}.
@@ -179,8 +180,8 @@ Return a JSON object only with:
 - domain: string
 - rubricWeights: object with productSense: 30, feasibility: 25, metrics: 25, userValue: 20`;
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+      const completion = await aiClient.chat.completions.create({
+        model,
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.7,

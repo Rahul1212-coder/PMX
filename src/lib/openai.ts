@@ -1,21 +1,51 @@
 import OpenAI from 'openai';
 
-// Decode key if not present in process.env
-const DEFAULT_KEY_B64 =
-  'c2stcHJvai15SXRWN29fX1JQRE5QazZJaW9rbW1PUXZJend5QzMxNHctbll3WGhaWTZYQnJqaUE5N0pEbGhqR0NuaWYwNWVuUUd3Vm1wdzNnV1QzQmxia0ZKd0tvMEp0Z2ZxMEFLbVFhYlJXNnFLTXJEak1fdWFOVUhkamVjMjlGZGhHQmo1MTRpU3cwLVJtTlAzWU9sN00waUlYTFRyZkh2Z0E=';
+// Google Gemini API Configuration (Default Provider)
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-export function getOpenAIApiKey(): string {
-  if (process.env.OPENAI_API_KEY) {
-    return process.env.OPENAI_API_KEY;
-  }
-  try {
-    return Buffer.from(DEFAULT_KEY_B64, 'base64').toString('utf-8');
-  } catch {
-    return '';
-  }
+export function getGeminiApiKey(): string {
+  return (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GEMINI_API_KEY ||
+    ''
+  ).trim();
 }
 
-export function getOpenAIClient(): OpenAI {
-  const apiKey = getOpenAIApiKey();
+export function isGeminiActive(): boolean {
+  if (process.env.USE_OPENAI === 'true') return false;
+  return Boolean(getGeminiApiKey());
+}
+
+export function getAiApiKey(): string {
+  if (isGeminiActive()) {
+    return getGeminiApiKey();
+  }
+  return (process.env.OPENAI_API_KEY || '').trim();
+}
+
+export function getAiModel(defaultFallback?: string): string {
+  if (isGeminiActive()) {
+    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  }
+  return process.env.OPENAI_RESUME_MODEL || defaultFallback || 'gpt-4o-mini';
+}
+
+export function getAiClient(): OpenAI {
+  if (isGeminiActive()) {
+    const apiKey = getGeminiApiKey();
+    return new OpenAI({
+      apiKey,
+      baseURL: GEMINI_BASE_URL,
+    });
+  }
+
+  const apiKey = getAiApiKey();
   return new OpenAI({ apiKey });
 }
+
+// Backward-compatible exports for existing codebase callers
+export const getOpenAIClient = getAiClient;
+export const getOpenAIApiKey = getAiApiKey;
+export default getAiClient;

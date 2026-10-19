@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getOpenAIClient } from '@/lib/openai';
+import { getAiClient, getAiModel, isGeminiActive } from '@/lib/ai';
 import { isAiMentorEnabled } from '@/lib/features';
 
 export async function POST(request: Request) {
@@ -18,7 +18,8 @@ export async function POST(request: Request) {
     }
 
     try {
-      const openai = getOpenAIClient();
+      const aiClient = getAiClient();
+      const model = getAiModel('gemini-3.5-flash');
       const prompt = `You are a Principal Product Manager and PM Coach.
 Explain the product management term or concept: "${term}".
 Target audience: ${userRole || 'Aspiring or Current Product Manager'}.
@@ -33,8 +34,8 @@ Return a JSON response with the following keys:
 - interviewAdvice: How to bring this up effectively in a PM interview question.
 Ensure your response is valid JSON only.`;
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+      const completion = await aiClient.chat.completions.create({
+        model,
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.7,
@@ -42,12 +43,17 @@ Ensure your response is valid JSON only.`;
 
       const raw = completion.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(raw);
-      return NextResponse.json({ success: true, data: parsed, source: 'openai' });
+      return NextResponse.json({
+        success: true,
+        data: parsed,
+        source: isGeminiActive() ? 'gemini' : 'openai',
+        model,
+      });
     } catch (err: any) {
-      console.warn('OpenAI tutor generation failed, falling back:', err?.message);
+      console.warn('AI tutor generation failed, falling back:', err?.message);
     }
 
-    // High quality intelligent fallback if OPENAI_API_KEY is not set yet
+    // High quality intelligent fallback if GEMINI_API_KEY is not set yet
     const fallbackData = {
       summary: `"${term}" is a fundamental product management concept used to align cross-functional teams, make disciplined trade-offs, and ensure customer value creation.`,
       inDepth: `In day-to-day PM practice, "${term}" serves as a decision-making rubric. Rather than relying on gut feelings or executive mandates, high-performing product squads use this concept to de-risk investments before writing code.`,
@@ -61,7 +67,7 @@ Ensure your response is valid JSON only.`;
       success: true,
       data: fallbackData,
       source: 'offline-preview',
-      note: 'Add OPENAI_API_KEY in .env.local to activate live OpenAI GPT-4o-mini generation.',
+      note: 'Add GEMINI_API_KEY in .env.local to activate live Gemini AI generation.',
     });
   } catch (error: any) {
     console.error('Error generating AI explanation:', error);

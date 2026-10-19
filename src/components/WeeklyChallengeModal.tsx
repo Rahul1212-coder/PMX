@@ -448,7 +448,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                             {userSubmission.aiFeedback?.verdictLabel || 'Evaluated Solution'}
                           </span>
                           <span className="text-[10px] text-[#605d5d] font-bold">
-                            {userSubmission.aiFeedback?.evaluatorModel || 'Live OpenAI GPT-4o-mini'}
+                            {userSubmission.aiFeedback?.evaluatorModel || 'Live Google Gemini AI'}
                           </span>
                         </div>
                       </div>
