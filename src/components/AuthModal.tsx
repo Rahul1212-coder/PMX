@@ -12,6 +12,9 @@ import {
   Briefcase,
   RefreshCw,
   GraduationCap,
+  ArrowLeft,
+  Mail,
+  KeyRound,
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -22,12 +25,16 @@ export const AuthModal: React.FC = () => {
     openAuthModal,
     signIn,
     signUp,
+    resetPassword,
+    updatePassword,
     loginAsDemo,
     isConfigured,
   } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [pmStage, setPmStage] = useState<PmStage | ''>('');
   const [role, setRole] = useState('');
@@ -52,6 +59,38 @@ export const AuthModal: React.FC = () => {
         const res = await signIn(email, password);
         if (res.error) {
           setError(res.error);
+        }
+      } else if (authModalTab === 'forgot') {
+        if (!email.trim()) {
+          setError('Please enter your email address');
+          setIsLoading(false);
+          return;
+        }
+        const res = await resetPassword(email);
+        if (res.error) {
+          setError(res.error);
+        } else if (res.message) {
+          setSuccessMessage(res.message);
+        }
+      } else if (authModalTab === 'update-password') {
+        if (!password || password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setIsLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
+        const res = await updatePassword(password);
+        if (res.error) {
+          setError(res.error);
+        } else if (res.message) {
+          setSuccessMessage(res.message);
+          setTimeout(() => {
+            closeAuthModal();
+          }, 2500);
         }
       } else {
         if (!fullName.trim()) {
@@ -148,48 +187,81 @@ export const AuthModal: React.FC = () => {
           </div>
 
           <h2 className="text-xl font-black text-[#201e1d] m-0">
-            {authModalTab === 'signin' ? 'Sign in to PMVerse' : 'Join the Product Network'}
+            {authModalTab === 'signin' && 'Sign in to PMVerse'}
+            {authModalTab === 'signup' && 'Join the Product Network'}
+            {authModalTab === 'forgot' && 'Reset Your Password'}
+            {authModalTab === 'update-password' && 'Set New Password'}
           </h2>
           <p className="text-xs text-[#605d5d] mt-1">
-            {authModalTab === 'signin'
-              ? 'Stay updated on product frameworks, peer discussions, and open roles.'
-              : 'Create your verified PM profile, take the diagnostic, and connect with peers.'}
+            {authModalTab === 'signin' && 'Stay updated on product frameworks, peer discussions, and open roles.'}
+            {authModalTab === 'signup' && 'Create your verified PM profile, take the diagnostic, and connect with peers.'}
+            {authModalTab === 'forgot' && 'Enter your registered email and we will send you a secure link to reset your password.'}
+            {authModalTab === 'update-password' && 'Enter your new secure password (at least 6 characters).'}
           </p>
         </div>
 
-        {/* Modernist Segmented Tabs */}
-        <div className="flex border-b-2 border-[rgba(32,30,29,0.15)] bg-[#eae9e9]">
-          <button
-            type="button"
-            onClick={() => {
-              openAuthModal('signin');
-              setError(null);
-              setSuccessMessage(null);
-            }}
-            className={`flex-1 py-2.5 text-xs font-bold transition-colors border-r border-[rgba(32,30,29,0.15)] ${
-              authModalTab === 'signin'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              openAuthModal('signup');
-              setError(null);
-              setSuccessMessage(null);
-            }}
-            className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
-              authModalTab === 'signup'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
-            }`}
-          >
-            Join Now
-          </button>
-        </div>
+        {/* Modernist Navigation Bar / Segmented Tabs */}
+        {(authModalTab === 'signin' || authModalTab === 'signup') && (
+          <div className="flex border-b-2 border-[rgba(32,30,29,0.15)] bg-[#eae9e9]">
+            <button
+              type="button"
+              onClick={() => {
+                openAuthModal('signin');
+                setError(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold transition-colors border-r border-[rgba(32,30,29,0.15)] ${
+                authModalTab === 'signin'
+                  ? 'bg-[#201e1d] text-[#f3f2f2]'
+                  : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openAuthModal('signup');
+                setError(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
+                authModalTab === 'signup'
+                  ? 'bg-[#201e1d] text-[#f3f2f2]'
+                  : 'text-[#201e1d] hover:bg-[rgba(32,30,29,0.06)]'
+              }`}
+            >
+              Join Now
+            </button>
+          </div>
+        )}
+
+        {authModalTab === 'forgot' && (
+          <div className="flex items-center justify-between px-6 py-2.5 bg-[#eae9e9] border-b-2 border-[rgba(32,30,29,0.15)]">
+            <button
+              type="button"
+              onClick={() => {
+                openAuthModal('signin');
+                setError(null);
+                setSuccessMessage(null);
+              }}
+              className="text-xs font-bold text-slate-700 hover:text-[#201e1d] flex items-center gap-1.5 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
+            </button>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Password Recovery
+            </span>
+          </div>
+        )}
+
+        {authModalTab === 'update-password' && (
+          <div className="flex items-center px-6 py-2.5 bg-[#eae9e9] border-b-2 border-[rgba(32,30,29,0.15)]">
+            <span className="text-xs font-bold text-[#201e1d] flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-[#ec3013]" /> Setting New Password
+            </span>
+          </div>
+        )}
 
         {/* Body Content */}
         <div className="p-6 space-y-4">
@@ -215,10 +287,16 @@ export const AuthModal: React.FC = () => {
           {successMessage ? (
             <div className="py-6 px-4 text-center space-y-4 bg-white border-2 border-[#201e1d]">
               <div className="w-14 h-14 bg-[#fdf3f2] border-2 border-[#ec3013] flex items-center justify-center mx-auto p-2">
-                <img src="/pmverse-mark.png" alt="PMVerse" className="w-9 h-9 object-contain" />
+                {authModalTab === 'forgot' ? (
+                  <Mail className="w-7 h-7 text-[#ec3013]" />
+                ) : (
+                  <img src="/pmverse-mark.png" alt="PMVerse" className="w-9 h-9 object-contain" />
+                )}
               </div>
               <div>
-                <h3 className="text-base font-black text-[#201e1d]">Check Your Inbox!</h3>
+                <h3 className="text-base font-black text-[#201e1d]">
+                  {authModalTab === 'forgot' ? 'Check Your Inbox!' : authModalTab === 'update-password' ? 'Password Updated!' : 'Check Your Inbox!'}
+                </h3>
                 <p className="text-xs text-[#605d5d] mt-1.5 leading-relaxed max-w-sm mx-auto">
                   {successMessage}
                 </p>
@@ -227,12 +305,16 @@ export const AuthModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    openAuthModal('signin');
+                    if (authModalTab === 'update-password') {
+                      closeAuthModal();
+                    } else {
+                      openAuthModal('signin');
+                    }
                     setSuccessMessage(null);
                   }}
                   className="btn btn-primary text-xs font-bold w-full"
                 >
-                  Proceed to Sign In →
+                  {authModalTab === 'update-password' ? 'Proceed to Dashboard →' : 'Proceed to Sign In →'}
                 </button>
                 <button
                   type="button"
@@ -481,55 +563,182 @@ export const AuthModal: React.FC = () => {
               </>
             )}
 
-            <div>
-              <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                placeholder="pm@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-              />
-            </div>
+            {/* 1. FORGOT PASSWORD MODE */}
+            {authModalTab === 'forgot' && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="pm@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-[#605d5d] mt-1.5 leading-relaxed">
+                    Enter the email registered with PMVerse. We will send you a secure link to reset your password.
+                  </p>
+                </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#201e1d] mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input pr-10"
-                />
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn btn-primary w-full py-2.5 text-xs font-bold mt-2"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isLoading ? <span>Sending Reset Link...</span> : <span>Send Reset Link</span>}
                 </button>
-              </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn-primary w-full py-2.5 text-xs font-bold mt-2"
-            >
-              {isLoading ? (
-                <span>Authenticating...</span>
-              ) : (
-                <span>{authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMVerse'}</span>
-              )}
-            </button>
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setSuccessMessage(null);
+                      openAuthModal('signin');
+                    }}
+                    className="text-xs font-bold text-slate-600 hover:text-[#201e1d] transition-colors"
+                  >
+                    ← Back to Sign In
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 2. UPDATE PASSWORD (RECOVERY) MODE */}
+            {authModalTab === 'update-password' && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      placeholder="At least 6 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input pr-10"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="input pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn btn-primary w-full py-2.5 text-xs font-bold mt-2"
+                >
+                  {isLoading ? <span>Updating Password...</span> : <span>Save New Password</span>}
+                </button>
+              </>
+            )}
+
+            {/* 3. SIGN IN & SIGN UP MODES */}
+            {(authModalTab === 'signin' || authModalTab === 'signup') && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-[#201e1d] mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="pm@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-[#201e1d]">
+                      Password
+                    </label>
+                    {authModalTab === 'signin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setSuccessMessage(null);
+                          openAuthModal('forgot');
+                        }}
+                        className="text-[11px] font-bold text-[#ec3013] hover:underline transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn btn-primary w-full py-2.5 text-xs font-bold mt-2"
+                >
+                  {isLoading ? (
+                    <span>Authenticating...</span>
+                  ) : (
+                    <span>{authModalTab === 'signin' ? 'Sign In' : 'Agree & Join PMVerse'}</span>
+                  )}
+                </button>
+              </>
+            )}
           </form>
           )}
 

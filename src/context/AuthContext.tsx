@@ -13,9 +13,9 @@ interface AuthContextType {
   loading: boolean;
   isConfigured: boolean;
   isAuthModalOpen: boolean;
-  authModalTab: 'signin' | 'signup';
+  authModalTab: 'signin' | 'signup' | 'forgot' | 'update-password';
   isProfileModalOpen: boolean;
-  openAuthModal: (tab?: 'signin' | 'signup') => void;
+  openAuthModal: (tab?: 'signin' | 'signup' | 'forgot' | 'update-password') => void;
   closeAuthModal: () => void;
   openProfileModal: () => void;
   closeProfileModal: () => void;
@@ -32,6 +32,8 @@ interface AuthContextType {
       yearsOfExperience?: number;
     }
   ) => Promise<{ error?: string; message?: string }>;
+  resetPassword: (email: string) => Promise<{ error?: string; message?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error?: string }>;
   loginAsDemo: () => void;
@@ -45,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup' | 'forgot' | 'update-password'>('signin');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const configured = isSupabaseConfigured();
@@ -284,12 +286,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
+    // Check if user landed with recovery hash or query param
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+        setAuthModalTab('update-password');
+        setIsAuthModalOpen(true);
+      }
+    }
+
     // 2. Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event: string, authSession: Session | null) => {
       setSession(authSession);
       setUser(authSession?.user ?? null);
+      if (_event === 'PASSWORD_RECOVERY') {
+        setAuthModalTab('update-password');
+        setIsAuthModalOpen(true);
+      }
       if (authSession?.user) {
         await loadUserProfile(authSession.user);
       } else {
@@ -303,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [configured]);
 
-  const openAuthModal = (tab: 'signin' | 'signup' = 'signin') => {
+  const openAuthModal = (tab: 'signin' | 'signup' | 'forgot' | 'update-password' = 'signin') => {
     setAuthModalTab(tab);
     setIsAuthModalOpen(true);
   };
@@ -617,6 +633,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string): Promise<{ error?: string; message?: string }> => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      return { error: 'Please enter your email address' };
+    }
+
+    if (!configured) {
+      return { message: 'Demo mode: In production, a password reset link is emailed to your address.' };
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    try {
+      const PRODUCTION_SITE_URL = 'https://pmverse.in';
+      const origin = typeof window !== 'undefined' ? window.location.origin : PRODUCTION_SITE_URL;
+      const redirectUrl = `${origin}/reset-password`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        message: 'Password reset link sent! Please check your email inbox to reset your password.',
+      };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to send password reset email' };
+    }
+  };
+
+  const updatePassword = async (newPassword: string): Promise<{ error?: string; message?: string }> => {
+    if (!newPassword || newPassword.length < 6) {
+      return { error: 'Password must be at least 6 characters long' };
+    }
+
+    if (!configured) {
+      return { message: 'Password updated successfully (demo mode).' };
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) return { error: 'Supabase client not initialized' };
+
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      if (data?.user) {
+        setUser(data.user);
+        await loadUserProfile(data.user);
+      }
+
+      return { message: 'Your password has been successfully updated!' };
+    } catch (err: any) {
+      return { error: err?.message || 'Failed to update password' };
+    }
+  };
+
   const signOut = async () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('pmverse_user');
@@ -752,6 +834,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeProfileModal,
         signIn,
         signUp,
+        resetPassword,
+        updatePassword,
         signOut,
         updateProfile,
         loginAsDemo,
