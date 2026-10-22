@@ -27,5 +27,34 @@
     "daysRemaining": 7,
     "isActive": true,
     "createdAt": "2026-10-12T11:22:20.562Z"
+  },
+  "2026-W43": {
+    "id": "challenge-2026-w43",
+    "challengeNumber": 24,
+    "title": "Accelerate \"Aha Moment\" in Generative AI Productivity Tool",
+    "scenario": "A browser-based AI document assistant has high initial signups (100k/mo), but 45% of users generate only one prompt and never return. User interviews reveal prompt blank-slate anxiety.",
+    "targetObjectives": [
+      "Increase 3-prompt activation rate on Day-1 from 28% to 58%.",
+      "Reduce time-to-first-successful-output to under 15 seconds.",
+      "Lift Day-14 weekly active user (WAU) retention from 18% to 32%."
+    ],
+    "constraints": [
+      "LLM API token costs cannot exceed $0.08 per activated free user.",
+      "Must maintain sub-800ms generation response streaming latency.",
+      "No intrusive mandatory interactive tutorials or tooltip tours."
+    ],
+    "rubricWeights": {
+      "metrics": 25,
+      "userValue": 20,
+      "feasibility": 25,
+      "productSense": 30
+    },
+    "domain": "Generative AI & SaaS",
+    "weekIdentifier": "2026-W43",
+    "startsAt": "2026-10-19T00:00:00+00:00",
+    "endsAt": "2026-10-25T23:59:59.999+00:00",
+    "daysRemaining": 5,
+    "isActive": true,
+    "createdAt": "2026-10-19T15:10:17.598102+00:00"
   }
 }
