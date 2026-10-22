@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CommunityPost, Comment, WeeklyChallenge } from '../types';
+import { CommunityPost, Comment, WeeklyChallenge, CASE_STUDY_COMPETITION_FORM_URL } from '../types';
 import { useAuth } from '@/context/AuthContext';
 import { UserAvatar } from './UserAvatar';
 import {
@@ -10,7 +10,7 @@ import {
   togglePostUpvoteInDb,
   getCurrentWeeklyChallenge,
 } from '@/lib/supabase/database';
-import { MessageSquare, Bookmark, Share2, Send, Plus } from 'lucide-react';
+import { MessageSquare, Bookmark, Share2, Send, Plus, Trophy, ExternalLink } from 'lucide-react';
 
 interface CommunityFeedProps {
   initialPosts: CommunityPost[];
@@ -432,7 +432,10 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           {/* Vermilion Weekly Challenge Card */}
           <div className="bg-[#ec3013] text-[#f3f2f2] p-6 space-y-3 text-left">
             <div className="flex items-center justify-between text-xs uppercase tracking-widest font-bold opacity-90">
-              <span>Weekly Challenge #{challenge?.challengeNumber || 23}</span>
+              <span className="flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-300" />
+                Weekly Challenge #{challenge?.challengeNumber || 23}
+              </span>
               <span>{challenge?.daysRemaining || 7} Days Left</span>
             </div>
             <div className="text-xl sm:text-2xl font-black leading-snug">
@@ -442,6 +445,26 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               {challenge?.scenario ||
                 'Submit your product teardown for AI Rubric evaluation and peer review.'}
             </p>
+
+            {/* Competition Interest Callout */}
+            <div className="bg-black/20 p-2.5 border border-white/20 text-xs space-y-1">
+              <div className="font-extrabold uppercase text-[10px] tracking-wider text-amber-300 flex items-center gap-1">
+                <span>🏆 Live Case Study Competition</span>
+              </div>
+              <p className="text-[11px] text-white/90 leading-snug">
+                Compete on this week&apos;s published case study with fellow PMs.
+              </p>
+              <a
+                href={CASE_STUDY_COMPETITION_FORM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-black text-amber-200 hover:text-white underline pt-0.5"
+              >
+                <span>Join Competition (Interest Form)</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
             <button
               onClick={() => {
                 if (onOpenChallenge) {

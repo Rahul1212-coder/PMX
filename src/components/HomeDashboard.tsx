@@ -9,9 +9,10 @@ import {
   getCommunityPostsFromDb,
   getCurrentWeeklyChallenge,
 } from '@/lib/supabase/database';
-import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge } from '@/types';
-import { ArrowRight, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
+import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge, CASE_STUDY_COMPETITION_FORM_URL } from '@/types';
+import { ArrowRight, Sparkles, Award, Briefcase, Users, FileText, ExternalLink } from 'lucide-react';
 import { isAiMentorEnabled } from '@/lib/features';
+import { CaseStudyCompetitionModal } from './CaseStudyCompetitionModal';
 
 interface HomeDashboardProps {
   setActiveTab: (tab: NavTabType) => void;
@@ -34,6 +35,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
   const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
+  const [isCompetitionModalOpen, setIsCompetitionModalOpen] = useState(false);
 
   // Load real user test results, applications, community posts, and active weekly challenge
   useEffect(() => {
@@ -265,6 +267,54 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </button>
         </div>
       )}
+
+      {/* Live Case Study Competition Banner */}
+      <div className="bg-[#201e1d] text-[#f3f2f2] border-2 border-[#201e1d] p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-none bg-[#ec3013] text-[#f3f2f2] flex items-center justify-center shrink-0 font-black text-lg">
+            🏆
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black uppercase tracking-wider bg-[#ec3013] text-white px-2 py-0.5">
+                Case Study Competition This Week
+              </span>
+              <span className="text-xs text-amber-300 font-bold">
+                Week {challenge?.weekIdentifier || '2026-W43'} · {challenge?.daysRemaining || 4} Days Left
+              </span>
+              {challenge?.domain && (
+                <span className="text-[10px] bg-white/10 text-slate-200 px-2 py-0.5 font-bold uppercase tracking-wider">
+                  {challenge.domain}
+                </span>
+              )}
+            </div>
+            <h2 className="text-base sm:text-lg font-black text-white m-0 tracking-tight">
+              Competition Prompt: {challenge?.title || 'Accelerate "Aha Moment" in Generative AI Productivity Tool'}
+            </h2>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              Show your interest in joining this week's live PM case study competition. The challenge prompt is the exact case study published on PMVerse this week. Fill out the interest form to join.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+          <button
+            onClick={() => setIsCompetitionModalOpen(true)}
+            className="btn btn-secondary text-xs font-bold py-2 px-3.5 text-center flex-1 sm:flex-initial"
+          >
+            Details & Form
+          </button>
+          <a
+            href={CASE_STUDY_COMPETITION_FORM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary text-xs font-bold py-2 px-4 text-center flex items-center justify-center gap-1.5 flex-1 sm:flex-initial whitespace-nowrap shadow"
+          >
+            <span>Show Interest (Google Form)</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)]">
@@ -587,12 +637,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
         </div>
 
-        {/* Cell 6: Weekly Challenge Box (Interactive Journey) */}
+        {/* Cell 6: Weekly Challenge Box (Interactive Journey & Competition) */}
         <div className="bg-[#ec3013] text-[#f3f2f2] p-6 flex flex-col justify-between gap-3 text-left">
           <div>
             <div className="flex items-center justify-between text-xs uppercase tracking-widest font-bold opacity-90 mb-1">
               <span>
-                Weekly Challenge #{challenge?.challengeNumber || 23} · {challenge?.daysRemaining || 7} Days Left
+                Weekly Challenge #{challenge?.challengeNumber || 24} · {challenge?.daysRemaining || 4} Days Left
               </span>
               {challenge?.domain && (
                 <span className="bg-[#201e1d] text-white px-2 py-0.5 text-[10px] tracking-wider">
@@ -600,25 +650,51 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 </span>
               )}
             </div>
+            <div className="inline-block mt-1">
+              <span className="bg-[#201e1d] text-amber-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-none flex items-center gap-1 w-fit">
+                🏆 Live Case Study Competition
+              </span>
+            </div>
             <h3 className="text-xl sm:text-2xl font-black leading-tight tracking-tight mt-2 text-[#f3f2f2]">
-              {challenge?.title || 'Enhance User Engagement in Personal Finance App'}
+              {challenge?.title || 'Accelerate "Aha Moment" in Generative AI Productivity Tool'}
             </h3>
             <p className="text-xs opacity-90 mt-2 line-clamp-3 leading-relaxed">
               {challenge?.scenario ||
                 'Submit your teardown and get evaluated by AI rubric scoring and community review.'}
             </p>
           </div>
-          <button
-            onClick={() => {
-              if (onOpenChallenge) onOpenChallenge();
-            }}
-            className="btn w-full justify-between mt-4 bg-[#f3f2f2] text-[#201e1d] hover:bg-[#eae9e9] text-xs font-bold"
-          >
-            <span>Start Challenge Journey</span>
-            <span>→</span>
-          </button>
+
+          <div className="space-y-2 mt-4">
+            <a
+              href={CASE_STUDY_COMPETITION_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn w-full justify-between bg-[#201e1d] text-white hover:bg-black text-xs font-bold py-2.5 px-4 flex items-center shadow"
+            >
+              <span>Join Competition (Interest Form)</span>
+              <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
+            </a>
+
+            <button
+              onClick={() => {
+                if (onOpenChallenge) onOpenChallenge();
+              }}
+              className="btn w-full justify-between bg-[#f3f2f2] text-[#201e1d] hover:bg-[#eae9e9] text-xs font-bold"
+            >
+              <span>Solve Challenge Brief</span>
+              <span>→</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Case Study Competition Modal */}
+      <CaseStudyCompetitionModal
+        isOpen={isCompetitionModalOpen}
+        onClose={() => setIsCompetitionModalOpen(false)}
+        challenge={challenge}
+        onOpenChallengeBrief={onOpenChallenge}
+      />
     </div>
   );
 };
