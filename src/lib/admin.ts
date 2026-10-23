@@ -16,6 +16,7 @@ export function getAuthorizedAdminEmails(): string[] {
 
 export function isAuthorizedAdmin(email?: string | null): boolean {
   if (!email) return false;
-  const authorized = getAuthorizedAdminEmails();
-  return authorized.includes(email.trim().toLowerCase());
+  const cleanEmail = email.trim().toLowerCase();
+  const allowed = getAuthorizedAdminEmails();
+  return allowed.includes(cleanEmail);
 }

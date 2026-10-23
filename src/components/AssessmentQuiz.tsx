@@ -1,1316 +1,216 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  AssessmentQuestion,
-  AssessmentResult,
-  CategoryScore,
-  AnswerReviewItem,
-  SavedQuizResult,
-  AssessmentCategory,
-} from '@/types';
-import {
-  PM_ASSESSMENT_QUESTIONS,
-  PM_COMPETENCY_CATEGORIES,
-  CATEGORY_RECOMMENDATIONS,
-  PM_CASE_STUDIES,
-} from '@/data/assessmentQuestions';
-import {
-  Award,
-  BarChart3,
-  Brain,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Compass,
-  FileText,
-  Filter,
-  Flame,
-  HelpCircle,
-  History,
-  Layers,
-  Lightbulb,
-  ListOrdered,
-  RotateCcw,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  X,
-  XCircle,
-  Briefcase,
-  TrendingUp,
-  Sliders,
-  BookOpen,
-  AlertTriangle,
-} from 'lucide-react';
+  AssessmentLevelConfig,
+  AssessmentLevelId,
+  UserLevelProgress,
+  AssessmentAttempt,
+  PublicAssessmentQuestion,
+} from '@/types/assessment';
+import { ASSESSMENT_LEVEL_CONFIGS } from '@/data/threeLevelQuestions';
+import { AssessmentDashboard } from './assessment/AssessmentDashboard';
+import { AssessmentRunner } from './assessment/AssessmentRunner';
+import { AssessmentResultsView } from './assessment/AssessmentResultsView';
+import { AssessmentAdminView } from './assessment/AssessmentAdminView';
 import { useAuth } from '@/context/AuthContext';
-import { saveQuizResultToDb, getUserQuizResultsFromDb } from '@/lib/supabase/database';
+import { isAuthorizedAdmin } from '@/lib/admin';
+import { Award, Sparkles } from 'lucide-react';
 
 interface AssessmentQuizProps {
-  questions?: AssessmentQuestion[];
   setActiveTab?: (tab: any) => void;
 }
 
-type AssessmentMode = 'diagnostic' | 'full_50' | 'rapid_10' | 'category_focus' | 'case_studies';
-
-function getArchetypeForScore(score: number): string {
-  if (score >= 90) return 'High-Agency Product Leader';
-  if (score >= 75) return 'Strategic Product Builder';
-  if (score >= 60) return 'Product Specialist';
-  if (score >= 40) return 'Emerging Product Builder';
-  return 'Aspiring Product Explorer';
-}
-
-function getLabelForScore(score: number): AssessmentResult['assessmentLabel'] {
-  if (score >= 90) return 'Advanced';
-  if (score >= 75) return 'Strong';
-  if (score >= 60) return 'Competent';
-  if (score >= 40) return 'Developing';
-  return 'Beginner';
-}
-
-function getRecommendedRoleForScore(score: number): string {
-  if (score >= 90) return 'Lead / Principal Product Manager or Group PM';
-  if (score >= 75) return 'Senior Product Manager';
-  if (score >= 60) return 'Product Manager (Feature / Growth Squad)';
-  if (score >= 40) return 'Associate PM / Product Analyst';
-  return 'Associate PM Intern / Product Operations';
-}
-
-function getSummaryForScore(score: number): string {
-  if (score >= 90)
-    return 'Exceptional product judgment! You excel at ruthless prioritization, risk mitigation, data analysis, and cross-functional leadership under high uncertainty.';
-  if (score >= 75)
-    return 'Strong, mature product instincts! You balance commercial goals with engineering realities and make sound evidence-based trade-offs.';
-  if (score >= 60)
-    return 'Good working foundation across core PM competencies. With focused practice in root cause analysis and technical trade-offs, you will excel.';
-  if (score >= 40)
-    return 'You understand essential concepts but show occasional inconsistency in navigating ambiguous edge-cases and stakeholder trade-offs.';
-  return 'Foundational PM concepts need development. Focus on problem discovery, metric literacy, and separating symptoms from root causes.';
-}
-
-function buildAssessmentResultFromRecord(saved: any): AssessmentResult {
-  const score = typeof saved.scorePercentage === 'number' ? saved.scorePercentage : 75;
-  const archetype = saved.archetype || getArchetypeForScore(score);
-  const summary = saved.summary || getSummaryForScore(score);
-  const assessmentLabel = getLabelForScore(score);
-
-  let categoryScores: CategoryScore[] = [];
-  if (Array.isArray(saved.categoryScores) && saved.categoryScores.length > 0) {
-    categoryScores = saved.categoryScores.map((cs: any) => ({
-      category: cs.category || cs.dimension,
-      score: typeof cs.score === 'number' && cs.total ? cs.score : Math.round(((cs.percentage || cs.score || score) / 100) * 5),
-      total: cs.total || 5,
-      percentage: typeof cs.percentage === 'number' ? cs.percentage : cs.score || score,
-      level: (cs.percentage || cs.score || score) >= 80 ? 'Strong understanding' : 'Foundational understanding',
-      recommendation: CATEGORY_RECOMMENDATIONS[cs.category as AssessmentCategory] || 'Deepen fundamentals in this area.',
-    }));
-  } else if (Array.isArray(saved.dimensionScores) && saved.dimensionScores.length > 0) {
-    categoryScores = saved.dimensionScores.map((ds: any) => ({
-      category: (ds.dimension || ds.category) as AssessmentCategory,
-      score: typeof ds.rawCorrect === 'number' ? ds.rawCorrect : Math.round(((ds.percentage || ds.score || score) / 100) * 5),
-      total: ds.total || 5,
-      percentage: typeof ds.percentage === 'number' ? ds.percentage : ds.score || score,
-      level: (ds.percentage || ds.score || score) >= 80 ? 'Strong understanding' : 'Foundational understanding',
-      recommendation: CATEGORY_RECOMMENDATIONS[(ds.dimension || ds.category) as AssessmentCategory] || 'Deepen fundamentals in this area.',
-    }));
-  } else {
-    categoryScores = PM_COMPETENCY_CATEGORIES.map((cat, i) => {
-      const variance = [4, -3, 2, -1, 3, -4, 1, -2, 3, -2][i] || 0;
-      const pct = Math.min(100, Math.max(30, score + variance));
-      return {
-        category: cat,
-        score: Math.round((pct / 100) * 5),
-        total: 5,
-        percentage: pct,
-        level: pct >= 80 ? 'Strong understanding' : pct >= 60 ? 'Foundational understanding' : 'Developing',
-        recommendation: CATEGORY_RECOMMENDATIONS[cat] || 'Deepen fundamentals in this area.',
-      };
-    });
-  }
-
-  const sorted = [...categoryScores].sort((a, b) => b.percentage - a.percentage);
-  const strengths =
-    Array.isArray(saved.strengths) && saved.strengths.length > 0
-      ? saved.strengths
-      : sorted.slice(0, 3).map((c) => `${c.category}: ${c.level} (${c.percentage}%)`);
-
-  const growthAreas =
-    Array.isArray(saved.growthAreas) && saved.growthAreas.length > 0
-      ? saved.growthAreas
-      : sorted.slice(-3).reverse().map((c) => `${c.category}: ${c.recommendation}`);
-
-  return {
-    scorePercentage: score,
-    totalCorrect: saved.totalCorrect || Math.round((score / 100) * 50),
-    totalQuestions: saved.totalQuestions || 50,
-    archetype,
-    assessmentLabel,
-    summary,
-    categoryScores,
-    strengths,
-    growthAreas,
-    recommendedRole: saved.recommendedRole || getRecommendedRoleForScore(score),
-  };
-}
+type AssessmentScreen = 'dashboard' | 'running' | 'results';
 
 export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) => {
-  const { user, profile, updateProfile, openAuthModal, isConfigured } = useAuth();
+  const { user, profile, updateProfile, openAuthModal } = useAuth();
 
-  // Initialize diagnostic synchronously from localStorage so there is zero delay or question flicker
-  const [result, setResult] = useState<AssessmentResult | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw =
-          localStorage.getItem('pmverse_user_diagnosis') ||
-          localStorage.getItem('pmverse_latest_diagnostic');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed.scorePercentage === 'number') {
-            return buildAssessmentResultFromRecord(parsed);
-          }
-        }
-      } catch {}
-    }
-    return null;
+  // State
+  const [screen, setScreen] = useState<AssessmentScreen>('dashboard');
+  const [levels, setLevels] = useState<AssessmentLevelConfig[]>([
+    ASSESSMENT_LEVEL_CONFIGS.beginner,
+    ASSESSMENT_LEVEL_CONFIGS.intermediate,
+    ASSESSMENT_LEVEL_CONFIGS.advanced,
+  ]);
+  const [progress, setProgress] = useState<Record<AssessmentLevelId, UserLevelProgress>>({
+    beginner: { levelId: 'beginner', isUnlocked: true, attemptsCount: 0, status: 'not_started' },
+    intermediate: { levelId: 'intermediate', isUnlocked: false, attemptsCount: 0, status: 'locked' },
+    advanced: { levelId: 'advanced', isUnlocked: false, attemptsCount: 0, status: 'locked' },
   });
+  const [history, setHistory] = useState<AssessmentAttempt[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Default mode: if user already has a saved diagnostic or profile score, show 'diagnostic' all the time!
-  const [mode, setMode] = useState<AssessmentMode>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw =
-          localStorage.getItem('pmverse_user_diagnosis') ||
-          localStorage.getItem('pmverse_latest_diagnostic');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed.scorePercentage === 'number') {
-            return 'diagnostic';
-          }
-        }
-      } catch {}
-    }
-    return 'full_50';
-  });
+  // Active Test State
+  const [activeLevelId, setActiveLevelId] = useState<AssessmentLevelId>('beginner');
+  const [activeQuestions, setActiveQuestions] = useState<PublicAssessmentQuestion[]>([]);
+  const [activeAttempt, setActiveAttempt] = useState<AssessmentAttempt | null>(null);
 
-  const [selectedFocusCategory, setSelectedFocusCategory] = useState<AssessmentCategory>(
-    'Product Thinking'
-  );
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('case-1');
-  const [caseStudyNotes, setCaseStudyNotes] = useState<Record<string, string>>({});
-  const [isGradingCase, setIsGradingCase] = useState(false);
-  const [caseFeedback, setCaseFeedback] = useState<Record<string, any>>({});
+  // Admin Modal
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const isAdmin = Boolean(user?.email && isAuthorizedAdmin(user.email));
 
-  const handleGradeCaseProposal = async (caseId: string) => {
-    const proposal = (caseStudyNotes[caseId] || '').trim();
-    if (!proposal) {
-      alert('Please write your proposal or action plan in the notepad before requesting AI rubric evaluation.');
-      return;
-    }
-
-    const currentCase = PM_CASE_STUDIES.find((c) => c.id === caseId) || PM_CASE_STUDIES[0];
-    setIsGradingCase(true);
+  // Load Levels & Progress
+  const loadLevelsAndProgress = useCallback(async () => {
     try {
-      const res = await fetch('/api/challenge/grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          challengeId: currentCase.id,
-          challengeTitle: currentCase.title,
-          challengeScenario: currentCase.scenario,
-          targetObjectives: currentCase.tasks,
-          constraints: currentCase.contextPoints,
-          submissionText: proposal,
-          rubric: currentCase.rubric,
-          userRole: user?.role || 'Product Manager',
-        }),
-      });
+      const userIdParam = user?.id ? `?userId=${user.id}` : '';
+      const [levelsRes, historyRes] = await Promise.all([
+        fetch(`/api/assessment/levels${userIdParam}`),
+        fetch(`/api/assessment/history${userIdParam}`),
+      ]);
 
-      const json = await res.json();
-      if (json?.data) {
-        setCaseFeedback((prev) => ({ ...prev, [caseId]: json.data }));
+      const levelsData = await levelsRes.json();
+      const historyData = await historyRes.json();
+
+      if (levelsData.success) {
+        if (levelsData.levels) setLevels(levelsData.levels);
+        if (levelsData.progress) setProgress(levelsData.progress);
+      }
+      if (historyData.success && Array.isArray(historyData.attempts)) {
+        setHistory(historyData.attempts);
       }
     } catch (err) {
-      console.error('Case study grading error:', err);
+      console.warn('Error loading assessment status:', err);
     } finally {
-      setIsGradingCase(false);
+      setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  // Active question set based on mode
-  const activeQuestionSet = useMemo(() => {
-    if (mode === 'rapid_10') {
-      return PM_COMPETENCY_CATEGORIES.map((cat) => {
-        return PM_ASSESSMENT_QUESTIONS.find((q) => q.category === cat) || PM_ASSESSMENT_QUESTIONS[0];
-      });
-    }
-    if (mode === 'category_focus') {
-      return PM_ASSESSMENT_QUESTIONS.filter((q) => q.category === selectedFocusCategory);
-    }
-    return PM_ASSESSMENT_QUESTIONS;
-  }, [mode, selectedFocusCategory]);
-
-  // Quiz state
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, 'A' | 'B' | 'C' | 'D'>>({});
-  const [isSavedToDb, setIsSavedToDb] = useState(false);
-  const [isBadgeAddedToProfile, setIsBadgeAddedToProfile] = useState(false);
-  const [pastResults, setPastResults] = useState<SavedQuizResult[]>([]);
-  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-
-  const currentQ = activeQuestionSet[currentIdx] || activeQuestionSet[0];
-  const progressPercent = Math.round(((currentIdx + 1) / activeQuestionSet.length) * 100);
-  const answeredCount = Object.keys(selectedAnswers).length;
-
-  // Listen for navigation event from Dashboard or elsewhere
   useEffect(() => {
-    const handleNavToDiagnostic = () => {
-      setMode('diagnostic');
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('pmverse_navigate_diagnostic', handleNavToDiagnostic);
+    loadLevelsAndProgress();
+  }, [loadLevelsAndProgress]);
+
+  // Handler: Start a level
+  const handleStartLevel = async (levelId: AssessmentLevelId) => {
+    // If not authenticated, prompt sign-in
+    if (!user) {
+      if (openAuthModal) {
+        openAuthModal('signin');
+      }
+      // Allow preview / guest attempt
     }
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('pmverse_navigate_diagnostic', handleNavToDiagnostic);
-      }
-    };
-  }, []);
 
-  // Load past quiz results and restore full diagnostic
-  useEffect(() => {
-    let mounted = true;
-    async function loadPastAndRestore() {
-      let savedRecord: SavedQuizResult | null = null;
+    try {
+      const userIdParam = user?.id ? `&userId=${user.id}` : '';
+      const res = await fetch(`/api/assessment/questions?levelId=${levelId}${userIdParam}`);
+      const data = await res.json();
 
-      // 1. Check Supabase / DB if user exists
-      if (user) {
-        const history = await getUserQuizResultsFromDb(user.id);
-        if (mounted && history.length > 0) {
-          setPastResults(history);
-          savedRecord = history[0];
-        }
+      if (data.isLocked) {
+        alert(data.error || 'This level is locked. Complete the prerequisite level first.');
+        return;
       }
 
-      // 2. Check localStorage if no DB record found or guest
-      if (!savedRecord && typeof window !== 'undefined') {
-        try {
-          const raw =
-            (user?.id && localStorage.getItem(`pmverse_diagnostic_${user.id}`)) ||
-            localStorage.getItem('pmverse_user_diagnosis') ||
-            localStorage.getItem('pmverse_latest_diagnostic');
-          if (raw) {
-            const parsed: SavedQuizResult = JSON.parse(raw);
-            savedRecord = parsed;
-            if (mounted) {
-              setPastResults((prev) => (prev.length > 0 ? prev : [parsed]));
-            }
-          }
-        } catch {}
+      if (data.success && data.questions) {
+        setActiveLevelId(levelId);
+        setActiveQuestions(data.questions);
+        setScreen('running');
+      } else {
+        alert(data.error || 'Failed to load assessment questions.');
       }
-
-      // 3. Fallback: if user profile has verified pmFitScore
-      if (!savedRecord && profile?.pmFitScore) {
-        savedRecord = {
-          id: 'profile-score',
-          scorePercentage: profile.pmFitScore,
-          archetype: getArchetypeForScore(profile.pmFitScore),
-          summary: getSummaryForScore(profile.pmFitScore),
-          dimensionScores: [],
-          createdAt: 'Recently',
-        };
-      }
-
-      // 4. Update result state & ensure diagnostic mode is active
-      if (mounted && savedRecord) {
-        const built = buildAssessmentResultFromRecord(savedRecord);
-        setResult(built);
-        setIsSavedToDb(true);
-        // If on initial landing, show diagnosis all the time
-        if (mode === 'full_50' && Object.keys(selectedAnswers).length === 0) {
-          setMode('diagnostic');
-        }
-      }
-    }
-    loadPastAndRestore();
-    return () => {
-      mounted = false;
-    };
-  }, [user, profile?.pmFitScore]);
-
-  // Switch mode without losing verified diagnosis
-  const switchMode = (newMode: AssessmentMode) => {
-    setMode(newMode);
-    setCurrentIdx(0);
-    setSelectedAnswers({});
-    setIsBadgeAddedToProfile(false);
-    setIsPaletteOpen(false);
-  };
-
-  const handleSelectOption = (qId: number, optionKey: 'A' | 'B' | 'C' | 'D') => {
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [qId]: optionKey,
-    }));
-  };
-
-  const handleNext = () => {
-    if (currentIdx < activeQuestionSet.length - 1) {
-      setCurrentIdx((prev) => prev + 1);
-    } else {
-      calculateResult();
+    } catch (err: any) {
+      alert(err.message || 'Network error loading questions.');
     }
   };
 
-  const handlePrev = () => {
-    if (currentIdx > 0) {
-      setCurrentIdx((prev) => prev - 1);
+  // Handler: View Past Attempt
+  const handleViewAttempt = async (attemptId: string) => {
+    try {
+      const res = await fetch(`/api/assessment/attempt/${attemptId}`);
+      const data = await res.json();
+
+      if (data.success && data.attempt) {
+        setActiveAttempt(data.attempt);
+        setActiveLevelId(data.attempt.levelId);
+        setScreen('results');
+      } else {
+        alert(data.error || 'Attempt records not found.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error fetching attempt details.');
     }
   };
 
-  // Comprehensive Rubric & Evaluation Engine
-  const calculateResult = async () => {
-    let totalCorrect = 0;
-    const totalQuestions = activeQuestionSet.length;
+  // Handler: Test Completed
+  const handleTestCompleted = (completedAttempt: AssessmentAttempt) => {
+    setActiveAttempt(completedAttempt);
+    setScreen('results');
+    loadLevelsAndProgress();
 
-    // Track category scores
-    const categoryStats: Record<string, { correct: number; total: number }> = {};
-    PM_COMPETENCY_CATEGORIES.forEach((cat) => {
-      categoryStats[cat] = { correct: 0, total: 0 };
-    });
-
-    const answersReview: AnswerReviewItem[] = [];
-
-    activeQuestionSet.forEach((q) => {
-      const selected = selectedAnswers[q.id] || null;
-      const isCorrect = selected === q.correctOption;
-
-      if (!categoryStats[q.category]) {
-        categoryStats[q.category] = { correct: 0, total: 0 };
-      }
-      categoryStats[q.category].total += 1;
-
-      if (isCorrect) {
-        totalCorrect += 1;
-        categoryStats[q.category].correct += 1;
-      }
-
-      answersReview.push({
-        questionId: q.id,
-        category: q.category,
-        title: q.title,
-        scenario: q.scenario,
-        selectedOption: selected,
-        correctOption: q.correctOption,
-        isCorrect,
-        explanation: q.explanation,
-        competencyTested: q.competencyTested,
-      });
-    });
-
-    const scorePercentage = Math.round((totalCorrect / totalQuestions) * 100);
-
-    // Compute category level and recommendations
-    const categoryScores: CategoryScore[] = Object.entries(categoryStats)
-      .filter(([_, data]) => data.total > 0)
-      .map(([catName, data]) => {
-        const cat = catName as AssessmentCategory;
-        const pct = Math.round((data.correct / data.total) * 100);
-        let level = 'Foundational understanding';
-        if (data.correct === data.total) level = 'Excellent performance';
-        else if (data.correct >= 4) level = 'Strong understanding';
-        else if (data.correct === 3) level = 'Foundational understanding';
-        else if (data.correct === 2) level = 'Developing';
-        else level = 'Needs significant improvement';
-
-        return {
-          category: cat,
-          score: data.correct,
-          total: data.total,
-          percentage: pct,
-          level,
-          recommendation: CATEGORY_RECOMMENDATIONS[cat] || 'Deepen fundamentals in this area.',
-        };
-      });
-
-    // Score Bands
-    let assessmentLabel: AssessmentResult['assessmentLabel'] = 'Competent';
-    let archetype = 'Product Strategist';
-    let recommendedRole = 'Product Manager (B2B SaaS / Growth)';
-    let summary =
-      'You demonstrate a solid foundation across product management competencies with strong judgment in user-centric problem solving.';
-
-    if (scorePercentage >= 90) {
-      assessmentLabel = 'Advanced';
-      archetype = 'High-Agency Product Leader';
-      recommendedRole = 'Lead / Principal Product Manager or Group PM';
-      summary =
-        'Exceptional product judgment! You excel at ruthless prioritization, risk mitigation, data analysis, and cross-functional leadership under high uncertainty.';
-    } else if (scorePercentage >= 75) {
-      assessmentLabel = 'Strong';
-      archetype = 'Strategic Product Builder';
-      recommendedRole = 'Senior Product Manager';
-      summary =
-        'Strong, mature product instincts! You balance commercial goals with engineering realities and make sound evidence-based trade-offs.';
-    } else if (scorePercentage >= 60) {
-      assessmentLabel = 'Competent';
-      archetype = 'Product Specialist';
-      recommendedRole = 'Product Manager (Feature / Growth Squad)';
-      summary =
-        'Good working foundation across core PM competencies. With focused practice in root cause analysis and technical trade-offs, you will excel.';
-    } else if (scorePercentage >= 40) {
-      assessmentLabel = 'Developing';
-      archetype = 'Emerging Product Builder';
-      recommendedRole = 'Associate PM / Product Analyst';
-      summary =
-        'You understand essential concepts but show occasional inconsistency in navigating ambiguous edge-cases and stakeholder trade-offs.';
-    } else {
-      assessmentLabel = 'Beginner';
-      archetype = 'Aspiring Product Explorer';
-      recommendedRole = 'Associate PM Intern / Product Operations';
-      summary =
-        'Foundational PM concepts need development. Focus on problem discovery, metric literacy, and separating symptoms from root causes.';
-    }
-
-    // Top strengths (highest category scores)
-    const sortedCategories = [...categoryScores].sort((a, b) => b.percentage - a.percentage);
-    const strengths = sortedCategories
-      .filter((c) => c.percentage >= 60)
-      .slice(0, 3)
-      .map((c) => `${c.category}: ${c.level} (${c.percentage}%)`);
-
-    // Growth areas (lowest category scores)
-    const growthAreas = sortedCategories
-      .filter((c) => c.percentage < 80)
-      .reverse()
-      .slice(0, 3)
-      .map((c) => `${c.category}: ${c.recommendation}`);
-
-    const calculated: AssessmentResult = {
-      scorePercentage,
-      totalCorrect,
-      totalQuestions,
-      archetype,
-      assessmentLabel,
-      summary,
-      categoryScores,
-      strengths:
-        strengths.length > 0
-          ? strengths
-          : ['Continue building hands-on familiarity with end-to-end product lifecycles.'],
-      growthAreas:
-        growthAreas.length > 0
-          ? growthAreas
-          : ['Maintain high standards across experimentation and systems architecture.'],
-      recommendedRole,
-      answersReview,
-    };
-
-    setResult(calculated);
-    setMode('diagnostic');
-
-    // 1. Immediately persist full diagnosis locally for instant offline availability & tab sync
-    if (typeof window !== 'undefined') {
-      try {
-        const fullDiagnosticRecord: SavedQuizResult = {
-          id: `diag-${Date.now()}`,
-          userId: user?.id || 'guest',
-          scorePercentage: calculated.scorePercentage,
-          archetype: calculated.archetype,
-          summary: calculated.summary,
-          dimensionScores: categoryScores.map((cs) => ({
-            dimension: cs.category,
-            score: cs.percentage,
-            percentage: cs.percentage,
-            rawCorrect: cs.score,
-            total: cs.total,
-          })),
-          categoryScores: calculated.categoryScores,
-          strengths: calculated.strengths,
-          growthAreas: calculated.growthAreas,
-          recommendedRole: calculated.recommendedRole,
-          answersReview: calculated.answersReview,
-          createdAt: new Date().toISOString(),
-        };
-        localStorage.setItem('pmverse_latest_diagnostic', JSON.stringify(fullDiagnosticRecord));
-        localStorage.setItem('pmverse_user_diagnosis', JSON.stringify(fullDiagnosticRecord));
-        if (user?.id) {
-          localStorage.setItem(`pmverse_diagnostic_${user.id}`, JSON.stringify(fullDiagnosticRecord));
-        }
-        window.dispatchEvent(new CustomEvent('pmverse_quiz_completed', { detail: fullDiagnosticRecord }));
-        setPastResults((prev) => [fullDiagnosticRecord, ...prev]);
-      } catch (err) {
-        console.warn('Error caching diagnostic locally:', err);
-      }
-    }
-
-    // 2. Persist to database (handles Supabase insert and local fallback)
-    const savedOk = await saveQuizResultToDb(user?.id || 'guest', calculated);
-    if (savedOk) {
-      setIsSavedToDb(true);
-    }
-
-    // 3. Update User Profile if authenticated
-    if (user) {
-      updateProfile({ pmFitScore: scorePercentage }).catch(() => {});
+    // Update user profile score if higher
+    if (completedAttempt.scorePercentage && user && updateProfile) {
+      updateProfile({ pmFitScore: completedAttempt.scorePercentage }).catch(() => {});
     }
   };
 
+  // Handler: Retake
   const handleRetake = () => {
-    setSelectedAnswers({});
-    setCurrentIdx(0);
-    setMode('full_50');
-    setIsSavedToDb(false);
-    setIsBadgeAddedToProfile(false);
+    handleStartLevel(activeLevelId);
   };
 
-  const activeCase =
-    PM_CASE_STUDIES.find((c) => c.id === selectedCaseId) || PM_CASE_STUDIES[0];
+  // Handler: Next Level
+  const handleGoToNextLevel = () => {
+    if (activeLevelId === 'beginner') {
+      handleStartLevel('intermediate');
+    } else if (activeLevelId === 'intermediate') {
+      handleStartLevel('advanced');
+    }
+  };
+
+  const activeLevelConfig =
+    levels.find((l) => l.id === activeLevelId) || ASSESSMENT_LEVEL_CONFIGS[activeLevelId];
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto text-left">
-      {/* Modernist PMVerse Assessment Header */}
-      <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-[rgba(32,30,29,0.15)]">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain" />
-              <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
-                PM Fit Assessment · Official Diagnostic
-              </div>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#201e1d] tracking-tight m-0">
-              PM Competency Assessment
-            </h1>
-            <p className="text-xs text-[#605d5d] mt-1 max-w-xl">
-              50 scenario-based questions across 10 core PM disciplines designed to evaluate real-world product judgment, trade-offs, and analytical rigor.
-            </p>
-          </div>
-
-          {/* Quick stats on user profile */}
-          {profile?.pmFitScore && (
-            <div className="border-2 border-[#201e1d] p-3 flex items-center gap-3 shrink-0 bg-[#eae9e9]">
-              <div className="text-3xl font-black text-[#ec3013] leading-none">
-                {profile.pmFitScore}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#605d5d]">
-                  Profile Score
-                </p>
-                <p className="text-xs font-bold text-[#201e1d]">Verified / 100</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Mode Selector Tabs (Modernist Segmented) */}
-        <div className="flex flex-wrap border-2 border-[rgba(32,30,29,0.15)] mt-4 text-xs font-bold">
-          {(result || profile?.pmFitScore || pastResults.length > 0) && (
-            <button
-              onClick={() => switchMode('diagnostic')}
-              className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
-                mode === 'diagnostic'
-                  ? 'bg-[#201e1d] text-[#f3f2f2]'
-                  : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
-              }`}
-            >
-              Verified Diagnosis ({result?.scorePercentage ?? profile?.pmFitScore ?? pastResults[0]?.scorePercentage}%)
-            </button>
-          )}
-
-          <button
-            onClick={() => switchMode('full_50')}
-            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
-              mode === 'full_50'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
-            }`}
-          >
-            Full 50 Exam
-          </button>
-
-          <button
-            onClick={() => switchMode('rapid_10')}
-            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
-              mode === 'rapid_10'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
-            }`}
-          >
-            10-Question Pulse
-          </button>
-
-          <button
-            onClick={() => switchMode('category_focus')}
-            className={`flex-1 py-2.5 px-3 text-center transition-colors border-r border-[rgba(32,30,29,0.15)] ${
-              mode === 'category_focus'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
-            }`}
-          >
-            Category Focus
-          </button>
-
-          <button
-            onClick={() => switchMode('case_studies')}
-            className={`flex-1 py-2.5 px-3 text-center transition-colors ${
-              mode === 'case_studies'
-                ? 'bg-[#201e1d] text-[#f3f2f2]'
-                : 'bg-transparent text-[#201e1d] hover:bg-[rgba(32,30,29,0.05)]'
-            }`}
-          >
-            Case Studies
-          </button>
-        </div>
-
-        {/* Category Focus Dropdown */}
-        {mode === 'category_focus' && (
-          <div className="mt-3 pt-3 border-t border-[rgba(32,30,29,0.15)] flex items-center gap-2 text-xs">
-            <span className="text-[#605d5d] font-semibold">Select Focus Category:</span>
-            <select
-              value={selectedFocusCategory}
-              onChange={(e) => {
-                setSelectedFocusCategory(e.target.value as AssessmentCategory);
-                setCurrentIdx(0);
-                setSelectedAnswers({});
-                setResult(null);
-              }}
-              className="px-2.5 py-1 border border-[rgba(32,30,29,0.3)] bg-white text-[#201e1d] font-bold outline-none"
-            >
-              {PM_COMPETENCY_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat} (5 Questions)
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Saved Diagnostic Quick Resume Banner */}
-        {mode !== 'diagnostic' && (result || pastResults.length > 0) && (
-          <div className="mt-4 p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.2)] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-[#201e1d]">Verified Diagnostic on File:</span>
-              <span className="px-2 py-0.5 bg-[#ec3013] text-white font-black text-xs">
-                {result?.scorePercentage ?? pastResults[0]?.scorePercentage}%
-              </span>
-              <span className="text-[#605d5d]">({result?.archetype ?? pastResults[0]?.archetype})</span>
-            </div>
-            <button
-              onClick={() => {
-                setMode('diagnostic');
-              }}
-              className="btn btn-secondary text-xs font-bold py-1 px-3"
-            >
-              View Verified Diagnosis →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================================
-          MODE 1, 2, 3: QUIZ QUESTION ENGINE OR RESULTS VIEW
-         ======================================================== */}
-      {mode !== 'case_studies' && (
-        <>
-          {mode !== 'diagnostic' || !result ? (
-            /* Active Question Card */            <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-5 sm:p-6 space-y-5">
-              {/* Top Progress & Stats */}
-              <div>
-                <div className="flex items-center justify-between text-xs font-semibold text-[#605d5d] mb-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-extrabold text-[#201e1d]">
-                      Question {currentIdx + 1} of {activeQuestionSet.length}
-                    </span>
-                    <span className="text-slate-400">•</span>
-                    <span>
-                      {answeredCount} of {activeQuestionSet.length} answered
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setIsPaletteOpen(!isPaletteOpen)}
-                    className="text-xs font-bold text-[#ae1800] hover:underline"
-                  >
-                    <span>{isPaletteOpen ? 'Hide Question Grid' : 'Question Grid (Jump)'}</span>
-                  </button>
-                </div>
-
-                <div className="w-full h-1 bg-[#d7d3d3]">
-                  <div
-                    className="h-full bg-[#ec3013] transition-all duration-300"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Collapsible Question Palette Drawer */}
-              {isPaletteOpen && (
-                <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[rgba(32,30,29,0.15)] text-xs font-bold text-[#201e1d]">
-                    <span>Jump to Question</span>
-                    <div className="flex items-center space-x-3 text-[11px] text-[#605d5d]">
-                      <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-2.5 bg-[#ec3013]" />
-                        <span>Answered</span>
-                      </span>
-                      <span className="flex items-center space-x-1">
-                        <span className="w-2.5 h-2.5 bg-white border border-slate-300" />
-                        <span>Unanswered</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                    {activeQuestionSet.map((q, idx) => {
-                      const isAnswered = selectedAnswers[q.id] !== undefined;
-                      const isCurrent = idx === currentIdx;
-
-                      return (
-                        <button
-                          key={q.id}
-                          onClick={() => {
-                            setCurrentIdx(idx);
-                            setIsPaletteOpen(false);
-                          }}
-                          className={`h-8 text-xs font-bold transition flex items-center justify-center ${
-                            isCurrent
-                              ? 'border-2 border-[#201e1d] bg-[#ec3013] text-white'
-                              : isAnswered
-                              ? 'bg-[#201e1d] text-white'
-                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          {idx + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Category & Competency Meta */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="tag tag-accent font-bold">
-                  {currentQ.category}
-                </span>
-                <span className="text-xs text-[#605d5d] font-semibold">
-                  Evaluates: {currentQ.competencyTested}
-                </span>
-              </div>
-
-              {/* Question Title & Scenario */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#605d5d]">
-                  {currentQ.title}
-                </h3>
-                <div className="bg-[#eae9e9] p-4 border border-[rgba(32,30,29,0.15)] text-sm text-[#201e1d] leading-relaxed">
-                  {currentQ.scenario}
-                </div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-[#201e1d] leading-snug">
-                  {currentQ.question}
-                </h2>
-              </div>
-
-              {/* Options List (Modernist 2px border boxes) */}
-              <div className="space-y-2.5">
-                {currentQ.options.map((opt) => {
-                  const isSelected = selectedAnswers[currentQ.id] === opt.key;
-
-                  return (
-                    <div
-                      key={opt.key}
-                      onClick={() => handleSelectOption(currentQ.id, opt.key)}
-                      className={`w-full text-left p-3.5 border-2 transition-all flex items-start gap-3 cursor-pointer ${
-                        isSelected
-                          ? 'border-[#ec3013] bg-[#fff2ef]'
-                          : 'border-[rgba(32,30,29,0.15)] bg-[#eae9e9] hover:border-[#201e1d]'
-                      }`}
-                    >
-                      <div
-                        className={`w-6 h-6 border text-xs font-black flex items-center justify-center shrink-0 mt-0.5 select-none transition ${
-                          isSelected
-                            ? 'border-[#ec3013] bg-[#ec3013] text-[#f3f2f2]'
-                            : 'border-slate-300 bg-white text-[#201e1d]'
-                        }`}
-                      >
-                        {opt.key}
-                      </div>
-                      <span className="text-sm text-[#201e1d] font-semibold leading-relaxed">
-                        {opt.text}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Navigation Bar */}
-              <div className="flex items-center justify-between pt-4 border-t-2 border-[rgba(32,30,29,0.15)]">
-                <button
-                  onClick={handlePrev}
-                  disabled={currentIdx === 0}
-                  className="btn btn-secondary text-xs font-bold"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Previous</span>
-                </button>
-
-                <div className="flex items-center space-x-2">
-                  {currentIdx === activeQuestionSet.length - 1 ? (
-                    <button
-                      onClick={calculateResult}
-                      disabled={!selectedAnswers[currentQ.id]}
-                      className="btn btn-primary text-xs font-bold px-5"
-                    >
-                      <span>Submit & Grade Assessment</span>
-                      <span>→</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleNext}
-                      disabled={!selectedAnswers[currentQ.id]}
-                      className="btn btn-primary text-xs font-bold px-5"
-                    >
-                      <span>Next Question</span>
-                      <span>→</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Results & Competency Diagnostic Report View */
-            <div className="bg-[#f3f2f2] border-2 border-[rgba(32,30,29,0.15)] p-6 sm:p-8 space-y-8">
-              {/* Score Header Card */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end pb-8 border-b-2 border-[rgba(32,30,29,0.15)]">
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <img src="/pmverse-mark.png" alt="PMVerse" className="w-4 h-4 object-contain" />
-                    <span className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
-                      Your PM Fit Score · Official Diagnostic
-                    </span>
-                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-[#201e1d] text-[#f3f2f2]">
-                      Saved & Calibrated ✓
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-3 my-2">
-                    <span className="text-8xl sm:text-9xl font-black text-[#ec3013] leading-none tracking-tighter">
-                      {result.scorePercentage}
-                    </span>
-                    <span className="text-2xl font-bold text-[#7d7979]">/ 100</span>
-                  </div>
-                  <div className="text-2xl font-extrabold tracking-tight mt-3 text-[#201e1d]">
-                    {result.archetype}
-                  </div>
-                  <p className="text-sm text-[#201e1d] mt-2 max-w-md leading-relaxed">
-                    {result.summary}
-                  </p>
-                </div>
-
-                {/* Score Bands Bar */}
-                <div className="border-t-2 border-[rgba(32,30,29,0.15)] pt-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[#605d5d] mb-2">
-                    Score Distribution Bands
-                  </div>
-                  <div className="grid grid-cols-5 gap-1 text-center">
-                    {[
-                      { label: 'Low fit', range: '0–39', active: result.scorePercentage < 40 },
-                      {
-                        label: 'Developing',
-                        range: '40–59',
-                        active: result.scorePercentage >= 40 && result.scorePercentage < 60,
-                      },
-                      {
-                        label: 'Good potential',
-                        range: '60–74',
-                        active: result.scorePercentage >= 60 && result.scorePercentage < 75,
-                      },
-                      {
-                        label: 'Strong PM fit',
-                        range: '75–89',
-                        active: result.scorePercentage >= 75 && result.scorePercentage < 90,
-                      },
-                      {
-                        label: 'Exceptional',
-                        range: '90–100',
-                        active: result.scorePercentage >= 90,
-                      },
-                    ].map((b, bi) => (
-                      <div key={bi}>
-                        <div
-                          className={`h-3 ${b.active ? 'bg-[#ec3013]' : 'bg-[#d7d3d3]'}`}
-                        />
-                        <div
-                          className={`text-[11px] mt-1.5 leading-tight ${
-                            b.active ? 'font-extrabold text-[#ae1800]' : 'text-slate-600'
-                          }`}
-                        >
-                          {b.label}
-                        </div>
-                        <div className="text-[10px] text-[#605d5d]">{b.range}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-4 flex flex-wrap gap-2">
-                    <button
-                      onClick={async () => {
-                        if (!user) {
-                          openAuthModal('signin');
-                          return;
-                        }
-                        setIsBadgeAddedToProfile(true);
-                        await updateProfile({ pmFitScore: result.scorePercentage });
-                        alert(
-                          `Certified PM Skill Badge (${result.scorePercentage}%) added to your public profile!`
-                        );
-                      }}
-                      className="btn btn-primary text-xs font-bold"
-                    >
-                      <span>
-                        {isBadgeAddedToProfile
-                          ? '✓ Badge Displayed on Profile'
-                          : 'Add Certified Badge to Profile'}
-                      </span>
-                    </button>
-                    <button
-                      onClick={handleRetake}
-                      className="btn btn-secondary text-xs font-bold"
-                    >
-                      <span>Retake Assessment</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3-Column Diagnostic Bento Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[2px] bg-[rgba(32,30,29,0.15)] border-2 border-[rgba(32,30,29,0.15)]">
-                {/* 1. Category Diagnostic Breakdown */}
-                <div className="bg-[#f3f2f2] p-6 space-y-3">
-                  <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-3">
-                    Competencies (10 Areas)
-                  </div>
-                  <div className="divide-y divide-[rgba(32,30,29,0.15)]">
-                    {result.categoryScores.map((cat, idx) => (
-                      <div key={idx} className="py-2.5">
-                        <div className="flex justify-between text-xs font-semibold mb-1">
-                          <span className="text-[#201e1d]">{cat.category}</span>
-                          <span className="font-extrabold text-[#ec3013]">
-                            {cat.score}/{cat.total} ({cat.percentage}%)
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-[#d7d3d3]">
-                          <div
-                            className={`h-full ${
-                              cat.percentage >= 80 ? 'bg-[#201e1d]' : 'bg-[#ec3013]'
-                            }`}
-                            style={{ width: `${cat.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. Natural Strengths & Growth Areas */}
-                <div className="bg-[#f3f2f2] p-6 space-y-6">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
-                      Key Strengths
-                    </div>
-                    <div className="space-y-1.5 text-sm font-semibold text-[#201e1d]">
-                      {result.strengths.map((str, i) => (
-                        <div key={i}>✓ {str}</div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-[#ae1800] font-bold mb-2">
-                      Growth Areas to Improve
-                    </div>
-                    <div className="space-y-1.5 text-sm font-semibold text-[#ae1800]">
-                      {result.growthAreas.map((ga, i) => (
-                        <div key={i}>→ {ga}</div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
-                      Recommended Track
-                    </div>
-                    <span className="tag tag-neutral text-xs font-bold">
-                      {result.recommendedRole}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 3. Action Cards & Next Steps */}
-                <div className="bg-[#f3f2f2] p-6 flex flex-col justify-between gap-4">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
-                      Benchmark Integrity & Next Steps
-                    </div>
-                    <div className="p-3 bg-[#eae9e9] border border-[rgba(32,30,29,0.15)] text-xs text-[#201e1d] space-y-1 mb-3">
-                      <div className="font-extrabold flex items-center gap-1.5 text-[#201e1d]">
-                        <ShieldCheck className="w-4 h-4 text-[#ae1800]" />
-                        <span>Official PM Benchmark</span>
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-[#605d5d]">
-                        To preserve standardized test validity and credential integrity, individual question answer keys are kept confidential.
-                      </p>
-                    </div>
-                    <p className="text-xs text-[#605d5d] leading-relaxed">
-                      Your verified PM Fit score is calibrated against industry benchmarks and live roles. Explore matched positions tailored to your profile.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    {setActiveTab && (
-                      <button
-                        onClick={() => setActiveTab('jobs')}
-                        className="btn btn-primary w-full justify-between text-xs font-bold"
-                      >
-                        <span>Explore Matched PM Jobs</span>
-                        <span>→</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={handleRetake}
-                      className="btn btn-secondary w-full justify-between text-xs font-bold"
-                    >
-                      <span>Retake Diagnostic Assessment</span>
-                      <span>↻</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+    <div className="w-full">
+      {/* View 1: Main Landing Dashboard */}
+      {screen === 'dashboard' && (
+        <AssessmentDashboard
+          levels={levels}
+          progress={progress}
+          history={history}
+          onStartLevel={handleStartLevel}
+          onViewAttempt={handleViewAttempt}
+          isAdmin={isAdmin}
+          onOpenAdmin={() => setIsAdminModalOpen(true)}
+        />
       )}
 
-      {/* ========================================================
-          MODE 4: LAYER 2 PRACTICAL PM CASE STUDIES
-         ======================================================== */}
-      {mode === 'case_studies' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-[#e0dfdc] shadow-sm p-4 sm:p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  Layer 2 Practical PM Cases
-                </span>
-                <h2 className="text-base font-bold text-slate-900 mt-1">
-                  Open-Ended Scenario Case Studies
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Go beyond multiple-choice: write realistic product proposals and action plans evaluated against calibrated PM rubrics.
-                </p>
-              </div>
+      {/* View 2: Live Assessment Taking Mode */}
+      {screen === 'running' && (
+        <AssessmentRunner
+          levelConfig={activeLevelConfig}
+          questions={activeQuestions}
+          userId={user?.id || 'guest'}
+          onExit={() => {
+            setScreen('dashboard');
+            loadLevelsAndProgress();
+          }}
+          onCompleted={handleTestCompleted}
+        />
+      )}
 
-              {/* Case Picker */}
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-slate-500 font-medium">Select Case:</span>
-                <select
-                  value={selectedCaseId}
-                  onChange={(e) => setSelectedCaseId(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-md bg-white text-slate-900 outline-none focus:border-[#0a66c2]"
-                >
-                  {PM_CASE_STUDIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+      {/* View 3: Scored Results View */}
+      {screen === 'results' && activeAttempt && (
+        <AssessmentResultsView
+          attempt={activeAttempt}
+          levelConfig={activeLevelConfig}
+          onRetake={handleRetake}
+          onBackToDashboard={() => {
+            setScreen('dashboard');
+            loadLevelsAndProgress();
+          }}
+          onGoToNextLevel={handleGoToNextLevel}
+        />
+      )}
 
-            {/* Case Details Card */}
-            <div className="pt-4 space-y-4 text-left">
-              <div>
-                <span className="text-[11px] font-bold text-[#0a66c2] uppercase tracking-wider">
-                  {activeCase.category}
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 mt-0.5">
-                  {activeCase.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-700 mt-2 bg-slate-50 p-3 rounded-lg border border-slate-200 leading-relaxed">
-                  {activeCase.scenario}
-                </p>
-              </div>
-
-              {/* Context Points */}
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Key Context & Operating Constraints:
-                </h4>
-                <ul className="text-xs text-slate-600 space-y-1 pl-1">
-                  {activeCase.contextPoints.map((pt, i) => (
-                    <li key={i} className="flex items-start space-x-2">
-                      <span className="text-[#0a66c2] font-bold">•</span>
-                      <span>{pt}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Required Tasks */}
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Your PM Deliverables:
-                </h4>
-                <div className="space-y-1.5">
-                  {activeCase.tasks.map((task, i) => (
-                    <div
-                      key={i}
-                      className="p-2.5 rounded bg-sky-50/50 border border-sky-100 text-xs font-medium text-slate-800"
-                    >
-                      {task}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Interactive Notepad */}
-              <div className="space-y-1.5 pt-2">
-                <label className="text-xs font-bold text-slate-800 block">
-                  Draft Your PM Proposal / Action Plan:
-                </label>
-                <textarea
-                  rows={6}
-                  value={caseStudyNotes[activeCase.id] || ''}
-                  onChange={(e) =>
-                    setCaseStudyNotes({ ...caseStudyNotes, [activeCase.id]: e.target.value })
-                  }
-                  placeholder="Outline your problem definition, root cause hypotheses, metrics, and trade-off rationale here..."
-                  className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:border-[#0a66c2] outline-none text-[#191919] leading-relaxed"
-                />
-                <div className="flex flex-wrap justify-between items-center gap-2 text-[11px] text-slate-500 pt-1">
-                  <span>Evaluated against the calibrated rubric below</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        alert('Proposal draft saved locally in your active PMVerse workspace!');
-                      }}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-bold border border-slate-300"
-                    >
-                      Save Draft
-                    </button>
-                    <button
-                      onClick={() => handleGradeCaseProposal(activeCase.id)}
-                      disabled={isGradingCase}
-                      className="px-3.5 py-1.5 bg-[#ec3013] hover:bg-[#ae1800] text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${isGradingCase ? 'animate-spin' : ''}`} />
-                      <span>{isGradingCase ? 'Evaluating with AI...' : 'Grade with AI Rubric'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Rubric Scorecard for Case Study */}
-              {caseFeedback[activeCase.id] && (
-                <div className="p-4 bg-[#fff5f2] border-2 border-[#ec3013]/30 rounded-lg space-y-3 animate-in fade-in duration-200 text-left">
-                  <div className="flex items-start justify-between gap-3 border-b border-rose-200/80 pb-3">
-                    <div>
-                      <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[#ae1800]">
-                        <Sparkles className="w-3.5 h-3.5 text-[#ec3013]" />
-                        Official AI Rubric Evaluation
-                      </div>
-                      <div className="text-xs text-[#605d5d] font-bold mt-0.5">
-                        {caseFeedback[activeCase.id].verdictLabel || 'Evaluated against Senior PM Rubric'}
-                      </div>
-                    </div>
-                    <div className="flex items-baseline gap-1 bg-white px-3 py-1 border border-rose-200 rounded shadow-sm">
-                      <span className="text-2xl font-black text-[#ec3013]">
-                        {caseFeedback[activeCase.id].overallScore ?? 0}
-                      </span>
-                      <span className="text-xs font-bold text-[#605d5d]">/100</span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-slate-900 leading-relaxed font-semibold">
-                    {caseFeedback[activeCase.id].summary}
-                  </p>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-rose-200/80 text-xs">
-                    <div className="bg-white p-2 rounded border border-rose-100">
-                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Product Sense</span>
-                      <strong className="text-slate-900">{caseFeedback[activeCase.id].productSenseScore ?? 0}/10</strong>
-                    </div>
-                    <div className="bg-white p-2 rounded border border-rose-100">
-                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Feasibility</span>
-                      <strong className="text-slate-900">{caseFeedback[activeCase.id].feasibilityScore ?? 0}/10</strong>
-                    </div>
-                    <div className="bg-white p-2 rounded border border-rose-100">
-                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">Metrics</span>
-                      <strong className="text-slate-900">{caseFeedback[activeCase.id].metricsScore ?? 0}/10</strong>
-                    </div>
-                    <div className="bg-white p-2 rounded border border-rose-100">
-                      <span className="text-[#605d5d] text-[10px] uppercase font-bold block">User Value</span>
-                      <strong className="text-slate-900">{caseFeedback[activeCase.id].userValueScore ?? 0}/10</strong>
-                    </div>
-                  </div>
-
-                  {Array.isArray(caseFeedback[activeCase.id].strengths) && caseFeedback[activeCase.id].strengths.length > 0 && (
-                    <div className="pt-2 border-t border-rose-200/80">
-                      <span className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">
-                        Core Strengths:
-                      </span>
-                      <ul className="list-disc pl-4 space-y-1 text-xs text-slate-800">
-                        {caseFeedback[activeCase.id].strengths.map((str: string, idx: number) => (
-                          <li key={idx}>{str}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {Array.isArray(caseFeedback[activeCase.id].improvements) && caseFeedback[activeCase.id].improvements.length > 0 && (
-                    <div className="pt-2 border-t border-rose-200/80">
-                      <span className="text-[10px] font-bold text-amber-800 uppercase block mb-1">
-                        High-Leverage Growth Areas:
-                      </span>
-                      <ul className="list-disc pl-4 space-y-1 text-xs text-slate-800">
-                        {caseFeedback[activeCase.id].improvements.map((imp: string, idx: number) => (
-                          <li key={idx}>{imp}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {caseFeedback[activeCase.id].principalAdvice && (
-                    <div className="bg-white p-3 rounded border border-rose-200 text-xs italic text-slate-800">
-                      <strong>Principal PM Pro-Tip:</strong> "{caseFeedback[activeCase.id].principalAdvice}"
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Evaluation Rubric Table */}
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Official Evaluation Rubric:
-                </h4>
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden text-xs">
-                  {activeCase.rubric.map((r, i) => (
-                    <div key={i} className="p-3 bg-white flex items-start justify-between gap-3">
-                      <div>
-                        <span className="font-bold text-slate-900 block">{r.dimension}</span>
-                        <span className="text-slate-500 text-[11px]">{r.description}</span>
-                      </div>
-                      <span className="font-bold text-[#0a66c2] bg-sky-50 px-2.5 py-0.5 rounded border border-sky-200 shrink-0">
-                        {r.weight}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Admin Question Bank Modal */}
+      {isAdminModalOpen && user?.email && (
+        <AssessmentAdminView
+          adminEmail={user.email}
+          onClose={() => {
+            setIsAdminModalOpen(false);
+            loadLevelsAndProgress();
+          }}
+        />
       )}
     </div>
   );

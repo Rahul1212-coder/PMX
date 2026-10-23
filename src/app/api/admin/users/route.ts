@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profErr.message }, { status: 500 });
     }
 
-    // 3. Fetch latest quiz results per user
+    // 3a. Fetch legacy quiz results per user
     const { data: quizResults } = await admin
       .from('quiz_results')
       .select('user_id, score_percentage, archetype, created_at')
@@ -46,6 +46,40 @@ export async function GET(request: Request) {
           archetype: q.archetype,
           date: q.created_at,
         });
+      }
+    });
+
+    // 3b. Fetch 3-Level Assessment attempts per user
+    const { data: assessmentAttempts } = await admin
+      .from('assessment_attempts')
+      .select('user_id, level_id, score_percentage, status, is_passed, created_at')
+      .order('created_at', { ascending: false });
+
+    const assessmentMap = new Map<string, { [levelId: string]: { score: number; passed: boolean; status: string } }>();
+    (assessmentAttempts || []).forEach((att) => {
+      if (att.user_id && att.level_id) {
+        if (!assessmentMap.has(att.user_id)) {
+          assessmentMap.set(att.user_id, {});
+        }
+        const userLevels = assessmentMap.get(att.user_id)!;
+        if (!userLevels[att.level_id]) {
+          userLevels[att.level_id] = {
+            score: att.score_percentage || 0,
+            passed: Boolean(att.is_passed),
+            status: att.status,
+          };
+        }
+      }
+    });
+
+    // 3c. Fetch Weekly Challenge submissions count per user
+    const { data: challengeSubs } = await admin
+      .from('challenge_submissions')
+      .select('user_id');
+    const challengeSubCountMap = new Map<string, number>();
+    (challengeSubs || []).forEach((c) => {
+      if (c.user_id) {
+        challengeSubCountMap.set(c.user_id, (challengeSubCountMap.get(c.user_id) || 0) + 1);
       }
     });
 
@@ -66,6 +100,8 @@ export async function GET(request: Request) {
     let enrichedUsers = users.map((u) => {
       const p = profMap.get(u.id);
       const quiz = quizMap.get(u.id);
+      const userLevels = assessmentMap.get(u.id) || null;
+      const challengeCount = challengeSubCountMap.get(u.id) || 0;
       const resumeCount = Math.max(
         resumeCountMap.get(u.id) || 0,
         Number(u.user_metadata?.resume_eval_count || 0)
@@ -98,6 +134,8 @@ export async function GET(request: Request) {
         status: isActive ? 'active' : 'pending',
         diagnosticScore,
         diagnosticArchetype,
+        assessmentLevels: userLevels,
+        challengeSubmissionsCount: challengeCount,
         resumeAuditsCount: resumeCount,
         lastSignInAt: u.last_sign_in_at || null,
         createdAt: u.created_at || null,

@@ -25,6 +25,28 @@ export const isSupabaseConfigured = (): boolean => {
 // Singleton browser client instance
 let browserClient: SupabaseClient | null = null;
 
+class NodeWebSocketDummy {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  readonly readyState = 3;
+  close() {}
+  send() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+const getClientOptions = (serviceRole = false) => {
+  const options: any = {
+    auth: { persistSession: false },
+  };
+  if (typeof window === 'undefined' && typeof WebSocket === 'undefined') {
+    options.realtime = { transport: NodeWebSocketDummy as any };
+  }
+  return options;
+};
+
 export const getSupabaseClient = (): SupabaseClient | null => {
   if (!isSupabaseConfigured()) {
     return null;
@@ -33,7 +55,11 @@ export const getSupabaseClient = (): SupabaseClient | null => {
   const { url, key } = getSupabaseConfig();
 
   if (typeof window === 'undefined') {
-    return createSupabaseClient(url, key);
+    try {
+      return createSupabaseClient(url, key, getClientOptions(false));
+    } catch {
+      return null;
+    }
   }
 
   if (!browserClient) {
@@ -46,16 +72,18 @@ export const getSupabaseClient = (): SupabaseClient | null => {
 const DEFAULT_ENCODED_SERVICE_KEY = 'c2Jfc2VjcmV0X1ZvMG5wejRSOXBEME9YWkcyLUFHQ2dfdXlaQTVxaVM=';
 
 export const getSupabaseAdminClient = (): SupabaseClient | null => {
-  const { url, key } = getSupabaseConfig();
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    (typeof window === 'undefined' && typeof Buffer !== 'undefined'
-      ? Buffer.from(DEFAULT_ENCODED_SERVICE_KEY, 'base64').toString('utf8')
-      : key);
+  try {
+    const { url, key } = getSupabaseConfig();
+    const serviceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      (typeof window === 'undefined' && typeof Buffer !== 'undefined'
+        ? Buffer.from(DEFAULT_ENCODED_SERVICE_KEY, 'base64').toString('utf8')
+        : key);
 
-  if (!url || !serviceKey) return null;
-  return createSupabaseClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
+    if (!url || !serviceKey) return null;
+    return createSupabaseClient(url, serviceKey, getClientOptions(true));
+  } catch {
+    return null;
+  }
 };
 

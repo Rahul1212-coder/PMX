@@ -531,7 +531,7 @@ export const AdminPortal: React.FC = () => {
                             }}
                             className="btn btn-secondary text-[11px] font-bold py-1 px-2.5 hover:border-[#201e1d]"
                           >
-                            View Activity
+                            View / Edit Profile
                           </button>
                         </td>
                       </tr>
@@ -624,6 +624,7 @@ export const AdminPortal: React.FC = () => {
       <AdminUserModal
         userId={selectedUserId}
         onClose={() => setSelectedUserId(null)}
+        onUserUpdated={fetchData}
       />
     </div>
   );

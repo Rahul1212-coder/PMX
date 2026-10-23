@@ -453,3 +453,9 @@ export interface CircleActivity {
   createdAt: string;
 }
 
+export const CASE_STUDY_COMPETITION_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSfYH_t1wVKjHZ1Fup1rbzaKg3PSy8UC6vd9V6ONInJ9YlhoRQ/viewform?usp=sharing&ouid=107298085385128235587';
+
+export const CASE_STUDY_COMPETITION_EMBED_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSfYH_t1wVKjHZ1Fup1rbzaKg3PSy8UC6vd9V6ONInJ9YlhoRQ/viewform?embedded=true';
+
