@@ -17,6 +17,7 @@ import { isAiMentorEnabled } from '@/lib/features';
 
 export type NavTabType =
   | 'home'
+  | 'daily5'
   | 'resume'
   | 'mentor'
   | 'assess'
@@ -62,6 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems: Array<{ id: NavTabType; label: string; badge?: string }> = [
     { id: 'home', label: 'Home' },
+    { id: 'daily5', label: 'Daily 5', badge: '🔥' },
     { id: 'resume', label: 'Resume AI', badge: 'AI' },
     ...(mentorEnabled ? [{ id: 'mentor' as NavTabType, label: 'AI Mentor' }] : []),
     { id: 'assess', label: 'Assessment' },
@@ -148,6 +150,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Actions: Notifications & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Daily 5 streak button */}
+          <button
+            onClick={() => setActiveTab('daily5')}
+            className={`btn ${
+              activeTab === 'daily5' ? 'btn-primary' : 'btn-secondary'
+            } text-xs font-bold py-1.5 px-2.5 flex items-center gap-1.5 hover:border-[#ec3013] transition`}
+            title="PMVerse Daily 5 & Arena"
+          >
+            <span className="text-sm leading-none">🔥</span>
+            <span className="hidden sm:inline">Daily 5</span>
+          </button>
+
           {/* Join Discord Community Button */}
           <a
             href="https://discord.gg/S29SKDcWe"
@@ -230,6 +244,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                     >
                       <span>Edit Profile</span>
                       <span>→</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        setActiveTab('daily5');
+                      }}
+                      className="w-full text-left py-2 px-2 hover:bg-[#f3f2f2] font-semibold text-[#201e1d] flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>Daily 5 & Arena</span>
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-[#ec3013] text-white px-1.5 py-0.5">
+                        🔥 Daily
+                      </span>
                     </button>
 
                     <button

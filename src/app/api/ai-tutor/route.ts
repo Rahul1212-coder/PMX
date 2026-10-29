@@ -11,7 +11,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { term, userRole, questionType } = await request.json();
+    const { term, userRole, questionType, userId } = await request.json();
+
+    if (!userId || userId === 'guest' || typeof userId !== 'string') {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in to access VerseAI PM Mentor.' },
+        { status: 401 }
+      );
+    }
 
     if (!term) {
       return NextResponse.json({ error: 'Term or concept is required' }, { status: 400 });
@@ -67,7 +74,7 @@ Ensure your response is valid JSON only.`;
       success: true,
       data: fallbackData,
       source: 'offline-preview',
-      note: 'Add GEMINI_API_KEY in .env.local to activate live Gemini AI generation.',
+      note: 'Add API key in .env.local to activate live VerseAI generation.',
     });
   } catch (error: any) {
     console.error('Error generating AI explanation:', error);

@@ -30,7 +30,7 @@ export const BulletRewriterModal: React.FC<BulletRewriterModalProps> = ({
   targetJobContext,
   onApplyBullet,
 }) => {
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const [selectedGoal, setSelectedGoal] = useState<string>('impact');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<BulletRewriteResult | null>(null);
@@ -47,6 +47,12 @@ export const BulletRewriterModal: React.FC<BulletRewriterModalProps> = ({
   if (!isOpen) return null;
 
   const handleGenerate = async (overrideGoal?: string) => {
+    if (!user) {
+      openAuthModal?.('login');
+      setErrorMessage('Please sign in to use the AI bullet rewriter.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     const goalToUse = overrideGoal || selectedGoal;

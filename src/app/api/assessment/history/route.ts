@@ -6,6 +6,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || undefined;
 
+    if (!userId || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required to view assessment history' },
+        { status: 401 }
+      );
+    }
+
     const attempts = await getUserAttempts(userId);
     return NextResponse.json({ success: true, attempts });
   } catch (error: any) {

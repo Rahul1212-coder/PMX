@@ -36,3 +36,5 @@ next-env.d.ts
 
 # local test cache
 src/data/.assessment_cache/
+src/data/.gamification_cache/
+src/data/.learning_cache/

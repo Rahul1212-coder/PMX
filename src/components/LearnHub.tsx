@@ -1,248 +1,572 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  LearningItem,
+  LearningItemType,
+  LearningCategory,
+  LearningDifficulty,
+} from '@/types/learning';
+import { INITIAL_LEARNING_ITEMS } from '@/lib/learning/initialData';
+import { ConceptReader } from '@/components/learning/ConceptReader';
+import { CaseStudyReader } from '@/components/learning/CaseStudyReader';
+import { TeardownReader } from '@/components/learning/TeardownReader';
+import { VerseAiGenerateModal } from '@/components/learning/GeminiGenerateModal';
 import { isAiMentorEnabled } from '@/lib/features';
+import { useAuth } from '@/context/AuthContext';
+import {
+  Search,
+  Sparkles,
+  BookOpen,
+  Briefcase,
+  Layers,
+  Clock,
+  Filter,
+  CheckCircle2,
+  ChevronRight,
+  TrendingUp,
+} from 'lucide-react';
 
 interface LearnHubProps {
   initialTerm?: string;
-  onAskMentor?: (termName: string) => void;
+  onAskMentor?: (query: string) => void;
 }
+
+const CATEGORIES: LearningCategory[] = [
+  'Product Thinking',
+  'Metrics & Data',
+  'Prioritization & Strategy',
+  'User Discovery',
+  'Execution & Tech',
+  'Growth & Monetization',
+];
 
 export const LearnHub: React.FC<LearnHubProps> = ({
   initialTerm = 'pmf',
   onAskMentor,
 }) => {
-  const [selectedTermKey, setSelectedTermKey] = useState<string>(initialTerm);
-  const [query, setQuery] = useState('');
+  const { user, openAuthModal } = useAuth();
   const mentorEnabled = isAiMentorEnabled();
 
-  const TERMS_DATA: Record<
-    string,
-    {
-      name: string;
-      group: string;
-      def: string;
-      simple: string;
-      pm: string;
-      real: string;
-      use: string;
-      not: string;
-      iq: string;
-      related: string[];
+  // Materials state initialized with initial curriculum for instant zero-latency render
+  const [items, setItems] = useState<LearningItem[]>(INITIAL_LEARNING_ITEMS);
+  const [selectedSlug, setSelectedSlug] = useState<string>('concept-pmf');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [justPublishedTitle, setJustPublishedTitle] = useState<string | null>(null);
+
+  // Filters
+  const [activeTypeTab, setActiveTypeTab] = useState<'all' | LearningItemType>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch updated / published materials on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMaterials() {
+      try {
+        const res = await fetch('/api/learn');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.materials && Array.isArray(data.materials) && isMounted) {
+            setItems(data.materials);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load published learning materials:', err);
+      }
     }
-  > = {
-    pmf: {
-      name: 'Product-Market Fit',
-      group: 'Product Fundamentals',
-      def: 'The point where a product satisfies a strong market demand, so customers keep using it, pay for it, and recommend it without heavy pushing.',
-      simple: 'People would be genuinely disappointed if your product disappeared tomorrow.',
-      pm: 'A team sees 45% of new users still active after eight weeks and referrals rising each month, without any paid acquisition spend.',
-      real: 'Early file-sharing tools reached fit when teams started inviting colleagues unprompted, turning single users into whole company accounts.',
-      use: 'Before scaling paid acquisition, hiring a massive outbound sales team, or expanding into foreign segments.',
-      not: 'As a one-time static milestone. Fit can be lost as market expectations and competitors evolve.',
-      iq: 'How would you know if a new zero-to-one product has reached product-market fit?',
-      related: ['mvp', 'nsm', 'churn'],
-    },
-    rice: {
-      name: 'RICE',
-      group: 'Prioritization',
-      def: 'A prioritization framework score: Reach × Impact × Confidence ÷ Effort.',
-      simple: 'A systematic way to compare feature ideas by how many people they help, how much, how sure you are, and what engineering costs.',
-      pm: 'A feature reaching 4,000 users a quarter with medium impact (1), 80% confidence, and 2 person-months scores: (4000 × 1 × 0.8) / 2 = 1,600.',
-      real: 'Growth and platform squads use RICE to rank a backlog of quarterly experiments during sprint roadmapping.',
-      use: 'When you have many comparable feature candidates and need a shared, transparent, and explainable ranking criteria.',
-      not: 'For major strategic platform bets, regulatory compliance, or architectural re-platforming that arithmetic alone cannot justify.',
-      iq: 'Walk me through how you prioritized features on your most recent quarterly roadmap.',
-      related: ['nsm', 'mvp'],
-    },
-    nsm: {
-      name: 'North Star Metric',
-      group: 'Metrics & Data',
-      def: 'The single key metric that best captures the core recurring value a product delivers to its customers.',
-      simple: 'One number the whole company agrees means customers are genuinely experiencing value.',
-      pm: 'A language-learning app picks: weekly learners who complete three or more lessons (not vanity total app downloads).',
-      real: 'Marketplaces track gross completed transactions or nights booked, rather than app opens or registered accounts.',
-      use: 'To align product squads, design, and engineering around sustainable, long-term customer value.',
-      not: 'As the sole unchecked metric. Always pair it with health input metrics and counter-metric guardrails.',
-      iq: 'What North Star Metric would you select for a podcast streaming application?',
-      related: ['activation', 'churn', 'pmf'],
-    },
-    activation: {
-      name: 'Activation',
-      group: 'Metrics & Data',
-      def: 'The pivotal milestone where a new user first experiences the core value promise of the product (the "Aha!" moment).',
-      simple: 'The exact moment a casual sign-up turns into an engaged, retained user.',
-      pm: 'For a team workspace tool, activation is reached when a new account creates a project and sends 20 messages within the first 7 days.',
-      real: 'Social networks famously found that adding 7 friends in 10 days was the single highest predictor of multi-year retention.',
-      use: 'To focus onboarding UX and product walkthroughs strictly on the specific user actions that correlate with retention.',
-      not: 'When the chosen milestone does not statistically correlate with cohort retention curves.',
-      iq: 'How would you define and measure the activation milestone for a personal budgeting application?',
-      related: ['churn', 'nsm'],
-    },
-    churn: {
-      name: 'Churn',
-      group: 'Metrics & Data',
-      def: 'The percentage rate at which customers discontinue using or paying for a product over a given timeframe.',
-      simple: 'How fast you are losing existing users or recurring subscription revenue.',
-      pm: 'A SaaS product starting with 1,000 customers that loses 30 accounts during the month exhibits a 3% monthly customer churn rate.',
-      real: 'Subscription businesses segment voluntary churn (cancellations) from involuntary churn (expired credit cards or payment gateway timeouts).',
-      use: 'To diagnose cohort retention health, product-market decay, and the long-term impact of pricing or UI changes.',
-      not: 'Without segmenting cohorts by contract tier, acquisition channel, customer lifetime, and account size.',
-      iq: 'Customer churn rose 2 percentage points this quarter. How would you structure your investigation?',
-      related: ['activation', 'pmf'],
-    },
-    mvp: {
-      name: 'MVP (Minimum Viable Product)',
-      group: 'Product Fundamentals',
-      def: 'The simplest version of a product that allows a team to collect the maximum amount of validated customer learning with the least effort.',
-      simple: 'Build just enough to test your riskiest assumption with real paying users.',
-      pm: 'Before building an automated matching algorithm, a product squad manually connects buyers and sellers behind a simple web form.',
-      real: 'E-commerce pioneers validated demand by photographing local store shoes and buying them at retail after orders arrived.',
-      use: 'When the biggest risk is market demand—whether anyone genuinely wants the solution.',
-      not: 'As an excuse to deliver substandard, broken software to paying enterprise customers.',
-      iq: 'Design an MVP to test demand for a corporate meal-planning subscription.',
-      related: ['pmf', 'rice'],
-    },
+    loadMaterials();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Handle initialTerm passed from home dashboard or URL
+  useEffect(() => {
+    if (!initialTerm) return;
+    const clean = initialTerm.toLowerCase();
+    const matched = items.find(
+      (it) =>
+        it.slug.toLowerCase() === clean ||
+        it.slug.toLowerCase() === `concept-${clean}` ||
+        it.slug.toLowerCase().includes(clean) ||
+        it.id.toLowerCase() === clean
+    );
+    if (matched) {
+      setSelectedSlug(matched.slug);
+    }
+  }, [initialTerm, items]);
+
+  // Filtered materials
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // Type filter
+      if (activeTypeTab !== 'all' && item.type !== activeTypeTab) return false;
+
+      // Category filter
+      if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
+
+      // Difficulty filter
+      if (selectedDifficulty !== 'all' && item.difficulty !== selectedDifficulty) return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = item.title.toLowerCase().includes(q);
+        const matchesSummary = item.summary.toLowerCase().includes(q);
+        const matchesTags = item.tags.some((t) => t.toLowerCase().includes(q));
+        const matchesCompany =
+          item.caseStudyDetail?.company.toLowerCase().includes(q) ||
+          item.teardownDetail?.company.toLowerCase().includes(q);
+
+        if (!matchesTitle && !matchesSummary && !matchesTags && !matchesCompany) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [items, activeTypeTab, selectedCategory, selectedDifficulty, searchQuery]);
+
+  // Active item
+  const activeItem = useMemo(() => {
+    const found = items.find((it) => it.slug === selectedSlug);
+    if (found) return found;
+    return filteredItems[0] || items[0];
+  }, [items, selectedSlug, filteredItems]);
+
+  const handleSelectRelated = (relatedKey: string) => {
+    const cleanKey = relatedKey.toLowerCase();
+    const found = items.find(
+      (it) =>
+        it.slug.toLowerCase() === cleanKey ||
+        it.slug.toLowerCase() === `concept-${cleanKey}` ||
+        it.slug.toLowerCase().includes(cleanKey)
+    );
+    if (found) {
+      setSelectedSlug(found.slug);
+    }
   };
 
-  const termKeys = Object.keys(TERMS_DATA);
-  const qLower = query.toLowerCase();
+  const handleMaterialPublished = (newItem: LearningItem) => {
+    setItems((prev) => {
+      const exists = prev.some((it) => it.slug === newItem.slug);
+      if (exists) {
+        return prev.map((it) => (it.slug === newItem.slug ? newItem : it));
+      }
+      return [newItem, ...prev];
+    });
+    setSelectedSlug(newItem.slug);
+    setJustPublishedTitle(newItem.title);
+    setTimeout(() => {
+      setJustPublishedTitle(null);
+    }, 5000);
+  };
 
-  // Group terms by category
-  const groups: Record<string, string[]> = {};
-  termKeys.forEach((key) => {
-    const item = TERMS_DATA[key];
-    if (qLower && !item.name.toLowerCase().includes(qLower) && !item.group.toLowerCase().includes(qLower)) {
-      return;
-    }
-    if (!groups[item.group]) groups[item.group] = [];
-    groups[item.group].push(key);
-  });
-
-  const activeTerm = TERMS_DATA[selectedTermKey] || TERMS_DATA.pmf;
-
-  const sections = [
-    { h: 'Simple Explanation', body: activeTerm.simple },
-    { h: 'PM Real Scenario', body: activeTerm.pm },
-    { h: 'Industry Example', body: activeTerm.real },
-    { h: 'When to Use It', body: activeTerm.use },
-    { h: 'When Not to Use It', body: activeTerm.not },
-    { h: 'Interview Question', body: activeTerm.iq },
-  ];
+  // Type counts for tabs
+  const typeCounts = useMemo(() => {
+    return {
+      all: items.length,
+      concept: items.filter((it) => it.type === 'concept').length,
+      case_study: items.filter((it) => it.type === 'case_study').length,
+      teardown: items.filter((it) => it.type === 'teardown').length,
+    };
+  }, [items]);
 
   return (
-    <div className="text-left">
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-8 items-start">
-        {/* Left Sidebar: Search & Categorized Terms */}
-        <aside className="border-t-2 border-[rgba(32,30,29,0.15)] lg:border-t-0">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight m-0 mb-4 text-[#201e1d]">
-            Knowledge Hub
-          </h1>
+    <div className="text-left space-y-6 pb-12">
+      {/* 1. Header Banner & Gemini Generator Trigger */}
+      <div className="bg-[#201e1d] text-[#f3f2f2] p-6 sm:p-8 border-2 border-[#201e1d] shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-black tracking-widest bg-[#ec3013] text-white px-2.5 py-0.5">
+                Curriculum Hub
+              </span>
+              <span className="text-xs text-slate-300 font-bold">
+                {items.length} Production PM Modules
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white m-0">
+              PM Knowledge & Case Library
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+              Foundational frameworks, real-world telemetry case studies with practice Q&A, and in-depth product teardowns designed to train aspiring Product Managers.
+            </p>
+          </div>
 
-          <div className="flex items-center border border-[rgba(32,30,29,0.2)] bg-[#f3f2f2] px-2.5 mb-4">
+          <div className="shrink-0 flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => {
+                if (!user) {
+                  openAuthModal?.('login');
+                  return;
+                }
+                setIsModalOpen(true);
+              }}
+              className="btn btn-primary text-xs sm:text-sm font-black py-3 px-5 flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>⚡ Generate with VerseAI</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Just Published Success Toast */}
+      {justPublishedTitle && (
+        <div className="bg-emerald-50 border-2 border-emerald-500 p-4 flex items-center justify-between text-xs text-emerald-950 font-bold animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Successfully published &ldquo;{justPublishedTitle}&rdquo; to the Knowledge Hub!</span>
+          </div>
+          <button
+            onClick={() => setJustPublishedTitle(null)}
+            className="text-emerald-700 hover:text-emerald-900 text-xs uppercase tracking-wider font-extrabold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* 2. Type Tabs & Filter Bar */}
+      <div className="space-y-3">
+        {/* Type Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-2 border-b-2 border-[rgba(32,30,29,0.15)] pb-2">
+          <button
+            onClick={() => setActiveTypeTab('all')}
+            className={`px-3.5 py-2 text-xs font-black transition-all flex items-center gap-1.5 border-b-2 -mb-[10px] ${
+              activeTypeTab === 'all'
+                ? 'border-[#ec3013] text-[#ec3013] bg-white'
+                : 'border-transparent text-[#605d5d] hover:text-[#201e1d]'
+            }`}
+          >
+            <span>All Materials</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 font-bold">
+              {typeCounts.all}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTypeTab('concept')}
+            className={`px-3.5 py-2 text-xs font-black transition-all flex items-center gap-1.5 border-b-2 -mb-[10px] ${
+              activeTypeTab === 'concept'
+                ? 'border-[#ec3013] text-[#ec3013] bg-white'
+                : 'border-transparent text-[#605d5d] hover:text-[#201e1d]'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Concepts & Frameworks</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 font-bold">
+              {typeCounts.concept}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTypeTab('case_study')}
+            className={`px-3.5 py-2 text-xs font-black transition-all flex items-center gap-1.5 border-b-2 -mb-[10px] ${
+              activeTypeTab === 'case_study'
+                ? 'border-[#ec3013] text-[#ec3013] bg-white'
+                : 'border-transparent text-[#605d5d] hover:text-[#201e1d]'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5 text-amber-600" />
+            <span>Case Studies (Q&A)</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 font-bold">
+              {typeCounts.case_study}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTypeTab('teardown')}
+            className={`px-3.5 py-2 text-xs font-black transition-all flex items-center gap-1.5 border-b-2 -mb-[10px] ${
+              activeTypeTab === 'teardown'
+                ? 'border-[#ec3013] text-[#ec3013] bg-white'
+                : 'border-transparent text-[#605d5d] hover:text-[#201e1d]'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Product Teardowns</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 font-bold">
+              {typeCounts.teardown}
+            </span>
+          </button>
+        </div>
+
+        {/* Sub-Filters (Search, Category, Difficulty) */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center bg-white p-3 border border-[rgba(32,30,29,0.15)] shadow-sm">
+          <div className="sm:col-span-5 flex items-center bg-[#f3f2f2] px-3 py-1.5 border border-[rgba(32,30,29,0.2)]">
             <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
             <input
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search concepts…"
-              className="w-full text-xs py-2 bg-transparent outline-none font-medium text-[#201e1d]"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search concepts, companies, metrics..."
+              className="w-full text-xs bg-transparent outline-none font-medium text-[#201e1d]"
             />
           </div>
 
-          <div className="space-y-4">
-            {Object.keys(groups).map((groupName) => (
-              <div key={groupName} className="space-y-1">
-                <div className="text-[10px] uppercase tracking-widest text-[#605d5d] font-bold py-1 border-b-2 border-[rgba(32,30,29,0.15)]">
-                  {groupName}
-                </div>
-                <div className="divide-y divide-[rgba(32,30,29,0.1)]">
-                  {groups[groupName].map((tKey) => {
-                    const item = TERMS_DATA[tKey];
-                    const isSelected = selectedTermKey === tKey;
-
-                    return (
-                      <div
-                        key={tKey}
-                        onClick={() => setSelectedTermKey(tKey)}
-                        className={`py-2 px-2.5 cursor-pointer text-xs font-bold transition-all border-l-2 ${
-                          isSelected
-                            ? 'text-[#ae1800] border-[#ec3013] bg-[rgba(236,48,19,0.06)]'
-                            : 'text-[#201e1d] border-transparent hover:text-[#ec3013]'
-                        }`}
-                      >
-                        {item.name}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        {/* Right Article View */}
-        <article className="min-w-0 max-w-2xl">
-          <div className="text-xs uppercase tracking-widest text-[#ae1800] font-bold">
-            {activeTerm.group}
-          </div>
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-none my-2 text-[#201e1d]">
-            {activeTerm.name}
-          </h1>
-          <p className="text-lg sm:text-xl font-medium leading-relaxed pb-6 border-b-2 border-[rgba(32,30,29,0.15)] text-[#201e1d]">
-            {activeTerm.def}
-          </p>
-
-          <div className="divide-y divide-[rgba(32,30,29,0.15)]">
-            {sections.map((sec, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-1 sm:grid-cols-[160px_minmax(0,1fr)] gap-2 sm:gap-6 py-4"
-              >
-                <div className="font-extrabold text-sm text-[#201e1d]">{sec.h}</div>
-                <div className="text-sm sm:text-[15px] leading-relaxed text-[#201e1d] whitespace-pre-wrap">
-                  {sec.body}
-                </div>
-              </div>
-            ))}
+          <div className="sm:col-span-4 flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full text-xs font-bold p-1.5 bg-[#f3f2f2] border border-[rgba(32,30,29,0.2)] text-[#201e1d] outline-none"
+            >
+              <option value="all">All Categories ({items.length})</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Related Concepts */}
-          <div className="mt-8 pt-4 border-t-2 border-[rgba(32,30,29,0.15)]">
-            <div className="text-xs uppercase tracking-wider text-[#605d5d] font-bold mb-2">
-              Related Concepts
-            </div>
-            <div className="flex flex-wrap gap-2 mb-6">
-              {activeTerm.related.map((relKey) => {
-                const rel = TERMS_DATA[relKey];
-                if (!rel) return null;
-                return (
-                  <button
-                    key={relKey}
-                    onClick={() => setSelectedTermKey(relKey)}
-                    className="btn btn-secondary text-xs font-bold"
-                  >
-                    {rel.name}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="sm:col-span-3">
+            <select
+              value={selectedDifficulty}
+              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              className="w-full text-xs font-bold p-1.5 bg-[#f3f2f2] border border-[rgba(32,30,29,0.2)] text-[#201e1d] outline-none"
+            >
+              <option value="all">All Levels</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-            {mentorEnabled && onAskMentor && (
+      {/* 3. Main Two-Column Master / Detail Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-8 items-start">
+        {/* Left Column: Material Selector List */}
+        <aside className="space-y-2.5">
+          <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-600 px-1">
+            <span>Library ({filteredItems.length})</span>
+            {searchQuery && (
               <button
-                onClick={() => {
-                  onAskMentor(`Explain the concept of ${activeTerm.name} in detail.`);
-                }}
-                className="btn btn-primary text-xs font-bold px-6 py-3 justify-between w-full sm:w-auto"
+                onClick={() => setSearchQuery('')}
+                className="text-[11px] text-[#ec3013] hover:underline"
               >
-                <span>Ask the Mentor about {activeTerm.name}</span>
-                <span>→</span>
+                Clear search
               </button>
             )}
           </div>
-        </article>
+
+          {filteredItems.length === 0 ? (
+            <div className="p-6 bg-white border border-[rgba(32,30,29,0.15)] text-center space-y-3">
+              <p className="text-xs text-slate-500 font-medium">
+                No materials match your filter criteria.
+              </p>
+              <button
+                onClick={() => {
+                  if (!user) {
+                    openAuthModal?.('login');
+                    return;
+                  }
+                  setIsModalOpen(true);
+                }}
+                className="btn btn-primary text-xs font-bold py-2 px-3 mx-auto flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Generate &ldquo;{searchQuery}&rdquo; with VerseAI</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[750px] overflow-y-auto pr-1">
+              {filteredItems.map((item) => {
+                const isSelected = activeItem && activeItem.slug === item.slug;
+                const isTeardown = item.type === 'teardown';
+                const isCaseStudy = item.type === 'case_study';
+
+                return (
+                  <div
+                    key={item.id || item.slug}
+                    onClick={() => setSelectedSlug(item.slug)}
+                    className={`p-3.5 cursor-pointer border-2 transition-all text-left relative ${
+                      isSelected
+                        ? 'bg-white border-[#ec3013] shadow-md border-l-4 border-l-[#ec3013]'
+                        : 'bg-white border-[rgba(32,30,29,0.15)] hover:border-[#201e1d]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[9px] uppercase font-black tracking-wider px-1.5 py-0.5 ${
+                            isTeardown
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : isCaseStudy
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}
+                        >
+                          {isTeardown
+                            ? 'Teardown'
+                            : isCaseStudy
+                            ? 'Case Study'
+                            : 'Concept'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">
+                          {item.difficulty}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                        <Clock className="w-3 h-3" />
+                        <span>{item.readTimeMinutes}m</span>
+                      </div>
+                    </div>
+
+                    <div className="font-extrabold text-xs sm:text-[13px] text-[#201e1d] leading-snug line-clamp-2">
+                      {item.title}
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 line-clamp-2 mt-1 font-medium leading-snug">
+                      {item.summary}
+                    </p>
+
+                    <div className="mt-2 flex items-center justify-between text-[10px] font-bold text-slate-400">
+                      <span>{item.category}</span>
+                      {isSelected && (
+                        <span className="text-[#ec3013] flex items-center gap-0.5 font-extrabold">
+                          Viewing <ChevronRight className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Prompt to generate more */}
+          <div className="p-4 bg-[#f3f2f2] border-2 border-dashed border-[rgba(32,30,29,0.2)] text-center space-y-2">
+            <div className="text-xs font-black text-[#201e1d]">
+              Need a specific topic or case?
+            </div>
+            <p className="text-[11px] text-slate-600">
+              VerseAI can create a custom case study, concept guide, or product teardown in seconds.
+            </p>
+            <button
+              onClick={() => {
+                if (!user) {
+                  openAuthModal?.('login');
+                  return;
+                }
+                setIsModalOpen(true);
+              }}
+              className="btn btn-secondary text-xs font-bold py-1.5 px-3 mx-auto flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#ec3013]" />
+              <span>Generate Topic with VerseAI</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Right Column: Full Detail Article Reader */}
+        <main className="min-w-0 bg-white border border-[rgba(32,30,29,0.15)] p-5 sm:p-8 shadow-sm">
+          {activeItem ? (
+            <div className="space-y-6">
+              {/* Article Top Meta */}
+              <div className="border-b-2 border-[rgba(32,30,29,0.15)] pb-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider font-black text-[#ec3013]">
+                      {activeItem.category}
+                    </span>
+                    <span className="text-slate-300 font-bold">·</span>
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-slate-600">
+                      {activeItem.difficulty} level
+                    </span>
+                    <span className="text-slate-300 font-bold">·</span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      ⏱ {activeItem.readTimeMinutes} min read
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    {activeItem.author?.isAi ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 text-[10px] font-bold">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>Curated by VerseAI</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] uppercase font-bold text-slate-500">
+                        PMVerse Staff Verified
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-[#201e1d] m-0 leading-tight">
+                  {activeItem.title}
+                </h1>
+
+                {/* Tags */}
+                {activeItem.tags && activeItem.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {activeItem.tags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setSearchQuery(tag)}
+                        className="text-[11px] font-semibold bg-[#f3f2f2] text-slate-700 px-2 py-0.5 hover:bg-slate-200"
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Specific Reader Component Depending on Type */}
+              {activeItem.type === 'concept' && (
+                <ConceptReader
+                  item={activeItem}
+                  onSelectRelated={handleSelectRelated}
+                  onAskMentor={
+                    mentorEnabled && onAskMentor
+                      ? (termName) => onAskMentor(termName)
+                      : undefined
+                  }
+                />
+              )}
+
+              {activeItem.type === 'case_study' && (
+                <CaseStudyReader
+                  item={activeItem}
+                  onAskMentor={
+                    mentorEnabled && onAskMentor
+                      ? (query) => onAskMentor(query)
+                      : undefined
+                  }
+                />
+              )}
+
+              {activeItem.type === 'teardown' && (
+                <TeardownReader
+                  item={activeItem}
+                  onAskMentor={
+                    mentorEnabled && onAskMentor
+                      ? (query) => onAskMentor(query)
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          ) : (
+            <div className="p-12 text-center text-slate-500">
+              Select an item from the library to view details.
+            </div>
+          )}
+        </main>
       </div>
+
+      {/* 4. VerseAI Generator Modal */}
+      <VerseAiGenerateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onMaterialPublished={handleMaterialPublished}
+      />
     </div>
   );
 };

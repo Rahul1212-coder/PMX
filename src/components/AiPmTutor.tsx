@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PmConcept } from '../types';
 import { Send, Plus, Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface AiPmTutorProps {
   initialConcepts?: PmConcept[];
@@ -22,6 +23,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
   starterPrompt,
   starterMode = 'explain',
 }) => {
+  const { user, openAuthModal } = useAuth();
   const [mode, setMode] = useState<MentorModeType>(starterMode);
   const [input, setInput] = useState(starterPrompt || '');
   const [thinking, setThinking] = useState(false);
@@ -129,6 +131,11 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
     const textToSend = (customText ?? input).trim();
     if (!textToSend || thinking) return;
 
+    if (!user) {
+      openAuthModal?.('login');
+      return;
+    }
+
     const newMsgs = [...messages, { role: 'user' as const, text: textToSend }];
     setMessages(newMsgs);
     setInput('');
@@ -141,6 +148,7 @@ export const AiPmTutor: React.FC<AiPmTutorProps> = ({
         body: JSON.stringify({
           term: textToSend,
           questionType: MODES_CONFIG[mode].label,
+          userId: user?.id,
         }),
       });
 

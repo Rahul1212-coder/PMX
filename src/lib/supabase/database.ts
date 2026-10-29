@@ -739,9 +739,14 @@ export async function saveQuizResultToDb(userId: string, result: AssessmentResul
 }
 
 export async function getUserQuizResultsFromDb(userId?: string): Promise<SavedQuizResult[]> {
+  // Never return quiz results for unauthenticated users or guests
+  if (!userId || userId === 'guest') {
+    return [];
+  }
+
   let dbResults: SavedQuizResult[] = [];
 
-  if (isSupabaseConfigured() && userId && userId !== 'guest') {
+  if (isSupabaseConfigured() && userId) {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
@@ -772,14 +777,11 @@ export async function getUserQuizResultsFromDb(userId?: string): Promise<SavedQu
     }
   }
 
-  // If DB returned records, merge answersReview or categoryScores from localStorage if available
+  // If DB returned records, merge answersReview or categoryScores from user-keyed localStorage if available
   if (dbResults.length > 0) {
     if (typeof window !== 'undefined') {
       try {
-        const local =
-          (userId && localStorage.getItem(`pmverse_diagnostic_${userId}`)) ||
-          localStorage.getItem('pmverse_user_diagnosis') ||
-          localStorage.getItem('pmverse_latest_diagnostic');
+        const local = localStorage.getItem(`pmverse_diagnostic_${userId}`);
         if (local) {
           const parsed = JSON.parse(local);
           if (parsed.answersReview && (!dbResults[0].answersReview || dbResults[0].answersReview.length === 0)) {
@@ -794,31 +796,30 @@ export async function getUserQuizResultsFromDb(userId?: string): Promise<SavedQu
     return dbResults;
   }
 
-  // Fallback to locally stored diagnostic
-  if (typeof window !== 'undefined') {
+  // Fallback to locally stored diagnostic ONLY for this specific authenticated user
+  if (typeof window !== 'undefined' && userId) {
     try {
-      const local =
-        (userId && localStorage.getItem(`pmverse_diagnostic_${userId}`)) ||
-        localStorage.getItem('pmverse_user_diagnosis') ||
-        localStorage.getItem('pmverse_latest_diagnostic');
+      const local = localStorage.getItem(`pmverse_diagnostic_${userId}`);
       if (local) {
         const parsed = JSON.parse(local);
-        return [
-          {
-            id: parsed.id || 'diag-local',
-            userId: parsed.userId || userId,
-            scorePercentage: parsed.scorePercentage,
-            archetype: parsed.archetype || 'Product Strategist',
-            summary: parsed.summary || 'Verified PM competency assessment',
-            dimensionScores: parsed.dimensionScores || parsed.categoryScores || [],
-            categoryScores: parsed.categoryScores || parsed.dimensionScores || [],
-            strengths: parsed.strengths || [],
-            growthAreas: parsed.growthAreas || [],
-            recommendedRole: parsed.recommendedRole || 'Product Manager',
-            answersReview: parsed.answersReview || [],
-            createdAt: parsed.createdAt ? formatTimeAgo(new Date(parsed.createdAt)) : 'Recently',
-          },
-        ];
+        if (parsed.userId === userId || !parsed.userId) {
+          return [
+            {
+              id: parsed.id || 'diag-local',
+              userId: userId,
+              scorePercentage: parsed.scorePercentage,
+              archetype: parsed.archetype || 'Product Strategist',
+              summary: parsed.summary || 'Verified PM competency assessment',
+              dimensionScores: parsed.dimensionScores || parsed.categoryScores || [],
+              categoryScores: parsed.categoryScores || parsed.dimensionScores || [],
+              strengths: parsed.strengths || [],
+              growthAreas: parsed.growthAreas || [],
+              recommendedRole: parsed.recommendedRole || 'Product Manager',
+              answersReview: parsed.answersReview || [],
+              createdAt: parsed.createdAt ? formatTimeAgo(new Date(parsed.createdAt)) : 'Recently',
+            },
+          ];
+        }
       }
     } catch {
       // ignore
@@ -842,8 +843,12 @@ function formatTimeAgo(date: Date): string {
 
 // Job Applications Tracker
 export async function getJobApplicationsFromDb(userId?: string): Promise<JobApplication[]> {
-  const effectiveUserId = userId || 'guest';
-  const isUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  // Never return applications for unauthenticated users or guests
+  if (!userId || userId === 'guest') {
+    return [];
+  }
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
 
   let dbApps: JobApplication[] = [];
   const supabase = getSupabaseClient();
@@ -876,15 +881,13 @@ export async function getJobApplicationsFromDb(userId?: string): Promise<JobAppl
     }
   }
 
-  // Always merge with local storage applications
+  // Only merge local storage applications for this specific authenticated user
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem('pmverse_user_applications');
       if (raw) {
         const parsed: JobApplication[] = JSON.parse(raw);
-        const filteredLocal = parsed.filter(
-          (a) => a.userId === effectiveUserId || !a.userId || a.userId === 'guest' || effectiveUserId === 'guest'
-        );
+        const filteredLocal = parsed.filter((a) => a.userId === userId);
         if (dbApps.length > 0) {
           const dbIds = new Set(dbApps.map((a) => a.id));
           const dbJobIds = new Set(dbApps.map((a) => a.jobId).filter(Boolean));

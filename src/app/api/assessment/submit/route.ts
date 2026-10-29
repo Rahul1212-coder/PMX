@@ -7,11 +7,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       attemptId,
-      userId = 'guest',
+      userId,
       levelId = 'beginner',
       answers = {},
       timeSpentSeconds = 0,
     } = body;
+
+    if (!userId || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required to submit assessment' },
+        { status: 401 }
+      );
+    }
 
     if (!attemptId) {
       return NextResponse.json({ error: 'attemptId is required' }, { status: 400 });

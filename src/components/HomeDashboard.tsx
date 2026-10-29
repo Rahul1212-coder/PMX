@@ -9,10 +9,33 @@ import {
   getCommunityPostsFromDb,
   getCurrentWeeklyChallenge,
 } from '@/lib/supabase/database';
-import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge, CASE_STUDY_COMPETITION_FORM_URL } from '@/types';
-import { ArrowRight, Sparkles, Award, Briefcase, Users, FileText, ExternalLink } from 'lucide-react';
+import { SavedQuizResult, JobApplication, CommunityPost, WeeklyChallenge } from '@/types';
+import {
+  ArrowRight,
+  Sparkles,
+  Award,
+  Briefcase,
+  Users,
+  FileText,
+  ExternalLink,
+  Flame,
+  Zap,
+  Trophy,
+  Clock,
+  CheckCircle2,
+  ChevronRight,
+  Shield,
+  Star,
+  Target,
+} from 'lucide-react';
 import { isAiMentorEnabled } from '@/lib/features';
-import { CaseStudyCompetitionModal } from './CaseStudyCompetitionModal';
+import {
+  DailyChallenge,
+  ChallengeAttempt,
+  UserGamificationProfile,
+  StreakDayStatus,
+  PM_LEVELS,
+} from '@/types/gamification';
 
 interface HomeDashboardProps {
   setActiveTab: (tab: NavTabType) => void;
@@ -29,42 +52,54 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenChallenge,
   onOpenResumeAudit,
 }) => {
-  const { user, profile, openProfileModal } = useAuth();
+  const { user, profile, openProfileModal, openAuthModal } = useAuth();
   const mentorEnabled = isAiMentorEnabled();
   const [latestQuizResult, setLatestQuizResult] = useState<SavedQuizResult | null>(null);
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
   const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
-  const [isCompetitionModalOpen, setIsCompetitionModalOpen] = useState(false);
+  const [dailyChallenge, setDailyChallenge] = useState<DailyChallenge | null>(null);
+  const [dailyAttempt, setDailyAttempt] = useState<ChallengeAttempt | null>(null);
+  const [gamificationProfile, setGamificationProfile] = useState<UserGamificationProfile | null>(null);
+  const [streakCalendar, setStreakCalendar] = useState<StreakDayStatus[]>([]);
+  const [timeUntilReset, setTimeUntilReset] = useState<number>(0);
+  const [dailyLoading, setDailyLoading] = useState<boolean>(true);
 
   // Load real user test results, applications, community posts, and active weekly challenge
   useEffect(() => {
     let mounted = true;
 
     async function loadRealAnalytics() {
-      // 1. Real Quiz Diagnostic from DB or localStorage
-      const results = await getUserQuizResultsFromDb(user?.id);
-      if (mounted && results && results.length > 0) {
-        setLatestQuizResult(results[0]);
-      } else if (typeof window !== 'undefined') {
-        try {
-          const raw =
-            (user?.id && localStorage.getItem(`pmverse_diagnostic_${user.id}`)) ||
-            localStorage.getItem('pmverse_user_diagnosis') ||
-            localStorage.getItem('pmverse_latest_diagnostic');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (mounted) {
-              setLatestQuizResult(parsed);
+      // If user is NOT logged in, NEVER load or show previous user data
+      if (!user?.id) {
+        if (mounted) {
+          setLatestQuizResult(null);
+          setApplications([]);
+        }
+      } else {
+        // 1. Real Quiz Diagnostic from DB or user-specific localStorage ONLY
+        const results = await getUserQuizResultsFromDb(user.id);
+        if (mounted && results && results.length > 0) {
+          setLatestQuizResult(results[0]);
+        } else if (typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem(`pmverse_diagnostic_${user.id}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (mounted) {
+                setLatestQuizResult(parsed);
+              }
+            } else {
+              if (mounted) setLatestQuizResult(null);
             }
-          }
-        } catch {}
-      }
+          } catch {}
+        }
 
-      // 2. Real Job Applications
-      const apps = await getJobApplicationsFromDb(user?.id);
-      if (mounted) {
-        setApplications(apps);
+        // 2. Real Job Applications for this specific authenticated user only
+        const apps = await getJobApplicationsFromDb(user.id);
+        if (mounted) {
+          setApplications(apps);
+        }
       }
 
       // 3. Real Community Posts
@@ -80,14 +115,67 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       }
     }
 
+    async function loadGamification() {
+      try {
+        setDailyLoading(true);
+        if (!user?.id) {
+          const dailyRes = await fetch('/api/gamification/daily');
+          if (dailyRes.ok) {
+            const dData = await dailyRes.json();
+            if (mounted && dData.success) {
+              setDailyChallenge(dData.challenge);
+              setDailyAttempt(null);
+              setTimeUntilReset(dData.timeUntilResetSeconds || 0);
+            }
+          }
+          if (mounted) {
+            setGamificationProfile(null);
+            setStreakCalendar([]);
+          }
+          return;
+        }
+
+        const userIdParam = `?userId=${user.id}`;
+        const [dailyRes, statusRes] = await Promise.all([
+          fetch(`/api/gamification/daily${userIdParam}`),
+          fetch(`/api/gamification/user-status${userIdParam}`),
+        ]);
+        if (dailyRes && dailyRes.ok) {
+          const dData = await dailyRes.json();
+          if (mounted && dData.success) {
+            setDailyChallenge(dData.challenge);
+            setDailyAttempt(dData.attempt);
+            setTimeUntilReset(dData.timeUntilResetSeconds || 0);
+          }
+        }
+        if (statusRes && statusRes.ok) {
+          const sData = await statusRes.json();
+          if (mounted && sData.success) {
+            setGamificationProfile(sData.profile);
+            setStreakCalendar(sData.streakCalendar || []);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load gamification status:', err);
+      } finally {
+        if (mounted) setDailyLoading(false);
+      }
+    }
+
     loadRealAnalytics();
+    loadGamification();
 
     const handleQuizUpdated = () => {
       loadRealAnalytics();
     };
 
+    const handleDailyUpdated = () => {
+      loadGamification();
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('pmverse_quiz_completed', handleQuizUpdated);
+      window.addEventListener('pmverse_daily5_completed', handleDailyUpdated);
       window.addEventListener('storage', handleQuizUpdated);
     }
 
@@ -95,6 +183,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       mounted = false;
       if (typeof window !== 'undefined') {
         window.removeEventListener('pmverse_quiz_completed', handleQuizUpdated);
+        window.removeEventListener('pmverse_daily5_completed', handleDailyUpdated);
         window.removeEventListener('storage', handleQuizUpdated);
       }
     };
@@ -130,13 +219,15 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     : 'Product Leader';
   const targetRole = profile?.role || user?.user_metadata?.role || '';
 
-  // Real assessment analytics
-  const hasTakenTest = Boolean(profile?.pmFitScore || latestQuizResult);
-  const realScore = profile?.pmFitScore || latestQuizResult?.scorePercentage || 0;
-  const realArchetype = latestQuizResult?.archetype || 'Competency Benchmark';
+  // Real assessment analytics - strictly for logged in users
+  const hasTakenTest = Boolean(user && (profile?.pmFitScore || latestQuizResult));
+  const realScore = user ? (profile?.pmFitScore || latestQuizResult?.scorePercentage || 0) : 0;
+  const realArchetype = user && latestQuizResult?.archetype ? latestQuizResult.archetype : 'Competency Benchmark';
 
-  // Dimension scores computed accurately with 0-100 percentages
+  // Dimension scores computed accurately with 0-100 percentages - empty if not logged in
   const skillsList = useMemo(() => {
+    if (!user || !hasTakenTest) return [];
+
     // 1. If we have full category scores from quiz result
     if (latestQuizResult?.categoryScores && latestQuizResult.categoryScores.length > 0) {
       return latestQuizResult.categoryScores.map((cs: any) => {
@@ -185,12 +276,43 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     }
 
     return [];
-  }, [latestQuizResult, hasTakenTest, realScore]);
+  }, [latestQuizResult, hasTakenTest, realScore, user]);
 
   const appStages = ['Saved', 'Applied', 'Screening', 'Interview', 'Final Round', 'Offer'];
-  const stageCounts = appStages.map(
-    (stg) => applications.filter((a) => a.stage === stg).length
-  );
+  const stageCounts = useMemo(() => {
+    if (!user) return [0, 0, 0, 0, 0, 0];
+    return appStages.map(
+      (stg) => applications.filter((a) => a.stage === stg).length
+    );
+  }, [applications, user]);
+
+  const currentLevelObj = useMemo(() => {
+    const levelNum = gamificationProfile?.currentLevel || 1;
+    return PM_LEVELS.find((l) => l.level === levelNum) || PM_LEVELS[0];
+  }, [gamificationProfile?.currentLevel]);
+
+  const nextLevelObj = useMemo(() => {
+    const levelNum = (gamificationProfile?.currentLevel || 1) + 1;
+    return PM_LEVELS.find((l) => l.level === levelNum) || null;
+  }, [gamificationProfile?.currentLevel]);
+
+  const levelProgressPct = useMemo(() => {
+    const totalXp = gamificationProfile?.totalXp || 0;
+    const currentMin = currentLevelObj.minXp;
+    const currentMax = currentLevelObj.maxXp;
+    if (currentMax === Infinity) return 100;
+    const range = currentMax - currentMin;
+    if (range <= 0) return 100;
+    const progress = totalXp - currentMin;
+    return Math.min(100, Math.max(0, Math.round((progress / range) * 100)));
+  }, [gamificationProfile?.totalXp, currentLevelObj]);
+
+  const formattedResetCountdown = useMemo(() => {
+    if (!timeUntilReset || timeUntilReset <= 0) return 'Reset imminent';
+    const hours = Math.floor(timeUntilReset / 3600);
+    const minutes = Math.floor((timeUntilReset % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  }, [timeUntilReset]);
 
   return (
     <div className="space-y-6 text-left">
@@ -268,51 +390,249 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
       )}
 
-      {/* Live Case Study Competition Banner */}
-      <div className="bg-[#201e1d] text-[#f3f2f2] border-2 border-[#201e1d] p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-none bg-[#ec3013] text-[#f3f2f2] flex items-center justify-center shrink-0 font-black text-lg">
-            🏆
+      {/* PMVerse Daily 5 & Engagement Hero Card */}
+      <div className="bg-[#201e1d] text-[#f3f2f2] border-2 border-[#201e1d] p-5 sm:p-6 shadow-md transition-all">
+        {/* Top Header of the Hero Card */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/15">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🔥</span>
+            <span className="text-xs font-black uppercase tracking-wider text-white">
+              PMVerse Daily 5 & Consistency Arena
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-[#ec3013] text-white px-2 py-0.5">
+              Live Challenge
+            </span>
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black uppercase tracking-wider bg-[#ec3013] text-white px-2 py-0.5">
-                Case Study Competition This Week
+
+          <div className="flex items-center gap-3 text-xs">
+            {/* Streak Indicator */}
+            <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 font-bold text-amber-300 border border-white/10">
+              <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span>{gamificationProfile?.currentStreak || 0}-Day Streak</span>
+              <span className="text-white/40 text-[10px]">
+                (Best: {gamificationProfile?.longestStreak || 0}d)
               </span>
-              <span className="text-xs text-amber-300 font-bold">
-                Week {challenge?.weekIdentifier || '2026-W43'} · {challenge?.daysRemaining || 4} Days Left
-              </span>
-              {challenge?.domain && (
-                <span className="text-[10px] bg-white/10 text-slate-200 px-2 py-0.5 font-bold uppercase tracking-wider">
-                  {challenge.domain}
-                </span>
-              )}
             </div>
-            <h2 className="text-base sm:text-lg font-black text-white m-0 tracking-tight">
-              Competition Prompt: {challenge?.title || 'Accelerate "Aha Moment" in Generative AI Productivity Tool'}
-            </h2>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Show your interest in joining this week's live PM case study competition. The challenge prompt is the exact case study published on PMVerse this week. Fill out the interest form to join.
-            </p>
+
+            {/* Level & XP Indicator */}
+            <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 font-bold text-white border border-white/10">
+              <Zap className="w-3.5 h-3.5 text-[#ec3013] fill-[#ec3013]" />
+              <span>
+                Lvl {currentLevelObj.level}: {currentLevelObj.name}
+              </span>
+              <span className="text-white/60 font-semibold text-[11px]">
+                · {gamificationProfile?.totalXp || 0} XP
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => setIsCompetitionModalOpen(true)}
-            className="btn btn-secondary text-xs font-bold py-2 px-3.5 text-center flex-1 sm:flex-initial"
-          >
-            Details & Form
-          </button>
-          <a
-            href={CASE_STUDY_COMPETITION_FORM_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary text-xs font-bold py-2 px-4 text-center flex items-center justify-center gap-1.5 flex-1 sm:flex-initial whitespace-nowrap shadow"
-          >
-            <span>Show Interest (Google Form)</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+        {/* Card Body: 2 Columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5">
+          {/* Left Column: Today's Daily 5 Challenge Prompt (7 cols) */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#ec3013]">
+                  Today's PM Problem
+                </span>
+                <span className="text-white/40 text-xs">·</span>
+                <span className="text-xs text-white/70 flex items-center gap-1 font-semibold">
+                  <Clock className="w-3 h-3" />
+                  Resets in {formattedResetCountdown}
+                </span>
+              </div>
+
+              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight m-0 leading-snug">
+                {dailyChallenge?.title || 'Activation Friction in Self-Serve SaaS'}
+              </h2>
+
+              <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                {dailyChallenge?.description ||
+                  'Five realistic product management questions testing root-cause analysis, metrics, trade-offs, and experiment design.'}
+              </p>
+
+              {/* Challenge Metadata chips */}
+              <div className="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
+                <span className="px-2 py-0.5 bg-white/10 text-white font-semibold">
+                  {dailyChallenge?.difficulty
+                    ? dailyChallenge.difficulty.toUpperCase()
+                    : 'INTERMEDIATE'}
+                </span>
+                <span className="px-2 py-0.5 bg-white/10 text-white font-semibold">
+                  5 Scenarios · 3-5 Mins
+                </span>
+                <span className="px-2 py-0.5 bg-white/10 text-amber-300 font-bold">
+                  +70 Max XP
+                </span>
+              </div>
+            </div>
+
+            {/* Status & Action */}
+            <div className="pt-2">
+              {dailyAttempt?.status === 'completed' ? (
+                <div className="bg-white/10 border border-emerald-500/40 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-black text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Today's Daily 5 Completed!</span>
+                    </div>
+                    <div className="text-xs text-white/80 font-medium mt-0.5">
+                      Score: <strong className="text-white font-bold">{dailyAttempt.score}/100</strong>{' '}
+                      ({dailyAttempt.correctCount}/5 correct) · Earned {dailyAttempt.score >= 50 ? '+70' : '+40'} XP
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        openAuthModal?.('login');
+                        return;
+                      }
+                      setActiveTab('daily5');
+                    }}
+                    className="btn btn-secondary text-xs font-bold py-2 px-3.5 whitespace-nowrap"
+                  >
+                    Review Explanations →
+                  </button>
+                </div>
+              ) : dailyAttempt?.status === 'in_progress' ? (
+                <div className="bg-amber-500/10 border border-amber-500/40 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-black text-amber-400">
+                      <Target className="w-4 h-4" />
+                      <span>Challenge in Progress</span>
+                    </div>
+                    <div className="text-xs text-white/80 font-medium mt-0.5">
+                      {Object.keys(dailyAttempt.answers || {}).length}/5 answers saved. Continue where you left off.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        openAuthModal?.('login');
+                        return;
+                      }
+                      setActiveTab('daily5');
+                    }}
+                    className="btn btn-primary text-xs font-bold py-2 px-4 whitespace-nowrap shadow"
+                  >
+                    Resume Challenge →
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        openAuthModal?.('login');
+                        return;
+                      }
+                      setActiveTab('daily5');
+                    }}
+                    className="btn btn-primary text-xs sm:text-sm font-black py-2.5 px-6 flex items-center justify-center gap-2 shadow"
+                  >
+                    <span>{user ? "Solve Today's Daily 5 (3-5 min)" : "Sign In to Play Daily 5"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <span className="text-[11px] text-white/60">
+                    Earn up to 70 XP & keep your streak alive today.
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Consistency Calendar & Progression (5 cols) */}
+          <div className="lg:col-span-5 bg-black/30 border border-white/10 p-4 flex flex-col justify-between space-y-4">
+            {/* 7-Day Consistency Visual Calendar */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  7-Day Consistency Calendar
+                </span>
+                <span className="text-[10px] text-amber-300 font-bold">
+                  {gamificationProfile?.currentStreak || 0}d active
+                </span>
+              </div>
+
+              {/* Day Dots / Pills */}
+              <div className="grid grid-cols-7 gap-1.5 text-center">
+                {streakCalendar && streakCalendar.length === 7 ? (
+                  streakCalendar.map((day) => {
+                    const isDone = day.status === 'completed' || day.status === 'today_completed';
+                    const isTodayPending = day.status === 'today_pending';
+                    return (
+                      <div
+                        key={day.date}
+                        className={`p-1.5 border text-[11px] flex flex-col items-center justify-center ${
+                          isDone
+                            ? 'bg-[#ec3013] text-white border-[#ec3013]'
+                            : isTodayPending
+                            ? 'bg-white/10 text-amber-300 border-amber-300'
+                            : 'bg-white/5 text-white/40 border-white/10'
+                        }`}
+                      >
+                        <span className="text-[9px] uppercase font-bold">{day.dayLabel.slice(0, 1)}</span>
+                        <span className="text-xs font-black mt-0.5">
+                          {isDone ? '✓' : isTodayPending ? '•' : '–'}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((dayLetter, idx) => (
+                    <div
+                      key={idx}
+                      className="p-1.5 border border-white/10 bg-white/5 text-[11px] flex flex-col items-center justify-center text-white/40"
+                    >
+                      <span className="text-[9px] uppercase font-bold">{dayLetter}</span>
+                      <span className="text-xs font-black mt-0.5">–</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Level Progress */}
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-white/80 font-bold">
+                  Level {currentLevelObj.level}: {currentLevelObj.name}
+                </span>
+                <span className="text-white/60 font-medium text-[11px]">
+                  {gamificationProfile?.totalXp || 0}{' '}
+                  {nextLevelObj ? `/ ${nextLevelObj.minXp} XP` : 'XP (Max)'}
+                </span>
+              </div>
+              <div className="h-2 bg-white/15 w-full overflow-hidden">
+                <div
+                  className="h-full bg-[#ec3013] transition-all duration-500"
+                  style={{ width: `${levelProgressPct}%` }}
+                />
+              </div>
+              {nextLevelObj && (
+                <div className="text-[10px] text-white/60 mt-1">
+                  {nextLevelObj.minXp - (gamificationProfile?.totalXp || 0)} XP to unlock{' '}
+                  <strong className="text-white font-bold">{nextLevelObj.name}</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Arena & Quest Shortcut */}
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Arena Leaderboard & Quests</span>
+              </div>
+              <button
+                onClick={() => setActiveTab('daily5')}
+                className="text-xs text-[#ec3013] hover:text-white font-bold transition flex items-center gap-0.5"
+              >
+                <span>Open Arena</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -353,6 +673,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <button
             onClick={() => {
+              if (!user) {
+                if (openAuthModal) openAuthModal('signin');
+                return;
+              }
               if (typeof window !== 'undefined' && hasTakenTest) {
                 window.dispatchEvent(new CustomEvent('pmverse_navigate_diagnostic'));
               }
@@ -409,7 +733,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 Your performance across Product Sense, Analytics, Execution, and Strategy unlocks once you submit your first assessment.
               </p>
               <button
-                onClick={() => setActiveTab('assess')}
+                onClick={() => {
+                  if (!user) {
+                    if (openAuthModal) openAuthModal('signin');
+                    return;
+                  }
+                  setActiveTab('assess');
+                }}
                 className="btn btn-primary text-xs font-bold w-full mt-2"
               >
                 Unlock Skills Breakdown →
@@ -525,16 +855,22 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               Applications
             </div>
             <button
-              onClick={() => setActiveTab('tracker')}
+              onClick={() => {
+                if (!user) {
+                  if (openAuthModal) openAuthModal('signin');
+                  return;
+                }
+                setActiveTab('tracker');
+              }}
               className="btn btn-ghost text-xs font-bold"
             >
               Open tracker →
             </button>
           </div>
           <div className="text-5xl font-black tracking-tight mb-4 text-[#201e1d]">
-            {applications.length}
+            {user ? applications.length : 0}
           </div>
-          {applications.length > 0 ? (
+          {user && applications.length > 0 ? (
             <div className="divide-y divide-[rgba(32,30,29,0.15)] text-xs">
               {appStages.map((stg, i) => (
                 <div key={stg} className="flex justify-between py-1.5">
@@ -546,14 +882,27 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           ) : (
             <div className="py-2 space-y-2">
               <p className="text-xs text-[#605d5d]">
-                No applications tracked yet. Browse open PM roles or log your external job applications.
+                {user
+                  ? 'No applications tracked yet. Browse open PM roles or log your external job applications.'
+                  : 'Track your PM applications, interview stages, offers, and notes in one unified board.'}
               </p>
-              <button
-                onClick={() => setActiveTab('jobs')}
-                className="btn btn-secondary text-xs font-bold w-full"
-              >
-                Browse Roles →
-              </button>
+              {!user ? (
+                <button
+                  onClick={() => {
+                    if (openAuthModal) openAuthModal('signin');
+                  }}
+                  className="btn btn-secondary text-xs font-bold w-full"
+                >
+                  Sign in to track applications →
+                </button>
+              ) : (
+                <button
+                  onClick={() => setActiveTab('jobs')}
+                  className="btn btn-secondary text-xs font-bold w-full"
+                >
+                  Browse Roles →
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -637,7 +986,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
         </div>
 
-        {/* Cell 6: Weekly Challenge Box (Interactive Journey & Competition) */}
+        {/* Cell 6: Weekly Challenge Box (Interactive Journey) */}
         <div className="bg-[#ec3013] text-[#f3f2f2] p-6 flex flex-col justify-between gap-3 text-left">
           <div>
             <div className="flex items-center justify-between text-xs uppercase tracking-widest font-bold opacity-90 mb-1">
@@ -650,11 +999,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 </span>
               )}
             </div>
-            <div className="inline-block mt-1">
-              <span className="bg-[#201e1d] text-amber-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-none flex items-center gap-1 w-fit">
-                🏆 Live Case Study Competition
-              </span>
-            </div>
             <h3 className="text-xl sm:text-2xl font-black leading-tight tracking-tight mt-2 text-[#f3f2f2]">
               {challenge?.title || 'Accelerate "Aha Moment" in Generative AI Productivity Tool'}
             </h3>
@@ -663,38 +1007,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 'Submit your teardown and get evaluated by AI rubric scoring and community review.'}
             </p>
           </div>
-
-          <div className="space-y-2 mt-4">
-            <a
-              href={CASE_STUDY_COMPETITION_FORM_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn w-full justify-between bg-[#201e1d] text-white hover:bg-black text-xs font-bold py-2.5 px-4 flex items-center shadow"
-            >
-              <span>Join Competition (Interest Form)</span>
-              <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
-            </a>
-
-            <button
-              onClick={() => {
-                if (onOpenChallenge) onOpenChallenge();
-              }}
-              className="btn w-full justify-between bg-[#f3f2f2] text-[#201e1d] hover:bg-[#eae9e9] text-xs font-bold"
-            >
-              <span>Solve Challenge Brief</span>
-              <span>→</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              if (onOpenChallenge) onOpenChallenge();
+            }}
+            className="btn w-full justify-between mt-4 bg-[#f3f2f2] text-[#201e1d] hover:bg-[#eae9e9] text-xs font-bold"
+          >
+            <span>Start Challenge Journey</span>
+            <span>→</span>
+          </button>
         </div>
       </div>
-
-      {/* Case Study Competition Modal */}
-      <CaseStudyCompetitionModal
-        isOpen={isCompetitionModalOpen}
-        onClose={() => setIsCompetitionModalOpen(false)}
-        challenge={challenge}
-        onOpenChallengeBrief={onOpenChallenge}
-      />
     </div>
   );
 };

@@ -113,7 +113,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ activeTab, setActiveTa
 
             {/* Assessment Status / Badge */}
             <div
-              onClick={() => setActiveTab('assessment')}
+              onClick={() => {
+                if (!user) {
+                  if (openAuthModal) openAuthModal('signin');
+                  return;
+                }
+                setActiveTab('assessment');
+              }}
               className={`p-3 border-t text-left cursor-pointer transition ${
                 profile?.pmFitScore
                   ? 'bg-amber-50/70 border-amber-200/80 hover:bg-amber-100/70'

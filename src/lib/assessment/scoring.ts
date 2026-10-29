@@ -68,7 +68,7 @@ export async function gradeWrittenCaseWithAi(
     };
   }
 
-  // Attempt evaluation using Gemini AI
+  // Attempt evaluation using VerseAI
   try {
     const ai = getAiClient();
     const model = getAiModel('gemini-2.5-flash');

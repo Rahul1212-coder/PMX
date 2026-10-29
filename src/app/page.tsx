@@ -12,11 +12,14 @@ import { LearnHub } from '@/components/LearnHub';
 import { CirclesLanding } from '@/components/circles/CirclesLanding';
 import { ResumeIntelligence } from '@/components/resume/ResumeIntelligence';
 import { WeeklyChallengeModal } from '@/components/WeeklyChallengeModal';
+import { GamificationHub } from '@/components/gamification/GamificationHub';
 import { INITIAL_POSTS, INITIAL_JOBS } from '@/data/mockData';
-import { Home, Sparkles, Award, Briefcase, Users, FileText } from 'lucide-react';
+import { Home, Sparkles, Award, Briefcase, Users, FileText, Flame, Lock } from 'lucide-react';
 import { isAiMentorEnabled } from '@/lib/features';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Page() {
+  const { user, openAuthModal, loginAsDemo } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTabType>('home');
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [mentorStarterPrompt, setMentorStarterPrompt] = useState<string>('');
@@ -42,6 +45,10 @@ export default function Page() {
 
   const handleAskMentor = (prompt: string, mode: 'explain' | 'coach' | 'case' | 'prd' | 'interview' = 'explain') => {
     if (!mentorEnabled) return;
+    if (!user) {
+      openAuthModal?.('login');
+      return;
+    }
     setMentorStarterPrompt(prompt);
     setMentorStarterMode(mode);
     setActiveTab('mentor');
@@ -59,6 +66,10 @@ export default function Page() {
 
   const handleBottomAskSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!user) {
+      openAuthModal?.('login');
+      return;
+    }
     if (!bottomAskText.trim()) return;
     const q = bottomAskText.trim();
     setBottomAskText('');
@@ -85,6 +96,14 @@ export default function Page() {
           />
         )}
 
+        {/* TAB: PMVerse Daily 5, Arena & Gamification */}
+        {activeTab === 'daily5' && (
+          <GamificationHub
+            initialSubTab="daily"
+            onNavigateToAssess={() => setActiveTab('assess')}
+          />
+        )}
+
         {/* TAB: PMVerse Resume Intelligence */}
         {activeTab === 'resume' && (
           <ResumeIntelligence initialJobContext={resumeInitialJob} />
@@ -92,15 +111,89 @@ export default function Page() {
 
         {/* TAB 2: AI Mentor */}
         {mentorEnabled && activeTab === 'mentor' && (
-          <AiPmTutor
-            starterPrompt={mentorStarterPrompt}
-            starterMode={mentorStarterMode}
-          />
+          !user ? (
+            <div className="bg-white border-2 border-[#201e1d] p-6 sm:p-10 max-w-2xl mx-auto my-8 text-left space-y-6 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#201e1d] text-white text-[10px] font-black uppercase tracking-wider">
+                  <Lock className="w-3 h-3 text-[#ec3013]" />
+                  <span>Members Only · VerseAI PM Mentor</span>
+                </span>
+                <span className="text-xs font-bold text-slate-500">
+                  Authentication Required
+                </span>
+              </div>
+
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#201e1d] tracking-tight m-0">
+                  Sign in to access VerseAI Mentor
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed mt-2">
+                  Personalized 1-on-1 coaching, interactive case interview practice, root-cause problem diagnosis, and actionable product frameworks are exclusive to logged-in members.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="btn btn-primary w-full sm:w-auto text-xs font-black py-3 px-6 flex items-center justify-center gap-2 shadow"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Sign In / Register</span>
+                </button>
+
+                {loginAsDemo && (
+                  <button
+                    onClick={() => loginAsDemo()}
+                    className="btn btn-secondary w-full sm:w-auto text-xs font-bold py-3 px-5 flex items-center justify-center gap-1.5"
+                  >
+                    <span>Try Demo Account</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <AiPmTutor
+              starterPrompt={mentorStarterPrompt}
+              starterMode={mentorStarterMode}
+            />
+          )
         )}
 
         {/* TAB 3: PM Fit Competency Assessment */}
         {(activeTab === 'assess' || (activeTab as any) === 'assessment') && (
-          <AssessmentQuiz setActiveTab={setActiveTab} />
+          !user ? (
+            <div className="bg-white border-2 border-[#201e1d] p-8 text-center max-w-xl mx-auto my-12 shadow-sm">
+              <div className="w-14 h-14 bg-red-50 border-2 border-[#201e1d] flex items-center justify-center mx-auto mb-4 text-[#ec3013]">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-black text-[#201e1d] mb-2 uppercase tracking-wide">
+                PM Competency Assessment Locked
+              </h2>
+              <p className="text-sm text-[#605d5d] mb-6 leading-relaxed">
+                Sign in or register to take the official 3-tier PM competency assessment, earn your verified PM Fit certification, benchmark your product sense against top PMs, and unlock career analytics.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={() => openAuthModal('signin')}
+                  className="btn btn-primary w-full sm:w-auto text-xs font-bold py-3 px-6 flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Sign In / Register to Start</span>
+                </button>
+
+                {loginAsDemo && (
+                  <button
+                    onClick={() => loginAsDemo()}
+                    className="btn btn-secondary w-full sm:w-auto text-xs font-bold py-3 px-5 flex items-center justify-center gap-1.5"
+                  >
+                    <span>Try Demo Account</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <AssessmentQuiz setActiveTab={setActiveTab} />
+          )
         )}
 
         {/* TAB 4: Jobs Board & Tracker */}
@@ -169,7 +262,7 @@ export default function Page() {
       )}
 
       {/* 4. Mobile Bottom Tab Bar */}
-      <nav className="md:hidden sticky bottom-0 z-50 grid grid-cols-6 border-t-2 border-[#201e1d] bg-[#f3f2f2] text-[11px]">
+      <nav className="md:hidden sticky bottom-0 z-50 grid grid-cols-7 border-t-2 border-[#201e1d] bg-[#f3f2f2] text-[10px]">
         <button
           onClick={() => setActiveTab('home')}
           className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
@@ -178,6 +271,16 @@ export default function Page() {
         >
           <Home className="w-3.5 h-3.5" />
           <span>Home</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('daily5')}
+          className={`flex flex-col items-center justify-center gap-0.5 py-1.5 font-bold ${
+            activeTab === 'daily5' ? 'text-[#ae1800] border-t-2 border-[#ec3013] -mt-[2px]' : 'text-[#201e1d]'
+          }`}
+        >
+          <span className="text-xs leading-none">🔥</span>
+          <span>Daily 5</span>
         </button>
 
         {mentorEnabled ? (

@@ -12,6 +12,13 @@ export async function GET(request: Request) {
     const levelId = (searchParams.get('levelId') || 'beginner') as AssessmentLevelId;
     const userId = searchParams.get('userId') || undefined;
 
+    if (!userId || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required to access assessment questions' },
+        { status: 401 }
+      );
+    }
+
     if (!ASSESSMENT_LEVEL_CONFIGS[levelId]) {
       return NextResponse.json({ error: 'Invalid assessment level ID' }, { status: 400 });
     }

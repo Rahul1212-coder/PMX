@@ -15,7 +15,7 @@ import { AssessmentResultsView } from './assessment/AssessmentResultsView';
 import { AssessmentAdminView } from './assessment/AssessmentAdminView';
 import { useAuth } from '@/context/AuthContext';
 import { isAuthorizedAdmin } from '@/lib/admin';
-import { Award, Sparkles } from 'lucide-react';
+import { Award, Sparkles, Lock } from 'lucide-react';
 
 interface AssessmentQuizProps {
   setActiveTab?: (tab: any) => void;
@@ -24,7 +24,7 @@ interface AssessmentQuizProps {
 type AssessmentScreen = 'dashboard' | 'running' | 'results';
 
 export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) => {
-  const { user, profile, updateProfile, openAuthModal } = useAuth();
+  const { user, profile, updateProfile, openAuthModal, loginAsDemo } = useAuth();
 
   // State
   const [screen, setScreen] = useState<AssessmentScreen>('dashboard');
@@ -52,8 +52,12 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
 
   // Load Levels & Progress
   const loadLevelsAndProgress = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
     try {
-      const userIdParam = user?.id ? `?userId=${user.id}` : '';
+      const userIdParam = `?userId=${user.id}`;
       const [levelsRes, historyRes] = await Promise.all([
         fetch(`/api/assessment/levels${userIdParam}`),
         fetch(`/api/assessment/history${userIdParam}`),
@@ -82,12 +86,12 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
 
   // Handler: Start a level
   const handleStartLevel = async (levelId: AssessmentLevelId) => {
-    // If not authenticated, prompt sign-in
+    // If not authenticated, prompt sign-in and block
     if (!user) {
       if (openAuthModal) {
         openAuthModal('signin');
       }
-      // Allow preview / guest attempt
+      return;
     }
 
     try {
@@ -156,6 +160,40 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
     }
   };
 
+  if (!user) {
+    return (
+      <div className="bg-white border-2 border-[#201e1d] p-8 text-center max-w-xl mx-auto my-12 shadow-sm">
+        <div className="w-14 h-14 bg-red-50 border-2 border-[#201e1d] flex items-center justify-center mx-auto mb-4 text-[#ec3013]">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-black text-[#201e1d] mb-2 uppercase tracking-wide">
+          PM Competency Assessment Locked
+        </h2>
+        <p className="text-sm text-[#605d5d] mb-6 leading-relaxed">
+          Sign in or register to take the official 3-tier PM competency assessment, earn your verified PM Fit certification, benchmark your product sense against top PMs, and unlock career analytics.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            onClick={() => openAuthModal('signin')}
+            className="btn btn-primary w-full sm:w-auto text-xs font-bold py-3 px-6 flex items-center justify-center gap-2"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>Sign In / Register to Start</span>
+          </button>
+
+          {loginAsDemo && (
+            <button
+              onClick={() => loginAsDemo()}
+              className="btn btn-secondary w-full sm:w-auto text-xs font-bold py-3 px-5 flex items-center justify-center gap-1.5"
+            >
+              <span>Try Demo Account</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const activeLevelConfig =
     levels.find((l) => l.id === activeLevelId) || ASSESSMENT_LEVEL_CONFIGS[activeLevelId];
 
@@ -179,7 +217,7 @@ export const AssessmentQuiz: React.FC<AssessmentQuizProps> = ({ setActiveTab }) 
         <AssessmentRunner
           levelConfig={activeLevelConfig}
           questions={activeQuestions}
-          userId={user?.id || 'guest'}
+          userId={user.id}
           onExit={() => {
             setScreen('dashboard');
             loadLevelsAndProgress();

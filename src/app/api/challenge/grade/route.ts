@@ -102,6 +102,14 @@ export async function POST(request: Request) {
       keyMetrics = '',
       userRole = 'Product Manager',
     } = body;
+    const userId = (body as any).userId;
+
+    if (!userId || userId === 'guest' || typeof userId !== 'string') {
+      return NextResponse.json(
+        { error: 'Authentication required. Only logged in users can submit challenges for AI evaluation.' },
+        { status: 401 }
+      );
+    }
 
     const rawProblem = (problemStatement || '').trim();
     const rawSolution = (solutionProposal || '').trim();
@@ -308,7 +316,7 @@ OUTPUT JSON FORMAT (Return strictly valid JSON only):
         strengths: wordCount < 30 ? [] : strengths,
         improvements: improvements.length > 0 ? improvements : ['Consider establishing explicit counter-metrics to protect retention.'],
         principalAdvice: parsed.principalAdvice || 'Always validate your assumptions with progressive cohort rollouts.',
-        evaluatorModel: isGeminiActive() ? 'Google Gemini 3.5 Flash' : 'OpenAI GPT-4o-mini',
+        evaluatorModel: 'VerseAI Pro',
       };
 
       return NextResponse.json({

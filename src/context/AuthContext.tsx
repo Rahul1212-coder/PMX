@@ -15,7 +15,7 @@ interface AuthContextType {
   isAuthModalOpen: boolean;
   authModalTab: 'signin' | 'signup' | 'forgot' | 'update-password';
   isProfileModalOpen: boolean;
-  openAuthModal: (tab?: 'signin' | 'signup' | 'forgot' | 'update-password') => void;
+  openAuthModal: (tab?: 'signin' | 'signup' | 'forgot' | 'update-password' | 'login') => void;
   closeAuthModal: () => void;
   openProfileModal: () => void;
   closeProfileModal: () => void;
@@ -319,8 +319,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [configured]);
 
-  const openAuthModal = (tab: 'signin' | 'signup' | 'forgot' | 'update-password' = 'signin') => {
-    setAuthModalTab(tab);
+  const openAuthModal = (tab: 'signin' | 'signup' | 'forgot' | 'update-password' | 'login' = 'signin') => {
+    const effectiveTab = tab === 'login' ? 'signin' : tab;
+    setAuthModalTab(effectiveTab);
     setIsAuthModalOpen(true);
   };
 
@@ -703,6 +704,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.removeItem('pmverse_user');
       localStorage.removeItem('prodcraft_demo_user');
+      localStorage.removeItem('pmverse_user_diagnosis');
+      localStorage.removeItem('pmverse_latest_diagnostic');
+      localStorage.removeItem('pmverse_user_applications');
+      localStorage.removeItem('pmverse_guest_id');
+      try {
+        Object.keys(localStorage).forEach((key) => {
+          if (
+            key.startsWith('pmverse_diagnostic_') ||
+            key.startsWith('pmverse_attempt_') ||
+            key.startsWith('pmverse_saved_jobs')
+          ) {
+            localStorage.removeItem(key);
+          }
+        });
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('pmverse_quiz_completed'));
+        window.dispatchEvent(new CustomEvent('pmverse_daily5_completed'));
+      } catch {}
     }
 
     if (configured) {

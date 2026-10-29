@@ -56,5 +56,34 @@
     "daysRemaining": 4,
     "isActive": true,
     "createdAt": "2026-10-19T15:10:17.598102+00:00"
+  },
+  "2026-W44": {
+    "id": "challenge-2026-w44",
+    "challengeNumber": 25,
+    "title": "Improve onboarding for a music streaming app.",
+    "scenario": "A freemium music streaming app with 2M monthly downloads observes that 30% of new signups drop off before listening to a single track. Analytics indicate users get fatigued during mandatory onboarding genre/artist pickers and permission dialogs.",
+    "targetObjectives": [
+      "Increase Day-1 first song completion rate from 70% to 85%.",
+      "Reduce time-to-first-song from 3.2 minutes to under 45 seconds.",
+      "Maintain Day-7 active listening retention above 42%."
+    ],
+    "constraints": [
+      "Cannot require credit card or upfront payment.",
+      "3-sprint engineering budget across iOS and Android.",
+      "Must preserve user privacy and notification consent rates."
+    ],
+    "rubricWeights": {
+      "metrics": 25,
+      "userValue": 20,
+      "feasibility": 25,
+      "productSense": 30
+    },
+    "domain": "Streaming & Consumer Media",
+    "weekIdentifier": "2026-W44",
+    "startsAt": "2026-10-26T00:00:00+00:00",
+    "endsAt": "2026-11-01T23:59:59.999+00:00",
+    "daysRemaining": 4,
+    "isActive": true,
+    "createdAt": "2026-10-26T06:35:50.862215+00:00"
   }
 }

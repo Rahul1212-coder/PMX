@@ -66,6 +66,24 @@ export const Providers: React.FC<{ children: React.ReactNode }> = ({ children })
 
         localStorage.removeItem('prodcraft_demo_user');
         localStorage.removeItem('prodin_saved_jobs');
+
+        // Purge residual unkeyed caches if no authenticated session exists
+        const hasSession =
+          localStorage.getItem('pmverse_user') ||
+          Object.keys(localStorage).some(
+            (k) => k.startsWith('sb-') && k.endsWith('-auth-token')
+          );
+        if (!hasSession) {
+          localStorage.removeItem('pmverse_user_diagnosis');
+          localStorage.removeItem('pmverse_latest_diagnostic');
+          localStorage.removeItem('pmverse_user_applications');
+          localStorage.removeItem('pmverse_guest_id');
+          Object.keys(localStorage).forEach((k) => {
+            if (k.startsWith('pmverse_diagnostic_guest') || k.startsWith('pmverse_attempt_')) {
+              localStorage.removeItem(k);
+            }
+          });
+        }
       } catch {
         // ignore
       }

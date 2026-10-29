@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { ChallengeSubmission, WeeklyChallenge, CASE_STUDY_COMPETITION_FORM_URL } from '@/types';
+import { ChallengeSubmission, WeeklyChallenge } from '@/types';
 import {
   getCurrentWeeklyChallenge,
   getChallengeSubmissionsFromDb,
@@ -29,8 +29,6 @@ import {
   Clock,
   Wand2,
   Trash2,
-  Trophy,
-  ExternalLink,
 } from 'lucide-react';
 import { UserAvatar } from './UserAvatar';
 
@@ -178,6 +176,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
           solutionProposal: solutionProposal.trim(),
           keyMetrics: keyMetrics.trim(),
           userRole: profile?.role || 'Associate PM',
+          userId: user.id,
         }),
       });
 
@@ -333,38 +332,6 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
           {/* TAB 1: BRIEF */}
           {activeTab === 'brief' && (
             <div className="space-y-5 text-sm">
-              {/* Live Case Study Competition Banner */}
-              <div className="bg-[#201e1d] text-white p-4 sm:p-5 border-2 border-[#ec3013] relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-[#ec3013] text-white text-[10px] font-black uppercase px-2 py-0.5 tracking-wider flex items-center gap-1">
-                        <Trophy className="w-3 h-3 text-amber-300" />
-                        Live Competition
-                      </span>
-                      <span className="text-[11px] text-amber-300 font-bold uppercase tracking-wider">
-                        Case Study Cohort Active This Week
-                      </span>
-                    </div>
-                    <h3 className="text-sm sm:text-base font-black text-[#f3f2f2] leading-tight">
-                      Compete on this exact case study with PMVerse members
-                    </h3>
-                    <p className="text-xs text-[#dcdada] leading-relaxed max-w-xl">
-                      This week&apos;s competition is based on this published challenge brief. Show your interest to join the competition cohort, participate in peer teardowns, and get principal PM feedback.
-                    </p>
-                  </div>
-                  <a
-                    href={CASE_STUDY_COMPETITION_FORM_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn bg-[#ec3013] hover:bg-[#d0280e] text-white border-none text-xs font-bold px-4 py-2.5 shrink-0 flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <span>Show Interest (Form)</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-
               <div className="bg-[#eae9e9] p-4 border border-[rgba(32,30,29,0.15)] space-y-2">
                 <div className="text-xs uppercase tracking-wider font-extrabold text-[#ae1800] flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
@@ -466,26 +433,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
 
           {/* TAB 2: SUBMIT / SCORECARD */}
           {activeTab === 'submit' && (
-            <div className="space-y-4">
-              {/* Competition Notice */}
-              <div className="bg-[#eae9e9] border border-[rgba(32,30,29,0.2)] p-3 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-[#ec3013] shrink-0" />
-                  <span className="text-[#201e1d]">
-                    Taking part in this week&apos;s <strong>Live Case Study Competition</strong>? Remember to register your interest via the official form.
-                  </span>
-                </div>
-                <a
-                  href={CASE_STUDY_COMPETITION_FORM_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#ae1800] hover:text-[#ec3013] font-bold inline-flex items-center gap-1 shrink-0 underline"
-                >
-                  <span>Open Interest Form</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
+            <div>
               {userSubmission && !isEditing ? (
                 /* Detailed Evaluation Scorecard */
                 <div className="space-y-5">
@@ -501,7 +449,7 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
                             {userSubmission.aiFeedback?.verdictLabel || 'Evaluated Solution'}
                           </span>
                           <span className="text-[10px] text-[#605d5d] font-bold">
-                            {userSubmission.aiFeedback?.evaluatorModel || 'Live Google Gemini AI'}
+                            {userSubmission.aiFeedback?.evaluatorModel || 'VerseAI Evaluator'}
                           </span>
                         </div>
                       </div>

@@ -6,6 +6,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || undefined;
 
+    if (!userId || userId === 'guest') {
+      return NextResponse.json(
+        { error: 'Authentication required to access assessment levels' },
+        { status: 401 }
+      );
+    }
+
     const data = await getLevelsWithUserProgress(userId);
     return NextResponse.json({ success: true, ...data });
   } catch (error: any) {
