@@ -7,12 +7,14 @@ import {
   PublicAssessmentQuestion,
   UserLevelProgress,
   AssessmentAttempt,
+  CompetencyCategory,
+  CompetencyScoreBreakdown,
 } from '@/types/assessment';
 import {
   ASSESSMENT_LEVEL_CONFIGS,
   INITIAL_ASSESSMENT_QUESTIONS,
 } from '@/data/threeLevelQuestions';
-import { scoreAssessmentSubmission } from './scoring';
+import { scoreAssessmentSubmission, getStatusLabel } from './scoring';
 import { getSupabaseAdminClient } from '@/lib/supabase/client';
 
 // Local disk persistence for resilience and immediate zero-latency local operation
@@ -287,6 +289,143 @@ export async function getLevelsWithUserProgress(userId?: string): Promise<{
 // ATTEMPTS & PERSISTENCE
 // ---------------------------------------------------------------------------
 
+function mapDbAttemptToAssessmentAttempt(row: any): AssessmentAttempt {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    levelId: row.level_id as AssessmentLevelId,
+    status: row.status,
+    scorePercentage: Number(row.score_percentage) || 0,
+    isPassed: row.is_passed,
+    totalCorrect: row.total_correct,
+    totalQuestions: row.total_questions,
+    answers: row.answers || {},
+    markedForReview: row.marked_for_review || [],
+    competencyScores: row.competency_scores || {},
+    caseEvaluations: row.case_evaluations || {},
+    questionReviews: row.question_reviews || [],
+    strengths: row.strengths || [],
+    growthAreas: row.growth_areas || [],
+    recommendations: row.recommendations || [],
+    timeSpentSeconds: row.time_spent_seconds || 0,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  };
+}
+
+export function mapQuizResultToAttempt(row: any): AssessmentAttempt {
+  const firstDim = Array.isArray(row.dimension_scores) && row.dimension_scores[0];
+  const meta = firstDim?._meta;
+
+  const archetype = row.archetype || '';
+  const lowerArchetype = archetype.toLowerCase();
+
+  let levelId: AssessmentLevelId = 'beginner';
+  if (meta?.levelId) {
+    levelId = meta.levelId;
+  } else if (lowerArchetype.includes('advanced')) {
+    levelId = 'advanced';
+  } else if (lowerArchetype.includes('intermediate')) {
+    levelId = 'intermediate';
+  } else {
+    levelId = 'beginner';
+  }
+
+  const scorePercentage =
+    typeof meta?.scorePercentage === 'number'
+      ? meta.scorePercentage
+      : typeof row.score_percentage === 'number'
+      ? row.score_percentage
+      : Number(row.score_percentage) || 0;
+
+  const isPassed = typeof meta?.isPassed === 'boolean' ? meta.isPassed : scorePercentage >= 70;
+
+  const levelConfig = ASSESSMENT_LEVEL_CONFIGS[levelId] || ASSESSMENT_LEVEL_CONFIGS.beginner;
+  let competencyScores: Record<CompetencyCategory, CompetencyScoreBreakdown> =
+    meta?.competencyScores || {};
+
+  if (Object.keys(competencyScores).length === 0 && Array.isArray(row.dimension_scores)) {
+    competencyScores = {} as Record<CompetencyCategory, CompetencyScoreBreakdown>;
+    for (const d of row.dimension_scores) {
+      if (!d || !d.dimension) continue;
+      const cat = d.dimension as CompetencyCategory;
+      const catScore = typeof d.score === 'number' ? d.score : (d.percentage || 0);
+      const weight = levelConfig.competencyWeights?.[cat] || 0.2;
+      competencyScores[cat] = {
+        category: cat,
+        weight,
+        scorePercentage: catScore,
+        pointsEarned: d.rawCorrect ?? Math.round((catScore / 100) * (d.total || 400)),
+        totalPoints: d.total || 400,
+        status: getStatusLabel(catScore),
+        recommendations: [
+          `Focus on practical ${cat} scenarios and execution to improve proficiency.`
+        ],
+      };
+    }
+  }
+
+  const totalQuestions = meta?.totalQuestions ?? levelConfig.questionCount;
+  const totalCorrect = meta?.totalCorrect ?? Math.round((scorePercentage / 100) * totalQuestions);
+
+  let questionReviews = meta?.questionReviews || [];
+  if (questionReviews.length === 0) {
+    const canonical = INITIAL_ASSESSMENT_QUESTIONS.filter(
+      (q) => q.levelId === levelId && q.isActive
+    );
+    questionReviews = canonical.map((q) => ({
+      questionId: q.id,
+      title: q.title,
+      scenario: q.scenario,
+      questionText: q.questionText,
+      competency: q.competency,
+      format: q.format,
+      userAnswer: meta?.answers?.[q.id] || undefined,
+      correctAnswer: q.correctOption,
+      isCorrect: meta?.answers ? meta.answers[q.id] === q.correctOption : undefined,
+      scoreEarned: meta?.answers?.[q.id] === q.correctOption ? q.scoringWeight * 100 : 0,
+      maxScore: q.scoringWeight * 100,
+      explanation: q.explanation,
+      optionExplanations: q.optionExplanations,
+      options: q.options,
+    }));
+  }
+
+  let recommendations = meta?.recommendations || [];
+  if (!recommendations || recommendations.length === 0) {
+    const growth = row.growth_areas || [];
+    recommendations = growth.map((ga: string, idx: number) => ({
+      topic: ga.split(':')[0] || 'Product Competency',
+      category: 'Product Sense & User Empathy',
+      reason: ga,
+      suggestedAction: 'Review core frameworks, trade-off evaluations, and metrics.',
+      priority: idx === 0 ? 'high' : 'medium',
+    }));
+  }
+
+  return {
+    id: meta?.attemptId || row.id,
+    userId: row.user_id,
+    levelId,
+    status: meta?.status || 'completed',
+    scorePercentage,
+    isPassed,
+    totalCorrect,
+    totalQuestions,
+    answers: meta?.answers || {},
+    markedForReview: meta?.markedForReview || [],
+    competencyScores,
+    caseEvaluations: meta?.caseEvaluations || {},
+    questionReviews,
+    strengths: row.strengths || meta?.strengths || [],
+    growthAreas: row.growth_areas || meta?.growthAreas || [],
+    recommendations,
+    timeSpentSeconds: meta?.timeSpentSeconds || 600,
+    startedAt: meta?.startedAt || row.created_at || new Date().toISOString(),
+    completedAt: meta?.completedAt || row.created_at || new Date().toISOString(),
+  };
+}
+
 export async function getUserAttempts(userId?: string): Promise<AssessmentAttempt[]> {
   const cached = loadCachedAttempts();
   const allAttempts = Object.values(cached);
@@ -298,6 +437,7 @@ export async function getUserAttempts(userId?: string): Promise<AssessmentAttemp
   // Also query Supabase if configured
   const admin = getSupabaseAdminClient();
   if (admin && userId && userId !== 'guest') {
+    // 1. Check assessment_attempts table if it exists
     try {
       const { data, error } = await admin
         .from('assessment_attempts')
@@ -306,38 +446,53 @@ export async function getUserAttempts(userId?: string): Promise<AssessmentAttemp
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const dbAttempts: AssessmentAttempt[] = data.map((row: any) => ({
-          id: row.id,
-          userId: row.user_id,
-          levelId: row.level_id as AssessmentLevelId,
-          status: row.status,
-          scorePercentage: Number(row.score_percentage) || 0,
-          isPassed: row.is_passed,
-          totalCorrect: row.total_correct,
-          totalQuestions: row.total_questions,
-          answers: row.answers || {},
-          markedForReview: row.marked_for_review || [],
-          competencyScores: row.competency_scores || {},
-          caseEvaluations: row.case_evaluations || {},
-          questionReviews: row.question_reviews || [],
-          strengths: row.strengths || [],
-          growthAreas: row.growth_areas || [],
-          recommendations: row.recommendations || [],
-          timeSpentSeconds: row.time_spent_seconds || 0,
-          startedAt: row.started_at,
-          completedAt: row.completed_at,
-        }));
-
-        // Merge with cached, preferring DB
+        const dbAttempts: AssessmentAttempt[] = data.map(mapDbAttemptToAssessmentAttempt);
         const ids = new Set(dbAttempts.map((a) => a.id));
         const filteredCached = userAttempts.filter((a) => !ids.has(a.id));
         userAttempts = [...dbAttempts, ...filteredCached];
       }
     } catch {}
+
+    // 2. Query quiz_results table from Supabase (authoritative source in production)
+    try {
+      const { data: quizData, error: quizError } = await admin
+        .from('quiz_results')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (!quizError && quizData && quizData.length > 0) {
+        const existingIds = new Set(userAttempts.map((a) => a.id));
+        for (const row of quizData) {
+          const lowerArchetype = (row.archetype || '').toLowerCase();
+          const firstDim = Array.isArray(row.dimension_scores) && row.dimension_scores[0];
+          const isTierAssessment =
+            Boolean(firstDim?._meta?.levelId) ||
+            lowerArchetype.includes('beginner') ||
+            lowerArchetype.includes('intermediate') ||
+            lowerArchetype.includes('advanced') ||
+            (row.summary || '').toLowerCase().includes('official');
+
+          if (isTierAssessment) {
+            const mapped = mapQuizResultToAttempt(row);
+            // Deduplicate by mapped attempt ID or raw row UUID
+            if (!existingIds.has(mapped.id) && !existingIds.has(row.id)) {
+              userAttempts.push(mapped);
+              existingIds.add(mapped.id);
+              existingIds.add(row.id);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase quiz_results query notice:', err);
+    }
   }
 
   return userAttempts.sort(
-    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+    (a, b) =>
+      new Date(b.completedAt || b.startedAt).getTime() -
+      new Date(a.completedAt || a.startedAt).getTime()
   );
 }
 
@@ -467,18 +622,44 @@ export async function submitAssessmentAttempt(params: {
         .update({ pm_fit_score: scored.scorePercentage })
         .eq('id', userId);
 
+      const dimScoresWithMeta = Object.values(scored.competencyScores).map((cs, idx) => ({
+        dimension: cs.category,
+        score: cs.scorePercentage,
+        percentage: cs.scorePercentage,
+        rawCorrect: cs.pointsEarned,
+        total: cs.totalPoints,
+        ...(idx === 0
+          ? {
+              _meta: {
+                attemptId,
+                levelId,
+                status: 'completed',
+                scorePercentage: scored.scorePercentage,
+                isPassed: scored.isPassed,
+                totalCorrect: scored.totalCorrect,
+                totalQuestions: scored.totalQuestions,
+                answers,
+                markedForReview: [],
+                competencyScores: scored.competencyScores,
+                caseEvaluations: scored.caseEvaluations,
+                questionReviews: scored.questionReviews,
+                strengths: scored.strengths,
+                growthAreas: scored.growthAreas,
+                recommendations: scored.recommendations,
+                timeSpentSeconds,
+                startedAt: completedAttempt.startedAt,
+                completedAt,
+              },
+            }
+          : {}),
+      }));
+
       await admin.from('quiz_results').insert({
         user_id: userId,
         score_percentage: scored.scorePercentage,
         archetype: `${levelConfig.title} (${scored.statusLabel})`,
         summary: `Completed official ${levelConfig.title} with a verified score of ${scored.scorePercentage}%.`,
-        dimension_scores: Object.values(scored.competencyScores).map((cs) => ({
-          dimension: cs.category,
-          score: cs.scorePercentage,
-          percentage: cs.scorePercentage,
-          rawCorrect: cs.pointsEarned,
-          total: cs.totalPoints,
-        })),
+        dimension_scores: dimScoresWithMeta,
         strengths: scored.strengths,
         growth_areas: scored.growthAreas,
         recommended_role:
@@ -507,6 +688,7 @@ export async function getAttemptById(
 
   const admin = getSupabaseAdminClient();
   if (admin) {
+    // 1. Try assessment_attempts table if available
     try {
       const { data, error } = await admin
         .from('assessment_attempts')
@@ -515,29 +697,48 @@ export async function getAttemptById(
         .single();
 
       if (!error && data) {
-        return {
-          id: data.id,
-          userId: data.user_id,
-          levelId: data.level_id as AssessmentLevelId,
-          status: data.status,
-          scorePercentage: Number(data.score_percentage) || 0,
-          isPassed: data.is_passed,
-          totalCorrect: data.total_correct,
-          totalQuestions: data.total_questions,
-          answers: data.answers || {},
-          markedForReview: data.marked_for_review || [],
-          competencyScores: data.competency_scores || {},
-          caseEvaluations: data.case_evaluations || {},
-          questionReviews: data.question_reviews || [],
-          strengths: data.strengths || [],
-          growthAreas: data.growth_areas || [],
-          recommendations: data.recommendations || [],
-          timeSpentSeconds: data.time_spent_seconds || 0,
-          startedAt: data.started_at,
-          completedAt: data.completed_at,
-        };
+        return mapDbAttemptToAssessmentAttempt(data);
       }
     } catch {}
+
+    // 2. Try quiz_results table from Supabase
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        attemptId
+      );
+      if (isUuid) {
+        const { data: quizRow, error: quizError } = await admin
+          .from('quiz_results')
+          .select('*')
+          .eq('id', attemptId)
+          .maybeSingle();
+
+        if (!quizError && quizRow) {
+          return mapQuizResultToAttempt(quizRow);
+        }
+      }
+
+      // If attemptId is a custom string or UUID was not the row id, query user's quiz_results
+      let query = admin.from('quiz_results').select('*');
+      if (userId && userId !== 'guest') {
+        query = query.eq('user_id', userId);
+      }
+      const { data: listData } = await query
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (listData && listData.length > 0) {
+        const matched = listData.find((row: any) => {
+          if (row.id === attemptId) return true;
+          const firstDim = Array.isArray(row.dimension_scores) && row.dimension_scores[0];
+          return firstDim?._meta?.attemptId === attemptId;
+        });
+        if (matched) {
+          return mapQuizResultToAttempt(matched);
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase getAttemptById from quiz_results notice:', err);
+    }
   }
 
   return null;
