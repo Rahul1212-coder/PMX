@@ -14,35 +14,23 @@ export function getGeminiApiKey(): string {
 }
 
 export function isGeminiActive(): boolean {
-  if (process.env.USE_OPENAI === 'true') return false;
   return Boolean(getGeminiApiKey());
 }
 
 export function getAiApiKey(): string {
-  if (isGeminiActive()) {
-    return getGeminiApiKey();
-  }
-  return (process.env.OPENAI_API_KEY || '').trim();
+  return getGeminiApiKey();
 }
 
 export function getAiModel(defaultFallback?: string): string {
-  if (isGeminiActive()) {
-    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  }
-  return process.env.OPENAI_RESUME_MODEL || defaultFallback || 'gpt-4o-mini';
+  return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL || defaultFallback || 'gemini-3.5-flash';
 }
 
 export function getAiClient(): OpenAI {
-  if (isGeminiActive()) {
-    const apiKey = getGeminiApiKey();
-    return new OpenAI({
-      apiKey,
-      baseURL: GEMINI_BASE_URL,
-    });
-  }
-
-  const apiKey = getAiApiKey();
-  return new OpenAI({ apiKey });
+  const apiKey = getGeminiApiKey();
+  return new OpenAI({
+    apiKey,
+    baseURL: GEMINI_BASE_URL,
+  });
 }
 
 // Backward-compatible exports for existing codebase callers

@@ -40,10 +40,10 @@ cursor /Users/rj/.gemini/antigravity/scratch/pm-platform
    npm install
    ```
 
-3. (Optional) Set up your OpenAI API key for live GPT-4o-mini generation:
+3. Set up your Gemini API key:
    ```bash
    cp .env.example .env.local
-   # Add your key: OPENAI_API_KEY=sk-...
+   # Add your key: GEMINI_API_KEY=your_key_here
    ```
    *(Note: The platform includes an intelligent offline PM knowledge fallback if no key is provided, so you can test immediately without any API key.)*
 
