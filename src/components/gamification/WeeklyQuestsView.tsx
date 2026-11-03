@@ -33,6 +33,19 @@ export const WeeklyQuestsView: React.FC<WeeklyQuestsViewProps> = ({
 
   useEffect(() => {
     fetchQuests();
+
+    const handleChallengeDone = () => {
+      fetchQuests();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pmverse_daily5_completed', handleChallengeDone);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pmverse_daily5_completed', handleChallengeDone);
+      }
+    };
   }, [userId]);
 
   const handleClaimReward = async (questId: string) => {

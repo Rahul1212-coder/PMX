@@ -63,7 +63,42 @@ export const GamificationHub: React.FC<GamificationHubProps> = ({
 
       if (challengeData.success && challengeData.challenge) {
         setChallenge(challengeData.challenge);
-        setUserAttempt(challengeData.userAttempt || null);
+        const resolvedAttempt = challengeData.userAttempt || null;
+        setUserAttempt(resolvedAttempt);
+
+        // Self-healing: If server returned no completed attempt but localStorage has it, reconcile with server
+        if (!resolvedAttempt && userId && typeof window !== 'undefined') {
+          try {
+            const todayStr = challengeData.challenge.challengeDate || new Date().toISOString().split('T')[0];
+            const raw = localStorage.getItem(`pmverse_daily_completed_${userId}_${todayStr}`);
+            if (raw) {
+              const localAtt = JSON.parse(raw);
+              if (localAtt && localAtt.status === 'completed' && localAtt.answers) {
+                setUserAttempt(localAtt);
+                fetch('/api/gamification/daily/submit', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId,
+                    challengeDate: todayStr,
+                    answers: localAtt.answers,
+                    timeTakenSeconds: localAtt.timeTakenSeconds || 120,
+                  }),
+                }).then(async (r) => {
+                  const submitData = await r.json();
+                  if (submitData && submitData.success) {
+                    if (submitData.attempt) setUserAttempt(submitData.attempt);
+                    if (submitData.userProfile) setGamProfile(submitData.userProfile);
+                    if (submitData.newlyUnlockedAchievements?.length) {
+                      setAchievements(submitData.newlyUnlockedAchievements);
+                    }
+                    window.dispatchEvent(new CustomEvent('pmverse_daily5_completed', { detail: submitData }));
+                  }
+                }).catch(() => {});
+              }
+            }
+          } catch {}
+        }
       }
 
       if (statusData.success) {

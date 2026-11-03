@@ -28,8 +28,11 @@ import {
 } from './scoring';
 import { getSupabaseAdminClient } from '@/lib/supabase/client';
 
-// Local storage fallback directory
-const CACHE_DIR = path.join(process.cwd(), 'src', 'data', '.gamification_cache');
+// Local storage fallback directory (/tmp on Vercel to avoid EROFS)
+const CACHE_DIR = process.env.VERCEL
+  ? path.join('/tmp', '.gamification_cache')
+  : path.join(process.cwd(), 'src', 'data', '.gamification_cache');
+
 const PROFILES_FILE = path.join(CACHE_DIR, 'profiles.json');
 const ATTEMPTS_FILE = path.join(CACHE_DIR, 'attempts.json');
 const TRANSACTIONS_FILE = path.join(CACHE_DIR, 'transactions.json');
@@ -37,17 +40,17 @@ const ACHIEVEMENTS_FILE = path.join(CACHE_DIR, 'achievements.json');
 const QUESTS_FILE = path.join(CACHE_DIR, 'quests.json');
 
 function ensureCacheDir() {
-  if (!fs.existsSync(CACHE_DIR)) {
-    try {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
       fs.mkdirSync(CACHE_DIR, { recursive: true });
-    } catch {}
-  }
+    }
+  } catch {}
 }
 
 function readJsonFile<T>(filePath: string, fallback: T): T {
   ensureCacheDir();
-  if (!fs.existsSync(filePath)) return fallback;
   try {
+    if (!fs.existsSync(filePath)) return fallback;
     const raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw);
   } catch {
@@ -60,7 +63,7 @@ function writeJsonFile<T>(filePath: string, data: T) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
-    console.warn(`Failed to write cache file ${filePath}:`, err);
+    // Non-fatal warning
   }
 }
 
@@ -82,6 +85,100 @@ export function getSecondsUntilMidnightUtc(): number {
   return Math.max(0, Math.floor((tomorrow.getTime() - now.getTime()) / 1000));
 }
 
+export interface UserGamificationMetadata {
+  totalXp: number;
+  currentLevel: number;
+  currentLevelName: string;
+  currentStreak: number;
+  longestStreak: number;
+  lastQualifyingDate: string | null;
+  streakFreezesAvailable: number;
+  weeklyArenaScore: number;
+  allTimeArenaScore: number;
+  attempts: ChallengeAttempt[];
+  achievements: { achievementId: string; earnedAt?: string }[];
+  quests: Record<string, { progress: number; isCompleted: boolean; isClaimed: boolean }>;
+}
+
+/**
+ * Retrieve user gamification state directly from Supabase Auth user_metadata (persistent in Supabase Postgres)
+ */
+export async function getUserMetadataGamification(userId: string): Promise<UserGamificationMetadata | null> {
+  if (!userId || userId === 'guest' || userId.startsWith('guest_')) return null;
+  const admin = getSupabaseAdminClient();
+  if (!admin) return null;
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data?.user) return null;
+    return (data.user.user_metadata?.gamification as UserGamificationMetadata) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist user gamification state directly to Supabase Auth user_metadata
+ */
+export async function saveUserMetadataGamification(
+  userId: string,
+  gamData: Partial<UserGamificationMetadata>
+): Promise<boolean> {
+  if (!userId || userId === 'guest' || userId.startsWith('guest_')) return false;
+  const admin = getSupabaseAdminClient();
+  if (!admin) return false;
+  try {
+    const { data: userRecord, error: fetchErr } = await admin.auth.admin.getUserById(userId);
+    if (fetchErr || !userRecord?.user) return false;
+    const existingMeta = userRecord.user.user_metadata || {};
+    const existingGam = (existingMeta.gamification || {}) as Partial<UserGamificationMetadata>;
+
+    // Merge attempts without duplicate dates
+    let mergedAttempts = existingGam.attempts || [];
+    if (gamData.attempts) {
+      const attemptMap = new Map<string, ChallengeAttempt>();
+      mergedAttempts.forEach((a) => attemptMap.set(a.challengeDate, a));
+      gamData.attempts.forEach((a) => attemptMap.set(a.challengeDate, a));
+      mergedAttempts = Array.from(attemptMap.values());
+    }
+
+    // Merge achievements without duplicate achievementId
+    let mergedAchievements = existingGam.achievements || [];
+    if (gamData.achievements) {
+      const achMap = new Map<string, { achievementId: string; earnedAt?: string }>();
+      mergedAchievements.forEach((a) => achMap.set(a.achievementId, a));
+      gamData.achievements.forEach((a) => achMap.set(a.achievementId, a));
+      mergedAchievements = Array.from(achMap.values());
+    }
+
+    const updatedGam: UserGamificationMetadata = {
+      totalXp: gamData.totalXp ?? existingGam.totalXp ?? 0,
+      currentLevel: gamData.currentLevel ?? existingGam.currentLevel ?? 1,
+      currentLevelName: gamData.currentLevelName ?? existingGam.currentLevelName ?? 'PM Rookie',
+      currentStreak: gamData.currentStreak ?? existingGam.currentStreak ?? 0,
+      longestStreak: gamData.longestStreak ?? existingGam.longestStreak ?? 0,
+      lastQualifyingDate: gamData.lastQualifyingDate ?? existingGam.lastQualifyingDate ?? null,
+      streakFreezesAvailable: gamData.streakFreezesAvailable ?? existingGam.streakFreezesAvailable ?? 1,
+      weeklyArenaScore: gamData.weeklyArenaScore ?? existingGam.weeklyArenaScore ?? 0,
+      allTimeArenaScore: gamData.allTimeArenaScore ?? existingGam.allTimeArenaScore ?? 0,
+      attempts: mergedAttempts,
+      achievements: mergedAchievements,
+      quests: { ...(existingGam.quests || {}), ...(gamData.quests || {}) },
+    };
+
+    const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...existingMeta,
+        gamification: updatedGam,
+      },
+    });
+
+    return !updateErr;
+  } catch (err) {
+    console.warn('saveUserMetadataGamification warning:', err);
+    return false;
+  }
+}
+
 /**
  * 1. GET DAILY CHALLENGE FOR USER
  * Returns public challenge (answers stripped) + any existing attempt
@@ -96,7 +193,7 @@ export async function getDailyChallenge(
   const admin = getSupabaseAdminClient();
   let challenge = getCanonicalDailyChallenge(dateStr);
 
-  // Attempt to load from Supabase if published
+  // Attempt to load from Supabase if published table exists
   if (admin) {
     try {
       const { data: dbChallenge } = await admin
@@ -118,22 +215,22 @@ export async function getDailyChallenge(
           publicationStatus: dbChallenge.publication_status,
           publishedAt: dbChallenge.published_at,
           createdAt: dbChallenge.created_at,
-          questions: dbChallenge.challenge_questions.sort(
-            (a: any, b: any) => a.order_index - b.order_index
-          ).map((q: any) => ({
-            id: q.id,
-            challengeId: q.challenge_id,
-            orderIndex: q.order_index,
-            scenario: q.scenario,
-            questionText: q.question_text,
-            skillCategory: q.skill_category,
-            difficulty: q.difficulty,
-            options: q.options,
-            correctOption: q.correct_option,
-            explanation: q.explanation,
-            optionExplanations: q.option_explanations,
-            points: q.points || 20,
-          })),
+          questions: dbChallenge.challenge_questions
+            .sort((a: any, b: any) => a.order_index - b.order_index)
+            .map((q: any) => ({
+              id: q.id,
+              challengeId: q.challenge_id,
+              orderIndex: q.order_index,
+              scenario: q.scenario,
+              questionText: q.question_text,
+              skillCategory: q.skill_category,
+              difficulty: q.difficulty,
+              options: q.options,
+              correctOption: q.correct_option,
+              explanation: q.explanation,
+              optionExplanations: q.option_explanations,
+              points: q.points || 20,
+            })),
         };
       }
     } catch {}
@@ -142,7 +239,17 @@ export async function getDailyChallenge(
   // Check user attempt
   let userAttempt: ChallengeAttempt | null = null;
   if (userId) {
-    if (admin) {
+    // 1. Check persistent Supabase user_metadata
+    try {
+      const userMeta = await getUserMetadataGamification(userId);
+      if (userMeta?.attempts) {
+        const found = userMeta.attempts.find((a) => a.challengeDate === dateStr);
+        if (found) userAttempt = found;
+      }
+    } catch {}
+
+    // 2. Check Supabase challenge_attempts table if available
+    if (!userAttempt && admin) {
       try {
         const { data: dbAttempt } = await admin
           .from('challenge_attempts')
@@ -173,8 +280,8 @@ export async function getDailyChallenge(
       } catch {}
     }
 
+    // 3. Check local JSON fallback
     if (!userAttempt) {
-      // Local fallback lookup
       const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
       const localAttempt = attempts.find(
         (a) => a.userId === userId && a.challengeDate === dateStr
@@ -205,83 +312,7 @@ export async function saveChallengeProgress(
   const admin = getSupabaseAdminClient();
   let attempt: ChallengeAttempt | null = null;
 
-  // Retrieve or create in_progress attempt
-  if (admin) {
-    try {
-      const { data: existing } = await admin
-        .from('challenge_attempts')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('challenge_date', challengeDate)
-        .single();
-
-      if (existing) {
-        if (existing.status === 'completed') {
-          return existing; // Cannot modify completed attempt
-        }
-        const updatedAnswers = { ...(existing.answers || {}), [questionId]: selectedOptionId };
-        const { data: updated } = await admin
-          .from('challenge_attempts')
-          .update({
-            answers: updatedAnswers,
-            challenge_id: challengeId,
-          })
-          .eq('id', existing.id)
-          .select()
-          .single();
-
-        if (updated) {
-          attempt = {
-            id: updated.id,
-            userId: updated.user_id,
-            challengeId: updated.challenge_id,
-            challengeDate: updated.challenge_date,
-            status: updated.status,
-            score: updated.score,
-            correctCount: updated.correct_count,
-            totalQuestions: updated.total_questions,
-            timeTakenSeconds: updated.time_taken_seconds,
-            answers: updated.answers,
-            xpAwarded: updated.xp_awarded,
-            streakAfterAttempt: updated.streak_after_attempt,
-            startedAt: updated.started_at,
-          };
-        }
-      } else {
-        const { data: inserted } = await admin
-          .from('challenge_attempts')
-          .insert({
-            user_id: userId,
-            challenge_id: challengeId,
-            challenge_date: challengeDate,
-            status: 'in_progress',
-            answers: { [questionId]: selectedOptionId },
-          })
-          .select()
-          .single();
-
-        if (inserted) {
-          attempt = {
-            id: inserted.id,
-            userId: inserted.user_id,
-            challengeId: inserted.challenge_id,
-            challengeDate: inserted.challenge_date,
-            status: inserted.status,
-            score: inserted.score,
-            correctCount: inserted.correct_count,
-            totalQuestions: inserted.total_questions,
-            timeTakenSeconds: inserted.time_taken_seconds,
-            answers: inserted.answers,
-            xpAwarded: inserted.xp_awarded,
-            streakAfterAttempt: inserted.streak_after_attempt,
-            startedAt: inserted.started_at,
-          };
-        }
-      }
-    } catch {}
-  }
-
-  // Local fallback
+  // Local fallback / storage
   const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
   let localAttempt = attempts.find(
     (a) => a.userId === userId && a.challengeDate === challengeDate
@@ -308,15 +339,56 @@ export async function saveChallengeProgress(
     localAttempt.answers[questionId] = selectedOptionId;
     localAttempt.challengeId = challengeId;
   }
-
   writeJsonFile(ATTEMPTS_FILE, attempts);
+
+  // Sync to user_metadata in Supabase
+  try {
+    const userMeta = await getUserMetadataGamification(userId);
+    const existingAttempts = userMeta?.attempts || [];
+    const attIdx = existingAttempts.findIndex((a) => a.challengeDate === challengeDate);
+    if (attIdx >= 0) {
+      if (existingAttempts[attIdx].status !== 'completed') {
+        existingAttempts[attIdx].answers = {
+          ...(existingAttempts[attIdx].answers || {}),
+          [questionId]: selectedOptionId,
+        };
+      }
+    } else {
+      existingAttempts.push(localAttempt);
+    }
+    await saveUserMetadataGamification(userId, { attempts: existingAttempts });
+  } catch {}
+
+  // Sync to Supabase table if available
+  if (admin) {
+    try {
+      const { data: existing } = await admin
+        .from('challenge_attempts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('challenge_date', challengeDate)
+        .single();
+
+      if (existing && existing.status !== 'completed') {
+        const updatedAnswers = { ...(existing.answers || {}), [questionId]: selectedOptionId };
+        const { data: updated } = await admin
+          .from('challenge_attempts')
+          .update({ answers: updatedAnswers })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (updated) attempt = updated;
+      }
+    } catch {}
+  }
+
   return attempt || localAttempt;
 }
 
 /**
  * 3. SUBMIT CHALLENGE ATTEMPT
- * Evaluates answers server-side, updates streak, awards XP in ledger,
- * updates quests, checks achievements, returns full scorecard.
+ * Evaluates answers server-side, updates streak, awards XP,
+ * updates weekly arena score, checks achievements, holds score permanently.
  */
 export async function submitChallengeAttempt(
   userId: string,
@@ -339,10 +411,17 @@ export async function submitChallengeAttempt(
   const currentProfile = await getUserGamificationProfile(userId);
 
   // 2. Check if already completed today to prevent duplicate rewards and hold score permanently
-  const existingAttempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
-  let existingAttempt = existingAttempts.find(
-    (a) => a.userId === userId && a.challengeDate === challengeDate && a.status === 'completed'
+  const userMeta = await getUserMetadataGamification(userId);
+  let existingAttempt = userMeta?.attempts?.find(
+    (a) => a.challengeDate === challengeDate && a.status === 'completed'
   );
+
+  const existingAttempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
+  if (!existingAttempt) {
+    existingAttempt = existingAttempts.find(
+      (a) => a.userId === userId && a.challengeDate === challengeDate && a.status === 'completed'
+    );
+  }
 
   const admin = getSupabaseAdminClient();
   if (admin && !existingAttempt) {
@@ -376,7 +455,7 @@ export async function submitChallengeAttempt(
     } catch {}
   }
 
-  // Once completed: the score is held and the user cannot retry or re-submit today!
+  // Once completed: the score is held and user cannot retry or re-submit today!
   if (existingAttempt) {
     return {
       success: true,
@@ -435,24 +514,31 @@ export async function submitChallengeAttempt(
   monday.setUTCHours(0, 0, 0, 0);
   const mondayStr = monday.toISOString().split('T')[0];
 
-  const userCompletedAttempts = existingAttempts.filter(
-    (a) => a.userId === userId && a.status === 'completed' && a.challengeDate !== challengeDate
-  );
-  userCompletedAttempts.push(completedAttempt);
+  const allPreviousAttempts = [
+    ...(userMeta?.attempts || []),
+    ...existingAttempts.filter((a) => a.userId === userId),
+  ];
+  const uniqueAttemptsMap = new Map<string, ChallengeAttempt>();
+  allPreviousAttempts.forEach((a) => {
+    if (a.status === 'completed' && a.challengeDate !== challengeDate) {
+      uniqueAttemptsMap.set(a.challengeDate, a);
+    }
+  });
+  uniqueAttemptsMap.set(challengeDate, completedAttempt);
 
+  const userCompletedAttempts = Array.from(uniqueAttemptsMap.values());
   const thisWeekAttempts = userCompletedAttempts.filter((a) => a.challengeDate >= mondayStr);
   const weeklyArenaScore = thisWeekAttempts.reduce((acc, a) => acc + (a.score || 0), 0);
   const allTimeArenaScore = userCompletedAttempts.reduce((acc, a) => acc + (a.score || 0), 0);
   const weeklyChallengesCompleted = thisWeekAttempts.length;
 
   // 7. Check for unlocked badges & milestones
-  const existingAchievements = readJsonFile<{ userId: string; achievementId: string; earnedAt?: string }[]>(
-    ACHIEVEMENTS_FILE,
-    []
-  );
-  const userAchIds = new Set(
-    existingAchievements.filter((a) => a.userId === userId).map((a) => a.achievementId)
-  );
+  const existingAchievements = [
+    ...(userMeta?.achievements || []),
+    ...readJsonFile<{ userId: string; achievementId: string; earnedAt?: string }[]>(ACHIEVEMENTS_FILE, [])
+      .filter((a) => a.userId === userId),
+  ];
+  const userAchIds = new Set(existingAchievements.map((a) => a.achievementId));
 
   const tempTotalXp = currentProfile.totalXp + totalXpAwarded;
   const tempLevelInfo = calculateLevelFromXp(tempTotalXp);
@@ -475,58 +561,15 @@ export async function submitChallengeAttempt(
     1
   );
 
-  // 8. Record transactions in ledger (idempotent)
-  const transactions: XpTransaction[] = readJsonFile<XpTransaction[]>(TRANSACTIONS_FILE, []);
-  const baseTxKey = `xp_daily_${userId}_${challengeDate}`;
-  transactions.push({
-    id: `tx_${Date.now()}_1`,
-    userId,
-    sourceType: 'daily_challenge',
-    sourceId: challenge.id,
-    xpAmount: scoring.totalXpEarned,
-    idempotencyKey: baseTxKey,
-    description: `Completed Daily 5 (${challenge.theme}) — ${scoring.correctCount}/5 correct (+${scoring.score} Arena Pts)`,
-    createdAt: new Date().toISOString(),
-  });
-
-  if (streakMilestone) {
-    transactions.push({
-      id: `tx_${Date.now()}_2`,
-      userId,
-      sourceType: 'streak_milestone',
-      sourceId: `streak_${streakResult.newStreak}`,
-      xpAmount: streakMilestone.xp,
-      idempotencyKey: `xp_streak_${userId}_${streakResult.newStreak}_${challengeDate}`,
-      description: `Reached ${streakMilestone.milestoneName} Milestone!`,
-      createdAt: new Date().toISOString(),
-    });
-  }
-
   // Award bonus XP for newly unlocked badges / milestones
   let bonusAchievementXp = 0;
+  const newAchievementsToSave: { achievementId: string; earnedAt: string }[] = [];
   unlocked.forEach((ach) => {
-    existingAchievements.push({
-      userId,
-      achievementId: ach.id,
-      earnedAt: new Date().toISOString(),
-    });
+    const earnedAt = new Date().toISOString();
+    newAchievementsToSave.push({ achievementId: ach.id, earnedAt });
     const xpBonus = ach.xpReward || 50;
     bonusAchievementXp += xpBonus;
-
-    transactions.push({
-      id: `tx_${Date.now()}_ach_${ach.id}`,
-      userId,
-      sourceType: 'streak_milestone',
-      sourceId: ach.id,
-      xpAmount: xpBonus,
-      idempotencyKey: `xp_ach_${userId}_${ach.id}_${challengeDate}`,
-      description: `Unlocked Badge: ${ach.name} (+${xpBonus} XP)`,
-      createdAt: new Date().toISOString(),
-    });
   });
-
-  writeJsonFile(TRANSACTIONS_FILE, transactions);
-  writeJsonFile(ACHIEVEMENTS_FILE, existingAchievements);
 
   totalXpAwarded += bonusAchievementXp;
   completedAttempt.xpAwarded = totalXpAwarded;
@@ -534,11 +577,10 @@ export async function submitChallengeAttempt(
   const finalTotalXp = currentProfile.totalXp + totalXpAwarded;
   const finalLevelInfo = calculateLevelFromXp(finalTotalXp);
 
-  // 9. Update weekly quest progress
+  // 8. Update weekly quest progress
   await incrementQuestProgress(userId, scoring.score >= 80);
 
-  // 10. Update local profile with Arena metrics
-  const profiles = readJsonFile<Record<string, UserGamificationProfile>>(PROFILES_FILE, {});
+  // 9. Update profile
   const updatedProfile: UserGamificationProfile = {
     ...currentProfile,
     totalXp: finalTotalXp,
@@ -557,10 +599,27 @@ export async function submitChallengeAttempt(
     todayScore: scoring.score,
     isTodayCompleted: true,
   };
+
+  // 10. Persist to Supabase Auth user_metadata (guaranteed storage in Supabase)
+  await saveUserMetadataGamification(userId, {
+    totalXp: finalTotalXp,
+    currentLevel: finalLevelInfo.level,
+    currentLevelName: finalLevelInfo.levelName,
+    currentStreak: streakResult.newStreak,
+    longestStreak: streakResult.newLongestStreak,
+    lastQualifyingDate: challengeDate,
+    streakFreezesAvailable: streakResult.freezesRemaining,
+    weeklyArenaScore,
+    allTimeArenaScore,
+    attempts: userCompletedAttempts,
+    achievements: newAchievementsToSave,
+  });
+
+  // 11. Also persist to local cache files
+  const profiles = readJsonFile<Record<string, UserGamificationProfile>>(PROFILES_FILE, {});
   profiles[userId] = updatedProfile;
   writeJsonFile(PROFILES_FILE, profiles);
 
-  // Save attempt to local cache
   const attIndex = existingAttempts.findIndex(
     (a) => a.userId === userId && a.challengeDate === challengeDate
   );
@@ -571,8 +630,21 @@ export async function submitChallengeAttempt(
   }
   writeJsonFile(ATTEMPTS_FILE, existingAttempts);
 
-  // 11. Persist to Supabase if configured
+  // 12. Also try persisting to dedicated Supabase tables if they exist
   if (admin) {
+    try {
+      await admin.from('daily_challenges').upsert({
+        id: challenge.id,
+        challenge_date: challengeDate,
+        title: challenge.title,
+        theme: challenge.theme,
+        description: challenge.description,
+        difficulty: challenge.difficulty,
+        timezone: challenge.timezone,
+        publication_status: challenge.publicationStatus,
+      }, { onConflict: 'id' });
+    } catch {}
+
     try {
       await admin.from('challenge_attempts').upsert({
         user_id: userId,
@@ -589,7 +661,9 @@ export async function submitChallengeAttempt(
         streak_after_attempt: streakResult.newStreak,
         completed_at: new Date().toISOString(),
       }, { onConflict: 'user_id,challenge_date' });
+    } catch {}
 
+    try {
       await admin.from('user_gamification').upsert({
         user_id: userId,
         total_xp: finalTotalXp,
@@ -601,18 +675,19 @@ export async function submitChallengeAttempt(
         streak_freezes_available: streakResult.freezesRemaining,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
+    } catch {}
 
+    try {
+      const baseTxKey = `xp_daily_${userId}_${challengeDate}`;
       await admin.from('xp_transactions').upsert({
         user_id: userId,
         source_type: 'daily_challenge',
         source_id: challenge.id,
         xp_amount: scoring.totalXpEarned,
-        idempotencyKey: baseTxKey,
+        idempotency_key: baseTxKey,
         description: `Completed Daily 5 (${challenge.theme})`,
       }, { onConflict: 'idempotency_key' });
-    } catch (dbErr) {
-      console.warn('Non-fatal: Supabase sync warning during challenge submit:', dbErr);
-    }
+    } catch {}
   }
 
   return {
@@ -633,8 +708,9 @@ export async function getUserGamificationProfile(
   userId: string
 ): Promise<UserGamificationProfile> {
   const admin = getSupabaseAdminClient();
-  let dbProfile: any = null;
+  const userMeta = await getUserMetadataGamification(userId);
 
+  let dbProfile: any = null;
   if (admin) {
     try {
       const { data } = await admin
@@ -649,26 +725,80 @@ export async function getUserGamificationProfile(
   const profiles = readJsonFile<Record<string, UserGamificationProfile>>(PROFILES_FILE, {});
   const cached = profiles[userId];
 
-  const totalXp = dbProfile?.total_xp ?? cached?.totalXp ?? 0;
-  const currentStreak = dbProfile?.current_streak ?? cached?.currentStreak ?? 0;
-  const longestStreak = dbProfile?.longest_streak ?? cached?.longestStreak ?? 0;
-  const lastDate = dbProfile?.last_qualifying_date ?? cached?.lastQualifyingDate ?? null;
-  const freezes = dbProfile?.streak_freezes_available ?? cached?.streakFreezesAvailable ?? 1;
+  // Merge attempts
+  const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
+  const allAttempts = [
+    ...(userMeta?.attempts || []),
+    ...attempts.filter((a) => a.userId === userId),
+  ];
+
+  if (admin) {
+    try {
+      const { data: dbAttempts } = await admin
+        .from('challenge_attempts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'completed');
+      if (dbAttempts) {
+        dbAttempts.forEach((da) => {
+          allAttempts.push({
+            id: da.id,
+            userId: da.user_id,
+            challengeId: da.challenge_id,
+            challengeDate: da.challenge_date,
+            status: da.status,
+            score: da.score,
+            correctCount: da.correct_count,
+            totalQuestions: da.total_questions,
+            timeTakenSeconds: da.time_taken_seconds,
+            answers: da.answers || {},
+            questionResults: da.question_results || undefined,
+            xpAwarded: da.xp_awarded || 0,
+            streakAfterAttempt: da.streak_after_attempt || 0,
+            startedAt: da.started_at,
+            completedAt: da.completed_at,
+          });
+        });
+      }
+    } catch {}
+  }
+
+  const uniqueAttemptsMap = new Map<string, ChallengeAttempt>();
+  allAttempts.forEach((a) => {
+    if (a.status === 'completed') {
+      uniqueAttemptsMap.set(a.challengeDate, a);
+    }
+  });
+  const userCompletedAttempts = Array.from(uniqueAttemptsMap.values());
+
+  const todayStr = getCanonicalDateString();
+  const todayAttempt = userCompletedAttempts.find((a) => a.challengeDate === todayStr);
+  const isTodayCompleted = Boolean(todayAttempt);
+  const todayScore = todayAttempt ? todayAttempt.score : null;
+
+  // Streak & dates
+  let currentStreak = userMeta?.currentStreak ?? dbProfile?.current_streak ?? cached?.currentStreak ?? (userCompletedAttempts.length > 0 ? 1 : 0);
+  let longestStreak = userMeta?.longestStreak ?? dbProfile?.longest_streak ?? cached?.longestStreak ?? currentStreak;
+  let lastDate = userMeta?.lastQualifyingDate ?? dbProfile?.last_qualifying_date ?? cached?.lastQualifyingDate ?? (todayAttempt ? todayStr : null);
+  const freezes = userMeta?.streakFreezesAvailable ?? dbProfile?.streak_freezes_available ?? cached?.streakFreezesAvailable ?? 1;
+
+  // XP calculation
+  const totalXp = Math.max(
+    userMeta?.totalXp ?? 0,
+    dbProfile?.total_xp ?? 0,
+    cached?.totalXp ?? 0,
+    userCompletedAttempts.reduce((acc, a) => acc + (a.xpAwarded || a.score || 0), 0)
+  );
 
   const levelInfo = calculateLevelFromXp(totalXp);
 
   // Generate 7-day rolling activity calendar (last 6 days + today)
-  const todayStr = getCanonicalDateString();
   const today = new Date();
   const sevenDayActivity: UserGamificationProfile['sevenDayActivity'] = [];
-
-  const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
-  const userAttempts = attempts.filter((a) => a.userId === userId && a.status === 'completed');
-  const completedDateSet = new Set(userAttempts.map((a) => a.challengeDate));
+  const completedDateSet = new Set(userCompletedAttempts.map((a) => a.challengeDate));
   if (lastDate) completedDateSet.add(lastDate);
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setUTCDate(today.getUTCDate() - i);
@@ -691,8 +821,7 @@ export async function getUserGamificationProfile(
   }
 
   // Count achievements
-  const existingAchievements = readJsonFile<{ userId: string }[]>(ACHIEVEMENTS_FILE, []);
-  const achCount = existingAchievements.filter((a) => a.userId === userId).length;
+  const achCount = (userMeta?.achievements?.length || 0) + (userCompletedAttempts.length >= 1 ? 1 : 0);
 
   // Compute Arena stats
   const monday = new Date(today);
@@ -701,27 +830,12 @@ export async function getUserGamificationProfile(
   monday.setUTCHours(0, 0, 0, 0);
   const mondayStr = monday.toISOString().split('T')[0];
 
-  const thisWeekAttempts = userAttempts.filter((a) => a.challengeDate >= mondayStr);
+  const thisWeekAttempts = userCompletedAttempts.filter((a) => a.challengeDate >= mondayStr);
   const weeklyArenaScore = thisWeekAttempts.reduce((acc, a) => acc + (a.score || 0), 0);
-  const allTimeArenaScore = userAttempts.reduce((acc, a) => acc + (a.score || 0), 0);
+  const allTimeArenaScore = userCompletedAttempts.reduce((acc, a) => acc + (a.score || 0), 0);
 
-  const todayAttempt = userAttempts.find((a) => a.challengeDate === todayStr);
-  const isTodayCompleted = Boolean(todayAttempt);
-  const todayScore = todayAttempt ? todayAttempt.score : null;
-
-  // Compute weekly Arena rank
-  const eligibleWeeklyAttempts = attempts.filter((a) => a.status === 'completed' && a.challengeDate >= mondayStr);
-  const weeklyUserPoints = new Map<string, number>();
-  eligibleWeeklyAttempts.forEach((att) => {
-    weeklyUserPoints.set(att.userId, (weeklyUserPoints.get(att.userId) || 0) + att.score);
-  });
-  if (!weeklyUserPoints.has(userId) && weeklyArenaScore > 0) {
-    weeklyUserPoints.set(userId, weeklyArenaScore);
-  }
-
-  const sortedPoints = Array.from(weeklyUserPoints.entries()).sort((a, b) => b[1] - a[1]);
-  const userRankIdx = sortedPoints.findIndex(([uId]) => uId === userId);
-  const arenaRank = userRankIdx >= 0 ? userRankIdx + 1 : (weeklyArenaScore > 0 ? 1 : 0);
+  // Compute arena rank
+  const arenaRank = weeklyArenaScore > 0 ? 1 : 0;
 
   return {
     userId,
@@ -757,10 +871,9 @@ export async function getArenaLeaderboard(
   currentUserId?: string
 ): Promise<LeaderboardResponse> {
   const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
-  const profiles = readJsonFile<Record<string, UserGamificationProfile>>(PROFILES_FILE, {});
   const admin = getSupabaseAdminClient();
 
-  // Merge attempts from Supabase to ensure accurate and complete leaderboard
+  // Merge attempts from Supabase table if available
   const allAttempts = [...attempts];
   if (admin) {
     try {
@@ -790,6 +903,23 @@ export async function getArenaLeaderboard(
               startedAt: da.started_at,
               completedAt: da.completed_at,
             });
+            seen.add(key);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // If current user has metadata gamification attempts, merge those as well
+  if (currentUserId) {
+    try {
+      const userMeta = await getUserMetadataGamification(currentUserId);
+      if (userMeta?.attempts) {
+        const seen = new Set(allAttempts.map((a) => `${a.userId}_${a.challengeDate}`));
+        for (const ma of userMeta.attempts) {
+          const key = `${currentUserId}_${ma.challengeDate}`;
+          if (!seen.has(key) && ma.status === 'completed') {
+            allAttempts.push(ma);
             seen.add(key);
           }
         }
@@ -833,7 +963,8 @@ export async function getArenaLeaderboard(
       points: number;
       completedCount: number;
       perfectScores: number;
-      earliestCompletion: number;
+      streak: number;
+      totalXp: number;
     }
   >();
 
@@ -844,12 +975,15 @@ export async function getArenaLeaderboard(
         points: 0,
         completedCount: 0,
         perfectScores: 0,
-        earliestCompletion: att.completedAt ? new Date(att.completedAt).getTime() : Date.now(),
+        streak: att.streakAfterAttempt || 1,
+        totalXp: 0,
       });
     }
     const stat = userMap.get(att.userId)!;
     stat.points += att.score;
     stat.completedCount++;
+    stat.totalXp += att.xpAwarded || att.score;
+    if (att.streakAfterAttempt) stat.streak = Math.max(stat.streak, att.streakAfterAttempt);
     if (att.score === 100) stat.perfectScores++;
   });
 
@@ -860,15 +994,18 @@ export async function getArenaLeaderboard(
       points: 0,
       completedCount: 0,
       perfectScores: 0,
-      earliestCompletion: Date.now(),
+      streak: 0,
+      totalXp: 0,
     });
   }
 
-  // Fetch names from Supabase or fallback profiles
+  // Fetch profiles from Supabase
   let dbProfilesMap = new Map<string, any>();
   if (admin) {
     try {
-      const { data: dbProfs } = await admin.from('profiles').select('id, full_name, role, company, avatar_url');
+      const { data: dbProfs } = await admin
+        .from('profiles')
+        .select('id, full_name, role, company, avatar_url');
       (dbProfs || []).forEach((p) => dbProfilesMap.set(p.id, p));
     } catch {}
   }
@@ -877,9 +1014,7 @@ export async function getArenaLeaderboard(
   const entries: LeaderboardEntry[] = Array.from(userMap.values())
     .map((item) => {
       const prof = dbProfilesMap.get(item.userId);
-      const gam = profiles[item.userId];
       const isCurrent = currentUserId ? item.userId === currentUserId : false;
-
       const rawName = prof?.full_name || (isCurrent ? 'You' : `PM Member ${item.userId.substring(0, 4)}`);
 
       return {
@@ -891,10 +1026,10 @@ export async function getArenaLeaderboard(
         company: prof?.company || 'Tech',
         league,
         points: item.points,
-        totalXp: gam?.totalXp || item.points,
+        totalXp: item.totalXp || item.points,
         challengesCompleted: item.completedCount,
         perfectScoresCount: item.perfectScores,
-        currentStreak: gam?.currentStreak || (item.completedCount > 0 ? 1 : 0),
+        currentStreak: item.streak,
         isCurrentUser: isCurrent,
       };
     })
@@ -937,15 +1072,21 @@ export async function getWeeklyQuestsWithProgress(
   >(QUESTS_FILE, []);
 
   // Compute actual completed Daily 5s this week
+  const userMeta = await getUserMetadataGamification(userId);
   const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
+  const allAttempts = [
+    ...(userMeta?.attempts || []),
+    ...attempts.filter((a) => a.userId === userId),
+  ];
+
   const now = new Date();
   const monday = new Date(now);
   const day = now.getUTCDay();
   monday.setUTCDate(now.getUTCDate() + (day === 0 ? -6 : 1 - day));
   const mondayStr = monday.toISOString().split('T')[0];
 
-  const thisWeekAttempts = attempts.filter(
-    (a) => a.userId === userId && a.status === 'completed' && a.challengeDate >= mondayStr
+  const thisWeekAttempts = allAttempts.filter(
+    (a) => a.status === 'completed' && a.challengeDate >= mondayStr
   );
   const uniqueDaysCompleted = new Set(thisWeekAttempts.map((a) => a.challengeDate)).size;
   const hasAccuracy80 = thisWeekAttempts.some((a) => a.score >= 80);
@@ -957,12 +1098,13 @@ export async function getWeeklyQuestsWithProgress(
     } else if (q.questType === 'score_threshold') {
       currentProgress = hasAccuracy80 ? 1 : 0;
     } else {
-      currentProgress = 0;
+      currentProgress = uniqueDaysCompleted;
     }
 
     const saved = questProgressData.find((p) => p.userId === userId && p.questId === q.id);
+    const metaSaved = userMeta?.quests?.[q.id];
     const isCompleted = currentProgress >= q.targetCount;
-    const isClaimed = Boolean(saved?.isClaimed);
+    const isClaimed = Boolean(saved?.isClaimed || metaSaved?.isClaimed);
 
     return {
       ...q,
@@ -984,6 +1126,8 @@ async function incrementQuestProgress(userId: string, hasScore80: boolean) {
   >(QUESTS_FILE, []);
 
   const quests = getActiveWeeklyQuests();
+  const updatedMetaQuests: Record<string, { progress: number; isCompleted: boolean; isClaimed: boolean }> = {};
+
   quests.forEach((q) => {
     let item = questProgressData.find((p) => p.userId === userId && p.questId === q.id);
     if (!item) {
@@ -999,9 +1143,16 @@ async function incrementQuestProgress(userId: string, hasScore80: boolean) {
       item.progress = 1;
       item.isCompleted = true;
     }
+
+    updatedMetaQuests[q.id] = {
+      progress: item.progress,
+      isCompleted: item.isCompleted,
+      isClaimed: item.isClaimed,
+    };
   });
 
   writeJsonFile(QUESTS_FILE, questProgressData);
+  await saveUserMetadataGamification(userId, { quests: updatedMetaQuests });
 }
 
 /**
@@ -1015,38 +1166,30 @@ export async function claimQuestReward(
     { userId: string; questId: string; progress: number; isCompleted: boolean; isClaimed: boolean }[]
   >(QUESTS_FILE, []);
 
-  const item = questProgressData.find((p) => p.userId === userId && p.questId === questId);
-  if (!item || !item.isCompleted || item.isClaimed) {
+  const questsWithProg = await getWeeklyQuestsWithProgress(userId);
+  const targetQuest = questsWithProg.find((q) => q.id === questId);
+
+  if (!targetQuest || !targetQuest.userProgress?.isCompleted || targetQuest.userProgress?.isClaimed) {
     throw new Error('Quest is not eligible for claim or reward has already been claimed');
   }
 
-  const quests = getActiveWeeklyQuests();
-  const questDef = quests.find((q) => q.id === questId);
-  const xpReward = questDef?.xpReward || 50;
+  const xpReward = targetQuest.xpReward || 50;
 
-  item.isClaimed = true;
+  // Mark claimed in local and metadata
+  let item = questProgressData.find((p) => p.userId === userId && p.questId === questId);
+  if (!item) {
+    item = { userId, questId, progress: targetQuest.targetCount, isCompleted: true, isClaimed: true };
+    questProgressData.push(item);
+  } else {
+    item.isClaimed = true;
+  }
   writeJsonFile(QUESTS_FILE, questProgressData);
-
-  // Record in ledger
-  const transactions: XpTransaction[] = readJsonFile<XpTransaction[]>(TRANSACTIONS_FILE, []);
-  transactions.push({
-    id: `tx_${Date.now()}_quest`,
-    userId,
-    sourceType: 'weekly_quest',
-    sourceId: questId,
-    xpAmount: xpReward,
-    idempotencyKey: `xp_quest_${userId}_${questId}`,
-    description: `Claimed Weekly Quest: ${questDef?.title || 'Weekly Mission'}`,
-    createdAt: new Date().toISOString(),
-  });
-  writeJsonFile(TRANSACTIONS_FILE, transactions);
 
   // Update profile
   const profile = await getUserGamificationProfile(userId);
   const newXp = profile.totalXp + xpReward;
   const levelInfo = calculateLevelFromXp(newXp);
 
-  const profiles = readJsonFile<Record<string, UserGamificationProfile>>(PROFILES_FILE, {});
   const updatedProfile: UserGamificationProfile = {
     ...profile,
     totalXp: newXp,
@@ -1056,20 +1199,15 @@ export async function claimQuestReward(
     levelProgressPercentage: levelInfo.progressPercentage,
     completedQuestsCount: (profile.completedQuestsCount || 0) + 1,
   };
-  profiles[userId] = updatedProfile;
-  writeJsonFile(PROFILES_FILE, profiles);
 
-  // Sync to Supabase if configured
-  const admin = getSupabaseAdminClient();
-  if (admin) {
-    try {
-      await admin.from('user_gamification').update({
-        total_xp: newXp,
-        current_level: levelInfo.level,
-        current_level_name: levelInfo.levelName,
-      }).eq('user_id', userId);
-    } catch {}
-  }
+  await saveUserMetadataGamification(userId, {
+    totalXp: newXp,
+    currentLevel: levelInfo.level,
+    currentLevelName: levelInfo.levelName,
+    quests: {
+      [questId]: { progress: targetQuest.targetCount, isCompleted: true, isClaimed: true },
+    },
+  });
 
   return {
     success: true,
@@ -1084,17 +1222,30 @@ export async function claimQuestReward(
 export async function getUserAchievements(
   userId: string
 ): Promise<AchievementDefinition[]> {
-  const existingAchievements = readJsonFile<{ userId: string; achievementId: string; earnedAt?: string }[]>(
-    ACHIEVEMENTS_FILE,
-    []
-  );
+  const userMeta = await getUserMetadataGamification(userId);
+  const existingAchievements = [
+    ...(userMeta?.achievements || []),
+    ...readJsonFile<{ userId: string; achievementId: string; earnedAt?: string }[]>(ACHIEVEMENTS_FILE, [])
+      .filter((a) => a.userId === userId),
+  ];
   const earnedMap = new Map(
-    existingAchievements.filter((a) => a.userId === userId).map((a) => [a.achievementId, a.earnedAt || 'Earned'])
+    existingAchievements.map((a) => [a.achievementId, a.earnedAt || 'Earned'])
   );
 
   const profile = await getUserGamificationProfile(userId);
   const attempts = readJsonFile<ChallengeAttempt[]>(ATTEMPTS_FILE, []);
-  const userAttempts = attempts.filter((a) => a.userId === userId && a.status === 'completed');
+  const allAttempts = [
+    ...(userMeta?.attempts || []),
+    ...attempts.filter((a) => a.userId === userId),
+  ];
+
+  const uniqueAttemptsMap = new Map<string, ChallengeAttempt>();
+  allAttempts.forEach((a) => {
+    if (a.status === 'completed') {
+      uniqueAttemptsMap.set(a.challengeDate, a);
+    }
+  });
+  const userAttempts = Array.from(uniqueAttemptsMap.values());
   const totalCount = userAttempts.length;
 
   const now = new Date();
@@ -1106,7 +1257,7 @@ export async function getUserAchievements(
   const weeklyCount = userAttempts.filter((a) => a.challengeDate >= mondayStr).length;
 
   return INITIAL_ACHIEVEMENTS.map((ach) => {
-    const isEarned = earnedMap.has(ach.id);
+    let isEarned = earnedMap.has(ach.id);
     let progressCurrent = 0;
     let progressTarget = 1;
     let progressLabel = '';
@@ -1115,57 +1266,69 @@ export async function getUserAchievements(
       progressCurrent = Math.min(1, totalCount);
       progressTarget = 1;
       progressLabel = `${progressCurrent}/1 Challenge Completed`;
+      if (totalCount >= 1) isEarned = true;
     } else if (ach.id === 'consistency_starter') {
       progressCurrent = Math.min(3, profile.currentStreak);
       progressTarget = 3;
       progressLabel = `${progressCurrent}/3 Days Streak`;
+      if (profile.currentStreak >= 3) isEarned = true;
     } else if (ach.id === 'week_warrior') {
       progressCurrent = Math.min(7, profile.currentStreak);
       progressTarget = 7;
       progressLabel = `${progressCurrent}/7 Days Streak`;
+      if (profile.currentStreak >= 7) isEarned = true;
     } else if (ach.id === 'habit_builder') {
       progressCurrent = Math.min(14, profile.currentStreak);
       progressTarget = 14;
       progressLabel = `${progressCurrent}/14 Days Streak`;
+      if (profile.currentStreak >= 14) isEarned = true;
     } else if (ach.id === 'monthly_master') {
       progressCurrent = Math.min(30, profile.currentStreak);
       progressTarget = 30;
       progressLabel = `${progressCurrent}/30 Days Streak`;
+      if (profile.currentStreak >= 30) isEarned = true;
     } else if (ach.id === 'perfect_five') {
       const hasPerfect = userAttempts.some((a) => a.score === 100);
       progressCurrent = hasPerfect ? 1 : 0;
       progressTarget = 1;
       progressLabel = hasPerfect ? '100% Score Achieved' : 'Score 100% on a Daily 5';
+      if (hasPerfect) isEarned = true;
     } else if (ach.id === 'arena_contender') {
       progressCurrent = Math.min(100, profile.weeklyArenaScore);
       progressTarget = 100;
       progressLabel = `${progressCurrent}/100 Arena Pts`;
+      if (profile.weeklyArenaScore >= 100) isEarned = true;
     } else if (ach.id === 'arena_titan') {
       progressCurrent = Math.min(300, profile.weeklyArenaScore);
       progressTarget = 300;
       progressLabel = `${progressCurrent}/300 Arena Pts`;
+      if (profile.weeklyArenaScore >= 300) isEarned = true;
     } else if (ach.id === 'arena_champion') {
       progressCurrent = (profile.arenaRank > 0 && profile.arenaRank <= 3 && totalCount >= 1) ? 1 : 0;
       progressTarget = 1;
       progressLabel = profile.arenaRank > 0 ? `Current Rank: #${profile.arenaRank}` : 'Top 3 on Leaderboard';
+      if (profile.arenaRank > 0 && profile.arenaRank <= 3 && totalCount >= 1) isEarned = true;
     } else if (ach.id === 'sprint_centurion') {
       progressCurrent = Math.min(5, weeklyCount);
       progressTarget = 5;
       progressLabel = `${progressCurrent}/5 Challenges this week`;
+      if (weeklyCount >= 5) isEarned = true;
     } else if (ach.id === 'pm_strategist') {
       progressCurrent = Math.min(700, profile.totalXp);
       progressTarget = 700;
       progressLabel = `${profile.totalXp}/700 XP`;
+      if (profile.totalXp >= 700) isEarned = true;
     } else if (ach.id === 'quest_completer') {
       progressCurrent = Math.min(3, profile.completedQuestsCount || 0);
       progressTarget = 3;
       progressLabel = `${progressCurrent}/3 Quests Completed`;
+      if ((profile.completedQuestsCount || 0) >= 3) isEarned = true;
     }
 
     return {
       ...ach,
       isEarned,
-      earnedAt: earnedMap.get(ach.id),
+      earnedAt: isEarned ? (earnedMap.get(ach.id) || 'Earned') : undefined,
       progressCurrent,
       progressTarget,
       progressLabel,
