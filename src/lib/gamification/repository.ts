@@ -1091,20 +1091,38 @@ export async function getWeeklyQuestsWithProgress(
   const uniqueDaysCompleted = new Set(thisWeekAttempts.map((a) => a.challengeDate)).size;
   const hasAccuracy80 = thisWeekAttempts.some((a) => a.score >= 80);
 
+  // Check if user submitted a weekly case study solution this week
+  let hasCaseStudyThisWeek = false;
+  const admin = getSupabaseAdminClient();
+  if (admin && userId && userId !== 'guest') {
+    try {
+      const { data: subs } = await admin
+        .from('challenge_submissions')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', `${mondayStr}T00:00:00.000Z`);
+      if (subs && subs.length > 0) {
+        hasCaseStudyThisWeek = true;
+      }
+    } catch {}
+  }
+
   return quests.map((q) => {
     let currentProgress = 0;
     if (q.questType === 'daily_count') {
       currentProgress = uniqueDaysCompleted;
     } else if (q.questType === 'score_threshold') {
       currentProgress = hasAccuracy80 ? 1 : 0;
+    } else if (q.questType === 'case_study') {
+      currentProgress = hasCaseStudyThisWeek ? 1 : 0;
     } else {
-      currentProgress = uniqueDaysCompleted;
+      currentProgress = 0;
     }
 
     const saved = questProgressData.find((p) => p.userId === userId && p.questId === q.id);
     const metaSaved = userMeta?.quests?.[q.id];
     const isCompleted = currentProgress >= q.targetCount;
-    const isClaimed = Boolean(saved?.isClaimed || metaSaved?.isClaimed);
+    const isClaimed = Boolean(isCompleted && (saved?.isClaimed || metaSaved?.isClaimed));
 
     return {
       ...q,
@@ -1118,7 +1136,26 @@ export async function getWeeklyQuestsWithProgress(
 }
 
 /**
- * Increment / update quest progress
+ * Record weekly case study solution submission specifically for the Strategic Teardown quest
+ */
+export async function recordCaseStudySubmission(userId: string): Promise<void> {
+  if (!userId || userId === 'guest') return;
+  const quests = getActiveWeeklyQuests();
+  const caseQuest = quests.find((q) => q.questType === 'case_study');
+  if (caseQuest) {
+    const userMeta = await getUserMetadataGamification(userId);
+    const existingQuests = userMeta?.quests || {};
+    existingQuests[caseQuest.id] = {
+      progress: 1,
+      isCompleted: true,
+      isClaimed: existingQuests[caseQuest.id]?.isClaimed || false,
+    };
+    await saveUserMetadataGamification(userId, { quests: existingQuests });
+  }
+}
+
+/**
+ * Increment / update quest progress (for Daily 5 challenge completions)
  */
 async function incrementQuestProgress(userId: string, hasScore80: boolean) {
   const questProgressData = readJsonFile<
@@ -1129,26 +1166,30 @@ async function incrementQuestProgress(userId: string, hasScore80: boolean) {
   const updatedMetaQuests: Record<string, { progress: number; isCompleted: boolean; isClaimed: boolean }> = {};
 
   quests.forEach((q) => {
-    let item = questProgressData.find((p) => p.userId === userId && p.questId === q.id);
-    if (!item) {
-      item = { userId, questId: q.id, progress: 0, isCompleted: false, isClaimed: false };
-      questProgressData.push(item);
-    }
+    // Only daily_count and score_threshold are updated by Daily 5 challenges
+    // Strategic Teardown (case_study) is ONLY updated by weekly case study submissions
+    if (q.questType === 'daily_count' || q.questType === 'score_threshold') {
+      let item = questProgressData.find((p) => p.userId === userId && p.questId === q.id);
+      if (!item) {
+        item = { userId, questId: q.id, progress: 0, isCompleted: false, isClaimed: false };
+        questProgressData.push(item);
+      }
 
-    if (q.questType === 'daily_count') {
-      item.progress += 1;
-      if (item.progress >= q.targetCount) item.isCompleted = true;
-    }
-    if (q.questType === 'score_threshold' && hasScore80) {
-      item.progress = 1;
-      item.isCompleted = true;
-    }
+      if (q.questType === 'daily_count') {
+        item.progress += 1;
+        if (item.progress >= q.targetCount) item.isCompleted = true;
+      }
+      if (q.questType === 'score_threshold' && hasScore80) {
+        item.progress = 1;
+        item.isCompleted = true;
+      }
 
-    updatedMetaQuests[q.id] = {
-      progress: item.progress,
-      isCompleted: item.isCompleted,
-      isClaimed: item.isClaimed,
-    };
+      updatedMetaQuests[q.id] = {
+        progress: item.progress,
+        isCompleted: item.isCompleted,
+        isClaimed: item.isClaimed,
+      };
+    }
   });
 
   writeJsonFile(QUESTS_FILE, questProgressData);

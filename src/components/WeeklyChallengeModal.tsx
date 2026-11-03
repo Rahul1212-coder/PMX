@@ -202,6 +202,19 @@ export const WeeklyChallengeModal: React.FC<WeeklyChallengeModalProps> = ({
       };
 
       await submitChallengeSolutionToDb(newSub);
+
+      // Trigger gamification Strategic Teardown quest unlock
+      try {
+        await fetch('/api/gamification/quests/case-study', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('pmverse_daily5_completed'));
+        }
+      } catch {}
+
       setUserSubmission(newSub);
       setSubmissions((prev) => {
         const withoutOld = prev.filter((s) => s.id !== newSub.id && s.userId !== newSub.userId);
