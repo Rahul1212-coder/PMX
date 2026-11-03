@@ -57,6 +57,19 @@ export const ArenaLeaderboardView: React.FC<ArenaLeaderboardViewProps> = ({
 
   useEffect(() => {
     fetchLeaderboard();
+
+    const handleChallengeDone = () => {
+      fetchLeaderboard();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pmverse_daily5_completed', handleChallengeDone);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pmverse_daily5_completed', handleChallengeDone);
+      }
+    };
   }, [timeframe, league, userId]);
 
   const formatCountdown = (secs?: number) => {

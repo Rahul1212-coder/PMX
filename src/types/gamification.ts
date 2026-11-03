@@ -118,6 +118,11 @@ export interface UserGamificationProfile {
   activeQuestsCount: number;
   completedQuestsCount: number;
   achievementsCount: number;
+  weeklyArenaScore: number;
+  allTimeArenaScore: number;
+  arenaRank: number;
+  todayScore: number | null;
+  isTodayCompleted: boolean;
 }
 
 export interface XpTransaction {
@@ -208,6 +213,9 @@ export interface AchievementDefinition {
   active?: boolean;
   isEarned?: boolean;
   earnedAt?: string;
+  progressCurrent?: number;
+  progressTarget?: number;
+  progressLabel?: string;
 }
 
 export interface ShareableResultCardData {

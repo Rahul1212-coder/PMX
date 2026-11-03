@@ -79,6 +79,19 @@ export const GamificationHub: React.FC<GamificationHubProps> = ({
 
   useEffect(() => {
     fetchDailyAndProfile();
+
+    const handleCompleted = () => {
+      fetchDailyAndProfile();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pmverse_daily5_completed', handleCompleted);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pmverse_daily5_completed', handleCompleted);
+      }
+    };
   }, [userId]);
 
   const userDisplayName =
@@ -125,11 +138,25 @@ export const GamificationHub: React.FC<GamificationHubProps> = ({
           </div>
         </div>
 
-        {/* Quick Flame Streak & League Badge */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Quick Flame Streak, Arena Score & XP Badges */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
           <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-3 py-1.5 text-xs font-black text-amber-900">
             <Flame className="w-4 h-4 fill-amber-500 text-amber-600" />
             <span>{gamProfile?.currentStreak || 0} Day Streak</span>
+          </div>
+
+          <div
+            onClick={() => setActiveSubTab('arena')}
+            className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 px-3 py-1.5 text-xs font-black text-[#ae1800] cursor-pointer transition-colors shadow-sm"
+            title="Click to view Arena Leaderboard standings"
+          >
+            <Trophy className="w-4 h-4 text-[#ec3013]" />
+            <span>{gamProfile?.weeklyArenaScore || 0} Arena Pts</span>
+            {gamProfile?.arenaRank && gamProfile.arenaRank > 0 ? (
+              <span className="text-[10px] bg-[#ec3013] text-white px-1.5 py-0.2 font-black">
+                #{gamProfile.arenaRank}
+              </span>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700">

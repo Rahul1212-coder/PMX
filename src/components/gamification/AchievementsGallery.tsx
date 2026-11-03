@@ -84,12 +84,36 @@ export const AchievementsGallery: React.FC<AchievementsGalleryProps> = ({
                     {ach.description}
                   </p>
                 </div>
+
+                {/* Milestone Progress Bar */}
+                {ach.progressTarget && ach.progressTarget > 0 && (
+                  <div className="mt-3 pt-2 border-t border-slate-100 space-y-1">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                      <span>{ach.progressLabel || 'Milestone Progress'}</span>
+                      <span>
+                        {Math.min(100, Math.round(((ach.progressCurrent || 0) / ach.progressTarget) * 100))}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          isEarned ? 'bg-emerald-600' : 'bg-[#ec3013]'
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.round(((ach.progressCurrent || 0) / ach.progressTarget) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-200 mt-4 flex items-center justify-between text-[11px] font-bold">
                 <span className="text-[#ae1800]">+{ach.xpReward} XP</span>
-                <span className="text-slate-400">
-                  {isEarned ? 'Earned' : 'Locked'}
+                <span className={`px-2 py-0.5 text-[10px] uppercase font-black ${
+                  isEarned ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'text-slate-400'
+                }`}>
+                  {isEarned ? 'Unlocked' : 'In Progress'}
                 </span>
               </div>
             </div>

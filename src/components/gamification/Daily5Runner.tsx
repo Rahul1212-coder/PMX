@@ -24,9 +24,13 @@ import {
   ChevronUp,
   Loader2,
   Check,
+  Lock,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { ShareResultModal } from './ShareResultModal';
 import { useAuth } from '@/context/AuthContext';
+import { AchievementDefinition } from '@/types/gamification';
 
 interface Daily5RunnerProps {
   challenge: PublicDailyChallenge;
@@ -53,6 +57,56 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
   const [isSavingAnswer, setIsSavingAnswer] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [expandedRationale, setExpandedRationale] = useState<string | null>(null);
+  const [unlockedBadges, setUnlockedBadges] = useState<AchievementDefinition[]>([]);
+  const [milestoneBonus, setMilestoneBonus] = useState<{ xp: number; milestoneName: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<UserGamificationProfile | null>(null);
+
+  // Countdown timer to midnight UTC reset
+  const [timeUntilReset, setTimeUntilReset] = useState<number>(() => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    return Math.max(0, Math.floor((tomorrow.getTime() - now.getTime()) / 1000));
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeUntilReset((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatResetCountdown = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h}h ${m < 10 ? '0' : ''}${m}m ${s < 10 ? '0' : ''}${s}s`;
+  };
+
+  // Synchronize when initialAttempt loads or changes
+  useEffect(() => {
+    if (initialAttempt) {
+      setAttempt(initialAttempt);
+      if (initialAttempt.answers) setAnswers(initialAttempt.answers);
+      if (initialAttempt.timeTakenSeconds) setSecondsElapsed(initialAttempt.timeTakenSeconds);
+    }
+  }, [initialAttempt]);
+
+  // Synchronize from localStorage to hold completed score immediately
+  useEffect(() => {
+    if (!attempt && userId && challenge.challengeDate && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(`pmverse_daily_completed_${userId}_${challenge.challengeDate}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.status === 'completed') {
+            setAttempt(parsed);
+          }
+        }
+      } catch {}
+    }
+  }, [userId, challenge.challengeDate, attempt]);
 
   // Timer state
   const [secondsElapsed, setSecondsElapsed] = useState(initialAttempt?.timeTakenSeconds || 0);
@@ -129,6 +183,26 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
       }
 
       setAttempt(data.attempt);
+      if (data.newlyUnlockedAchievements && data.newlyUnlockedAchievements.length > 0) {
+        setUnlockedBadges(data.newlyUnlockedAchievements);
+      }
+      if (data.streakMilestoneBonus) {
+        setMilestoneBonus(data.streakMilestoneBonus);
+      }
+      if (data.userProfile) {
+        setUserProfile(data.userProfile);
+      }
+
+      if (typeof window !== 'undefined' && userId) {
+        try {
+          localStorage.setItem(
+            `pmverse_daily_completed_${userId}_${challenge.challengeDate}`,
+            JSON.stringify(data.attempt)
+          );
+          window.dispatchEvent(new CustomEvent('pmverse_daily5_completed', { detail: data }));
+        } catch {}
+      }
+
       if (onAttemptCompleted && data.userProfile) {
         onAttemptCompleted(data.attempt, data.userProfile);
       }
@@ -168,10 +242,82 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
     shareUrl: 'https://pmverse.in',
   };
 
-  // RESULTS SCREEN (POST-SUBMISSION)
+  // RESULTS SCREEN (POST-SUBMISSION - SCORE IS HELD, NO RETRY)
   if (isCompleted && attempt) {
     return (
       <div className="space-y-6 text-left animate-in fade-in">
+        {/* Official Result Lock Notice */}
+        <div className="bg-white border-2 border-[#201e1d] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-[#201e1d] text-white flex items-center justify-center font-bold shrink-0 border border-[#ec3013]">
+              <Lock className="w-4 h-4 text-[#ec3013]" />
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase text-[#201e1d] tracking-wider flex flex-wrap items-center gap-2">
+                <span>Daily Challenge Locked · Score Held ({attempt.score}/100)</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.2">
+                  Official Score Recorded
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                Daily challenges are a one-time event every 24 hours. No retry after submit. Points are saved to your Weekly Arena score.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 bg-slate-100 border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700">
+            <Clock className="w-3.5 h-3.5 text-[#ec3013]" />
+            <span>Next Challenge In:</span>
+            <span className="font-mono font-black text-[#ec3013]">
+              {formatResetCountdown(timeUntilReset)}
+            </span>
+          </div>
+        </div>
+
+        {/* Newly Unlocked Badges & Milestones Alert */}
+        {unlockedBadges.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-400 p-5 space-y-3 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 tracking-wider flex items-center gap-1">
+                <Award className="w-3.5 h-3.5" />
+                New Milestone Unlocked!
+              </span>
+              <span className="text-xs font-bold text-amber-900">
+                Congratulations on achieving new PM milestones!
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {unlockedBadges.map((badge) => (
+                <div key={badge.id} className="bg-white p-3 border border-amber-300 flex items-center gap-3 shadow-sm">
+                  <span className="text-2xl">{badge.icon}</span>
+                  <div>
+                    <div className="text-xs font-black text-[#201e1d] flex items-center gap-1.5">
+                      <span>{badge.name}</span>
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 font-bold">+{badge.xpReward} XP</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 line-clamp-1">{badge.description}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Streak Milestone Bonus Alert */}
+        {milestoneBonus && (
+          <div className="bg-amber-100/80 border-2 border-amber-400 p-3.5 flex items-center gap-3 text-amber-950 font-bold text-xs">
+            <Flame className="w-5 h-5 fill-amber-500 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-black text-[#201e1d] uppercase tracking-wider text-[11px]">
+                {milestoneBonus.milestoneName} Reached!{' '}
+              </span>
+              <span className="text-amber-800 font-medium">
+                You earned an extra <strong className="text-amber-900 font-black">+{milestoneBonus.xp} XP</strong> milestone bonus for maintaining your streak.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Top Celebration Card */}
         <div className="bg-[#201e1d] text-white p-6 sm:p-8 border-2 border-[#ec3013] relative overflow-hidden">
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
@@ -195,7 +341,7 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-6 border-t sm:border-t-0 sm:border-l border-white/10 pt-4 sm:pt-0 sm:pl-6 shrink-0">
+            <div className="flex items-center gap-5 sm:gap-6 border-t sm:border-t-0 sm:border-l border-white/10 pt-4 sm:pt-0 sm:pl-6 shrink-0">
               <div className="text-center">
                 <div className="text-4xl sm:text-5xl font-black text-[#ec3013]">
                   {attempt.score}
@@ -207,11 +353,21 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
 
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl font-black text-amber-300 flex items-center justify-center gap-1">
-                  <Flame className="w-6 h-6 fill-amber-300 text-amber-400" />
+                  <Trophy className="w-5 h-5 text-amber-400" />
+                  +{attempt.score}
+                </div>
+                <div className="text-[10px] uppercase font-bold text-slate-400 mt-1">
+                  Arena Pts
+                </div>
+              </div>
+
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-black text-amber-300 flex items-center justify-center gap-1">
+                  <Flame className="w-5 h-5 fill-amber-300 text-amber-400" />
                   {attempt.streakAfterAttempt}
                 </div>
                 <div className="text-[10px] uppercase font-bold text-slate-400 mt-1">
-                  Day Streak
+                  Streak
                 </div>
               </div>
 
@@ -227,8 +383,9 @@ export const Daily5Runner: React.FC<Daily5RunnerProps> = ({
           </div>
 
           <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-slate-400">
-              Next Daily 5 unlocks tonight at 00:00 UTC.
+            <span className="text-xs text-slate-300 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Score held & recorded. Next Daily 5 unlocks at 00:00 UTC.</span>
             </span>
             <div className="flex items-center gap-2">
               <button

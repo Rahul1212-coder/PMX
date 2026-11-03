@@ -144,7 +144,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           const dData = await dailyRes.json();
           if (mounted && dData.success) {
             setDailyChallenge(dData.challenge);
-            setDailyAttempt(dData.attempt);
+            setDailyAttempt(dData.userAttempt || dData.attempt);
             setTimeUntilReset(dData.timeUntilResetSeconds || 0);
           }
         }
@@ -475,11 +475,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   <div>
                     <div className="flex items-center gap-1.5 text-xs font-black text-emerald-400">
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Today's Daily 5 Completed!</span>
+                      <span>Today's Daily 5 Completed (Score Held)</span>
                     </div>
                     <div className="text-xs text-white/80 font-medium mt-0.5">
                       Score: <strong className="text-white font-bold">{dailyAttempt.score}/100</strong>{' '}
-                      ({dailyAttempt.correctCount}/5 correct) · Earned {dailyAttempt.score >= 50 ? '+70' : '+40'} XP
+                      ({dailyAttempt.correctCount}/5 correct) · +{dailyAttempt.score} pts to Weekly Arena
                     </div>
                   </div>
                   <button
@@ -492,7 +492,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                     }}
                     className="btn btn-secondary text-xs font-bold py-2 px-3.5 whitespace-nowrap"
                   >
-                    Review Explanations →
+                    Review Explanations & Arena Standings →
                   </button>
                 </div>
               ) : dailyAttempt?.status === 'in_progress' ? (

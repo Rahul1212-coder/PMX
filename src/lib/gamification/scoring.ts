@@ -241,7 +241,10 @@ export function evaluateUnlockedAchievements(
   profile: Partial<UserGamificationProfile>,
   totalChallengesCompleted: number,
   lastScore: number,
-  existingAchievementIds: Set<string>
+  existingAchievementIds: Set<string>,
+  weeklyArenaScore = 0,
+  weeklyChallengesCompleted = 0,
+  arenaRank = 0
 ): AchievementDefinition[] {
   const newlyUnlocked: AchievementDefinition[] = [];
 
@@ -255,9 +258,21 @@ export function evaluateUnlockedAchievements(
       qualifies = true;
     } else if (ach.id === 'week_warrior' && (profile.currentStreak || 0) >= 7) {
       qualifies = true;
+    } else if (ach.id === 'habit_builder' && (profile.currentStreak || 0) >= 14) {
+      qualifies = true;
     } else if (ach.id === 'monthly_master' && (profile.currentStreak || 0) >= 30) {
       qualifies = true;
     } else if (ach.id === 'perfect_five' && lastScore === 100) {
+      qualifies = true;
+    } else if (ach.id === 'arena_contender' && weeklyArenaScore >= 100) {
+      qualifies = true;
+    } else if (ach.id === 'arena_titan' && weeklyArenaScore >= 300) {
+      qualifies = true;
+    } else if (ach.id === 'arena_champion' && arenaRank > 0 && arenaRank <= 3 && totalChallengesCompleted >= 1) {
+      qualifies = true;
+    } else if (ach.id === 'sprint_centurion' && weeklyChallengesCompleted >= 5) {
+      qualifies = true;
+    } else if (ach.id === 'quest_completer' && (profile.completedQuestsCount || 0) >= 3) {
       qualifies = true;
     } else if (ach.id === 'pm_strategist' && (profile.currentLevel || 1) >= 4) {
       qualifies = true;
