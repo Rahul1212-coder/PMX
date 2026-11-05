@@ -131,6 +131,12 @@ export const ResumeIntelligence: React.FC<ResumeIntelligenceProps> = ({ initialJ
         const data = await res.json();
         const serverCount = typeof data.usageCount === 'number' ? data.usageCount : 0;
         const finalCount = Math.min(MAX_RESUME_ANALYSES, Math.max(clientUsage.usageCount, serverCount));
+        if (finalCount === 0 && typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem(`pmverse_resume_usage_${user.id}`);
+            if (user.email) localStorage.removeItem(`pmverse_resume_usage_${user.email}`);
+          } catch {}
+        }
         setUsageInfo({
           usageCount: finalCount,
           remaining: Math.max(0, MAX_RESUME_ANALYSES - finalCount),

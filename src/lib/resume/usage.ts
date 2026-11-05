@@ -164,6 +164,18 @@ export async function getUserResumeUsage(
   // 3. Client reported count
   const clientCount = Number(options?.clientReportedCount) || 0;
 
+  // If the database and user_metadata both indicate 0 evaluations, respect the reset!
+  if (metaCount === 0 && dbCount === 0) {
+    memoryUsageStore.delete(userId);
+    return {
+      usageCount: 0,
+      remaining: MAX_RESUME_ANALYSES,
+      maxAllowed: MAX_RESUME_ANALYSES,
+      hasReachedLimit: false,
+      history: [],
+    };
+  }
+
   // Highest count from any persistent channel
   const effectiveCount = Math.min(
     MAX_RESUME_ANALYSES,

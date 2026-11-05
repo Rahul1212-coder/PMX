@@ -69,16 +69,41 @@ export async function getClientAccountUsage(
     console.warn('Could not query saved_jobs for account resume usage:', err);
   }
 
-  // Take the highest confirmed count so count NEVER drops across re-login or refresh
+  // If the authoritative database and account metadata both indicate 0 evaluations (e.g. after a reset),
+  // purge any stale browser localStorage cache so it does NOT resurrect the old count!
+  if (metaCount === 0 && dbCount === 0) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(`pmverse_resume_usage_${user.id}`);
+        if (user.email) {
+          localStorage.removeItem(`pmverse_resume_usage_${user.email}`);
+        }
+      } catch {}
+    }
+    return {
+      usageCount: 0,
+      remaining: MAX_RESUME_ANALYSES,
+      maxAllowed: MAX_RESUME_ANALYSES,
+      hasReachedLimit: false,
+      history: [],
+    };
+  }
+
+  // Otherwise, take the highest confirmed count across persistent sources
   const effectiveCount = Math.min(MAX_RESUME_ANALYSES, Math.max(metaCount, localCount, dbCount));
   const remaining = Math.max(0, MAX_RESUME_ANALYSES - effectiveCount);
 
   // Re-sync localStorage if it lagged behind account metadata or DB
-  if (typeof window !== 'undefined' && effectiveCount > localCount) {
+  if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(`pmverse_resume_usage_${user.id}`, effectiveCount.toString());
-      if (user.email) {
-        localStorage.setItem(`pmverse_resume_usage_${user.email}`, effectiveCount.toString());
+      if (effectiveCount === 0) {
+        localStorage.removeItem(`pmverse_resume_usage_${user.id}`);
+        if (user.email) localStorage.removeItem(`pmverse_resume_usage_${user.email}`);
+      } else if (effectiveCount > localCount) {
+        localStorage.setItem(`pmverse_resume_usage_${user.id}`, effectiveCount.toString());
+        if (user.email) {
+          localStorage.setItem(`pmverse_resume_usage_${user.email}`, effectiveCount.toString());
+        }
       }
     } catch {}
   }

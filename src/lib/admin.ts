@@ -1,5 +1,6 @@
 export const DEFAULT_ADMIN_EMAILS = [
   'krjha1212@gmail.com',
+  'krjha.2412@gmail.com',
 ];
 
 export function getAuthorizedAdminEmails(): string[] {
