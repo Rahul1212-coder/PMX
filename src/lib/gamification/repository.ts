@@ -141,6 +141,24 @@ export async function saveUserMetadataGamification(
       mergedAttempts = Array.from(attemptMap.values());
     }
 
+    // Sanitize attempts to strip bulky questionResults and avoid 494 REQUEST_HEADER_TOO_LARGE in JWT cookies
+    const sanitizedAttempts: ChallengeAttempt[] = mergedAttempts.slice(-14).map((a) => ({
+      id: a.id,
+      userId: a.userId,
+      challengeId: a.challengeId,
+      challengeDate: a.challengeDate,
+      status: a.status,
+      score: a.score,
+      correctCount: a.correctCount,
+      totalQuestions: a.totalQuestions || 5,
+      timeTakenSeconds: a.timeTakenSeconds || 120,
+      answers: a.answers || {},
+      xpAwarded: a.xpAwarded || 0,
+      streakAfterAttempt: a.streakAfterAttempt || 1,
+      completedAt: a.completedAt,
+      startedAt: a.startedAt,
+    }));
+
     // Merge achievements without duplicate achievementId
     let mergedAchievements = existingGam.achievements || [];
     if (gamData.achievements) {
@@ -160,7 +178,7 @@ export async function saveUserMetadataGamification(
       streakFreezesAvailable: gamData.streakFreezesAvailable ?? existingGam.streakFreezesAvailable ?? 1,
       weeklyArenaScore: gamData.weeklyArenaScore ?? existingGam.weeklyArenaScore ?? 0,
       allTimeArenaScore: gamData.allTimeArenaScore ?? existingGam.allTimeArenaScore ?? 0,
-      attempts: mergedAttempts,
+      attempts: sanitizedAttempts,
       achievements: mergedAchievements,
       quests: { ...(existingGam.quests || {}), ...(gamData.quests || {}) },
     };
@@ -288,6 +306,13 @@ export async function getDailyChallenge(
       );
       if (localAttempt) userAttempt = localAttempt;
     }
+  }
+
+  if (userAttempt && !userAttempt.questionResults && userAttempt.answers && Object.keys(userAttempt.answers).length > 0) {
+    try {
+      const scoring = scoreDailyAttempt(challenge, userAttempt.answers);
+      userAttempt.questionResults = scoring.questionResults;
+    } catch {}
   }
 
   const secondsRemaining = getSecondsUntilMidnightUtc();
